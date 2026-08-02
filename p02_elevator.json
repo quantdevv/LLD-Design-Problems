@@ -1,0 +1,249 @@
+{
+  "title": "Elevator Control System",
+  "description": "Design an elevator system for a building with multiple elevators. Handle hall calls, destination selection, dispatch algorithm, and concurrent request handling. Classic simulation + state machine problem.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "State Machine"},
+    {"type": "pattern", "label": "SCAN Algorithm"},
+    {"type": "concept", "label": "Simulation"}
+  ],
+  "prompt": "Design an elevator control system for a building. The system should handle multiple elevators, floor requests, and move elevators efficiently to service requests.",
+  "prompt_note": "This is a simulation problem. The critical first question is whether we're building a discrete-time simulation (with `step()`/`tick()`) or real hardware control software. 9 out of 10 interviews want the simulation — it's deterministic, testable, and lets us focus on object modeling + scheduling.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"How many elevators and floors? Configurable or fixed?\"",
+      "answer": "Interviewer: \"3 elevators, 10 floors (0–9). Fixed for now.\"",
+      "why": "Establishes scale. 3 elevators is a fundamentally different problem than 300."
+    },
+    {
+      "question": "You: \"Hall calls with direction (UP/DOWN), or destination dispatch where riders pick a floor outside?\"",
+      "answer": "Interviewer: \"Classic UP/DOWN hall calls.\"",
+      "why": "This means Request needs a type: PICKUP_UP, PICKUP_DOWN, DESTINATION. Direction-aware stopping is the key insight."
+    },
+    {
+      "question": "You: \"Once inside, can riders select multiple destination floors?\"",
+      "answer": "Interviewer: \"Yes, multiple floor buttons can be pressed.\"",
+      "why": "Elevator needs a Set of requests, not a single destination."
+    },
+    {
+      "question": "You: \"Are we building a simulation with `step()`/`tick()`, or actual control software with hardware interfaces?\"",
+      "answer": "Interviewer: \"Simulation. Discrete time steps.\"",
+      "why": "**Senior-level question.** Signals you understand the distinction. Real elevators use async interrupts (`onFloorReached()`), not `currentFloor++`. Simulation is deterministic and testable."
+    },
+    {
+      "question": "You: \"Capacity, weight, door mechanics, emergency stops?\"",
+      "answer": "Interviewer: \"Out of scope. Focus on scheduling and movement.\"",
+      "why": "Saved 15 minutes. Knowing what to exclude is as important as what to include."
+    },
+    {
+      "question": "You: \"Invalid requests — floor doesn't exist? Request the floor you're on?\"",
+      "answer": "Interviewer: \"Reject non-existent floors (return false). Current floor = no-op.\"",
+      "why": "Clear error semantics upfront."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "System manages 3 elevators serving 10 floors (0–9), discrete time steps via `step()`.",
+      "Hall call: user presses UP/DOWN on a floor → system dispatches best elevator (minimum cost heuristic).",
+      "Destination call: user inside elevator presses floor buttons — multiple allowed.",
+      "**Direction-aware stopping:** UP elevator doesn't stop for DOWN hall calls at that floor.",
+      "**SCAN algorithm:** continue in current direction until no more requests ahead, then reverse.",
+      "Reject invalid floor numbers. Current-floor request is a no-op."
+    ],
+    "out_of_scope": [
+      "Weight capacity, door open/close mechanics, emergency stop, dynamic floor/elevator config, UI/rendering."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Thread-safe:** concurrent `addRequest()` + `step()` must not corrupt elevator state.",
+      "**Deterministic:** same inputs → same elevator behavior (testable simulation).",
+      "**Fair scheduling:** no starvation — every request eventually served (SCAN guarantees this)."
+    ],
+    "out_of_scope": [
+      "Real-time hardware integration, persistence, distributed deployment."
+    ]
+  },
+
+  "primary_scope": [
+    "Hall call → dispatch best elevator via cost heuristic → add to stops",
+    "`step()` → move one floor → check for direction-aware stops → handle reversal/idle",
+    "Destination press → add floor to elevator's request set",
+    "`getCost()` → dispatch heuristic: idle=distance, same-dir-on-way=direct, else=sweep+return"
+  ],
+  "termination_points": [
+    "Invalid floor (floor < 0 or >= numFloors) → return `false`",
+    "Invalid elevator ID in `selectFloor()` → return `false` (bounds check)",
+    "Request for current floor → no-op (already served)",
+    "Elevator at floor 0 going DOWN or floor 9 going UP → must reverse (boundary guard)"
+  ],
+
+  "entity_intro": "Scan requirements for nouns with behavior or state. For simulation problems, there's always a **controller that owns `step()`** to advance time for all actors.",
+  "entities": [
+    {
+      "name": "ElevatorController",
+      "role": "**Orchestrator.** Receives hall calls, dispatches to best elevator via cost heuristic. Owns `step()` to advance all elevators one tick. Doesn't know elevator internals — just calls `getCost()` and `addRequest()`.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator / owns step()"
+    },
+    {
+      "name": "Elevator",
+      "role": "**Service.** Maintains currentFloor, direction (UP/DOWN/IDLE), and Set<Request>. Implements SCAN movement: move one floor per tick, stop when matching request found, reverse when no more ahead. Doesn't know about other elevators.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — state + behavior"
+    },
+    {
+      "name": "Request",
+      "role": "**Model.** `floor` + `RequestType` (PICKUP_UP, PICKUP_DOWN, DESTINATION). **Why not just Set<Integer>?** With integers, an UP elevator stops at floor 7 for a DOWN call — the rider sees UP, gets confused. Request class enables direction-aware stopping. `equals/hashCode` on (floor, type).",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — enables direction-aware logic"
+    },
+    {
+      "name": "Floor",
+      "role": "Just a number (0–9). No state, no behavior. Floors don't \"do\" anything in an elevator system.",
+      "verdict": "no",
+      "verdict_label": "✗ Just an int — not an entity"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "ElevatorController", "owns": "`List<Elevator>`, numFloors", "rel": "1 → N Elevators"},
+    {"entity": "Elevator", "owns": "currentFloor, Direction, `Set<Request>`", "rel": "1 → N Requests (active stops)"},
+    {"entity": "Request", "owns": "floor (int), type (RequestType)", "rel": "Value object — identity = (floor, type)"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Request record, Direction enum, RequestType enum. **Service** = Elevator (owns movement logic, SCAN, stop decisions). **Controller** = ElevatorController (dispatch, step orchestration, public API).",
+
+  "classes": [
+    {
+      "name": "ElevatorController", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "elevators", "type": "List<Elevator>"},
+        {"name": "numFloors", "type": "int"}
+      ],
+      "methods": [
+        {"name": "requestElevator(floor, type)", "returns": "boolean"},
+        {"name": "selectFloor(elevatorId, floor)", "returns": "boolean"},
+        {"name": "step()", "returns": "void"}
+      ]
+    },
+    {
+      "name": "Elevator", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "id", "type": "int"},
+        {"name": "currentFloor", "type": "int"},
+        {"name": "direction", "type": "Direction"},
+        {"name": "requests", "type": "Set<Request>"}
+      ],
+      "methods": [
+        {"name": "addRequest(floor, type)", "returns": "void"},
+        {"name": "step()", "returns": "void"},
+        {"name": "getCost(floor, type)", "returns": "int"},
+        {"name": "isIdle()", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "Request", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "floor", "type": "int"},
+        {"name": "type", "type": "RequestType"}
+      ],
+      "methods": [
+        {"name": "equals/hashCode", "returns": "based on (floor, type)"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "elevator_events (audit log)",
+      "columns": [
+        {"name": "event_id", "type": "BIGSERIAL", "pk": true},
+        {"name": "elevator_id", "type": "INT", "idx": true},
+        {"name": "event_type", "type": "ENUM(HALL_CALL, DEST, STOP, IDLE)"},
+        {"name": "floor", "type": "INT"},
+        {"name": "direction", "type": "ENUM(UP,DOWN,IDLE)"},
+        {"name": "timestamp", "type": "TIMESTAMP", "idx": true}
+      ]
+    }
+  ],
+  "schema_note": "Elevator systems are **stateful in-memory** — no DB needed for runtime. This audit log is optional for analytics (avg wait time per floor, peak hour dispatch counts).",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Enums + Request Record",
+      "code": "enum Direction    { UP, DOWN, IDLE }\nenum RequestType { PICKUP_UP, PICKUP_DOWN, DESTINATION }\n\n// Java record: auto equals/hashCode on all fields\n// Request(7, PICKUP_UP) != Request(7, PICKUP_DOWN) != Request(7, DESTINATION)\nrecord Request(int floor, RequestType type) {}"
+    },
+    {
+      "label": "Service — Elevator (SCAN Movement Engine)",
+      "flow": "`addRequest()`: add to set → if IDLE, pick direction toward request.\n`step()`: if IDLE return → move 1 floor → remove matching stops → decide: more ahead? continue : reverse or go IDLE.\n`getCost()`: IDLE=distance, same-dir-on-way=direct, else=sweep-to-end+return.",
+      "edge_cases": "Floor 0 going DOWN → reversal forced. Floor 9 going UP → reversal forced. Duplicate request → Set handles idempotency. Empty requests after removal → go IDLE.",
+      "code": "class Elevator {\n    private final int id;\n    private int currentFloor = 0;\n    private Direction direction = Direction.IDLE;\n    private final Set<Request> requests = new HashSet<>();\n\n    public Elevator(int id) { this.id = id; }\n\n    // ── addRequest ──────────────────────────\n    // Flow: add to set → wake up if idle\n    // Edge: duplicate request → Set ignores (idempotent)\n    public synchronized void addRequest(int floor, RequestType type) {\n        requests.add(new Request(floor, type));\n        if (direction == Direction.IDLE) {\n            direction = (floor > currentFloor) ? Direction.UP\n                      : (floor < currentFloor) ? Direction.DOWN\n                      : Direction.IDLE; // already at floor\n        }\n    }\n\n    // ── step ────────────────────────────────\n    // Flow: move 1 floor → check stops → decide direction\n    // Edge: boundary floors, empty set after removal\n    public synchronized void step() {\n        if (direction == Direction.IDLE) return;\n\n        // 1. Move one floor\n        currentFloor += (direction == Direction.UP) ? 1 : -1;\n\n        // 2. Remove matching stops (direction-aware)\n        RequestType pickupType = (direction == Direction.UP)\n            ? RequestType.PICKUP_UP : RequestType.PICKUP_DOWN;\n        boolean stopped = requests.remove(new Request(currentFloor, pickupType))\n                        | requests.remove(new Request(currentFloor, RequestType.DESTINATION));\n\n        // 3. Decide next direction\n        boolean hasAhead = requests.stream().anyMatch(r ->\n            direction == Direction.UP ? r.floor() > currentFloor\n                                     : r.floor() < currentFloor);\n\n        if (!hasAhead) {\n            boolean hasBehind = requests.stream().anyMatch(r ->\n                direction == Direction.UP ? r.floor() < currentFloor\n                                         : r.floor() > currentFloor);\n            if (hasBehind) {\n                // Reverse — SCAN pivot\n                direction = (direction == Direction.UP)\n                    ? Direction.DOWN : Direction.UP;\n            } else if (requests.isEmpty()) {\n                direction = Direction.IDLE;\n            }\n            // else: requests exist at currentFloor (other type), will be picked up next tick\n        }\n    }\n\n    // ── getCost (dispatch heuristic) ────────\n    // IDLE → direct distance\n    // Same direction + on the way → direct distance (cheap!)\n    // Otherwise → must complete sweep, then return\n    public int getCost(int floor, RequestType type) {\n        if (direction == Direction.IDLE)\n            return Math.abs(currentFloor - floor);\n\n        boolean sameDir =\n            (direction == Direction.UP && type == RequestType.PICKUP_UP) ||\n            (direction == Direction.DOWN && type == RequestType.PICKUP_DOWN);\n        boolean onTheWay =\n            (direction == Direction.UP && floor >= currentFloor) ||\n            (direction == Direction.DOWN && floor <= currentFloor);\n\n        if (sameDir && onTheWay)\n            return Math.abs(floor - currentFloor);\n\n        // Must finish current sweep first\n        int farthest = requests.stream()\n            .mapToInt(Request::floor)\n            .reduce(currentFloor,\n                direction == Direction.UP ? Math::max : Math::min);\n        return Math.abs(farthest - currentFloor)\n             + Math.abs(farthest - floor);\n    }\n\n    public boolean isIdle() { return direction == Direction.IDLE; }\n    public int getCurrentFloor() { return currentFloor; }\n    public Direction getDirection() { return direction; }\n}"
+    },
+    {
+      "label": "Controller — ElevatorController (Dispatch + Step)",
+      "flow": "`requestElevator()`: validate floor → find elevator with min `getCost()` → `addRequest()`.\n`selectFloor()`: validate floor + elevId → `addRequest(floor, DESTINATION)`.\n`step()`: advance all elevators one tick.",
+      "edge_cases": "Floor out of range → return `false`. ElevatorId out of range → return `false`. All elevators busy → still picks the one with lowest cost (no rejection).",
+      "code": "class ElevatorController {\n    private final List<Elevator> elevators;\n    private final int numFloors;\n\n    public ElevatorController(int numElevators, int numFloors) {\n        this.numFloors = numFloors;\n        this.elevators = new ArrayList<>();\n        for (int i = 0; i < numElevators; i++)\n            elevators.add(new Elevator(i));\n    }\n\n    // ── requestElevator (hall call) ─────────\n    public boolean requestElevator(int floor, RequestType type) {\n        if (floor < 0 || floor >= numFloors) return false;\n        if (type == RequestType.DESTINATION) return false; // must use selectFloor\n\n        Elevator best = elevators.stream()\n            .min(Comparator.comparingInt(e -> e.getCost(floor, type)))\n            .orElseThrow();\n        best.addRequest(floor, type);\n        return true;\n    }\n\n    // ── selectFloor (destination button inside) ──\n    public boolean selectFloor(int elevatorId, int floor) {\n        if (floor < 0 || floor >= numFloors) return false;\n        if (elevatorId < 0 || elevatorId >= elevators.size()) return false;\n\n        Elevator e = elevators.get(elevatorId);\n        if (e.getCurrentFloor() == floor) return true; // no-op\n        e.addRequest(floor, RequestType.DESTINATION);\n        return true;\n    }\n\n    // ── step (advance all elevators one tick) ──\n    public void step() {\n        elevators.forEach(Elevator::step);\n    }\n\n    public List<Elevator> getElevators() {\n        return Collections.unmodifiableList(elevators);\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "State Machine → Elevator Direction",
+      "why": "Elevator has three states: `IDLE`, `UP`, `DOWN`. Transitions: IDLE→UP (request above), IDLE→DOWN (request below), UP→DOWN (SCAN pivot, no more above), DOWN→UP (reverse pivot), UP/DOWN→IDLE (no requests left). The `step()` method is the state transition function.",
+      "where": "`Elevator.step()` — the direction FSM + `addRequest()` wakeup from IDLE"
+    },
+    {
+      "name": "SCAN Algorithm (Elevator Algorithm)",
+      "why": "Named after disk head scheduling. Move in one direction servicing all requests, reverse when no more ahead. **Guarantees fairness** — no starvation. Minimizes direction changes. Our `step()` implements SCAN: check `hasAhead` → continue or reverse.",
+      "where": "`Elevator.step()` — the `hasAhead`/`hasBehind` logic"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "addRequest() vs step() race",
+      "fix": "Both mutate the `requests` HashSet. Both are `synchronized` on the Elevator instance — only one thread can read/write at a time. In production, consider `ReentrantReadWriteLock` — `getCost()` only needs a read lock, `addRequest()` and `step()` need write locks."
+    },
+    {
+      "issue": "Dispatch double-selection",
+      "fix": "Two concurrent hall calls may both compute `getCost()` on the same elevator before either `addRequest()` completes. The cost doesn't reflect the pending request. **Fix in production:** lock around the entire `dispatch + addRequest` sequence, or accept the minor inefficiency (elevator gets two requests instead of one each)."
+    },
+    {
+      "issue": "step() called concurrently from multiple threads",
+      "fix": "The controller should guarantee `step()` is called from a single thread (e.g., a `ScheduledExecutorService` with pool size 1). Each `Elevator.step()` is `synchronized`, so they don't interfere with each other even if called concurrently."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why use a Request class instead of just Set<Integer> for floors?",
+      "answer": "With just integers, elevator going UP stops at floor 7 for a DOWN hall call — rider sees UP indicator, gets confused or rides the wrong way. Request(floor, type) enables **direction-aware stopping**: UP elevator at floor 7 checks for `Request(7, PICKUP_UP)` and `Request(7, DESTINATION)` — not `PICKUP_DOWN`. This is the key insight that separates good from great solutions."
+    },
+    {
+      "question": "How would you handle elevator capacity?",
+      "answer": "Add `currentLoad` and `maxCapacity` to Elevator. In `getCost()`, return `Integer.MAX_VALUE` if at capacity (dispatch avoids this elevator). In `step()`, when stopping at a floor: if capacity reached, skip PICKUP requests but still handle DESTINATION (people already inside). The PICKUP request stays in the set for the next pass."
+    },
+    {
+      "question": "What's the difference between SCAN and LOOK algorithms?",
+      "answer": "**SCAN** goes to the physical end of the range (floor 0 or floor 9) before reversing. **LOOK** (what we implement) reverses as soon as there are no more requests ahead — doesn't travel to the end. LOOK is strictly better in practice. Most interviewers say 'SCAN' but actually mean LOOK."
+    },
+    {
+      "question": "How would you add priority floors (e.g., lobby gets faster service)?",
+      "answer": "Add a `priority` field to Request. In `getCost()`, multiply distance by a discount factor for high-priority floors (e.g., lobby requests have cost * 0.5). This biases dispatch toward high-priority requests without changing the SCAN movement engine."
+    },
+    {
+      "question": "Simulation vs. real controller — what changes?",
+      "answer": "Real controller: replace `step()` with event-driven callbacks — `onFloorReached(floor)`, `onDoorOpened()`, `onButtonPressed(floor)`. Movement is async (motor controller). Floor detection via hardware sensors firing interrupts. The **object model stays the same** — Elevator, Request, Controller. Only the **control flow** changes from pull (tick) to push (events)."
+    },
+    {
+      "question": "How do you test this design?",
+      "answer": "Simulation model is **deterministic** — same request sequence + same step calls → same behavior. Write unit tests: (1) Single elevator, single request → verify floor-by-floor movement. (2) Two requests in opposite directions → verify SCAN reversal. (3) Direction-aware: add PICKUP_DOWN while going UP → verify it's not served until reversal. (4) `getCost()` for dispatch accuracy."
+    }
+  ]
+}
