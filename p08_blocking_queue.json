@@ -1,0 +1,215 @@
+{
+  "title": "Thread-Safe Bounded Blocking Queue",
+  "description": "Implement a bounded blocking queue from scratch using locks and condition variables. Producers block when full, consumers block when empty. The canonical concurrency primitive — if you can't implement this, you can't implement anything concurrent.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Monitor Pattern"},
+    {"type": "concept", "label": "Condition Variables"},
+    {"type": "concept", "label": "Producer-Consumer"}
+  ],
+  "prompt": "Implement a thread-safe bounded blocking queue with `put()` and `take()` methods. Producers block when the queue is full; consumers block when it's empty.",
+  "prompt_note": "This is a **from-scratch implementation** problem — `java.util.concurrent.ArrayBlockingQueue` already exists, but the interviewer wants to see you wire up the locks and conditions yourself. The design is small but every line matters. Getting the `await`/`signal` semantics right is the entire point.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Should this be a generic queue — `BoundedBlockingQueue<T>` — or fixed to a type?\"",
+      "answer": "Interviewer: \"Generic.\"",
+      "why": "Standard — use Java generics."
+    },
+    {
+      "question": "You: \"Should `put()` and `take()` block indefinitely, or support timeouts?\"",
+      "answer": "Interviewer: \"Both versions. `put(x)` blocks forever; `offer(x, timeout)` returns false if timeout expires.\"",
+      "why": "Two API variants. The timed version uses `Condition.awaitNanos()` with loop for spurious wakeups."
+    },
+    {
+      "question": "You: \"FIFO ordering guaranteed?\"",
+      "answer": "Interviewer: \"Yes, strict FIFO.\"",
+      "why": "Use an `ArrayDeque` or circular array — both give O(1) FIFO operations."
+    },
+    {
+      "question": "You: \"What's the use case — producer-consumer pattern?\"",
+      "answer": "Interviewer: \"Yes. Multiple producers and consumers running concurrently.\"",
+      "why": "Must handle **many-producers/many-consumers**, not just 1:1. This affects notification strategy (`signal` vs `signalAll`)."
+    },
+    {
+      "question": "You: \"Can the queue be closed? What happens to blocked threads if it is?\"",
+      "answer": "Interviewer: \"Yes — support `close()`. Blocked consumers should be woken up and see an empty+closed queue (throw or return null).\"",
+      "why": "Graceful shutdown is a common follow-up. Add a `closed` flag + wake all waiters."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "`put(item)` — add to the back of the queue. **Blocks** if full until space available.",
+      "`take()` — remove from the front. **Blocks** if empty until an item is available.",
+      "`offer(item, timeout)` — like `put` but returns `false` if timeout expires.",
+      "`poll(timeout)` — like `take` but returns `null` if timeout expires.",
+      "`size()` — current number of items (non-blocking snapshot).",
+      "`close()` — graceful shutdown. Wake all waiters. Further `put` throws; `take` returns remaining items then throws."
+    ],
+    "out_of_scope": [
+      "Priority ordering, persistence, distributed coordination, fair ordering between producers/consumers."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Strict FIFO** — items come out in insertion order.",
+      "**No busy-waiting** — threads must block via condition variables, not spin.",
+      "**No lost wakeups** — every `put` that adds an item must ensure at least one blocked consumer is woken.",
+      "**Handle spurious wakeups** — `await()` must be in a `while` loop, not `if`."
+    ],
+    "out_of_scope": [
+      "Fairness guarantees (e.g., longest-waiting producer first), lock-free implementations."
+    ]
+  },
+
+  "primary_scope": [
+    "`put(x)` → acquire lock → while full: await notFull → add → signal notEmpty → unlock",
+    "`take()` → acquire lock → while empty: await notEmpty → remove → signal notFull → unlock",
+    "Timed variants use `awaitNanos()` with deadline tracking",
+    "`close()` sets flag and signals all conditions → waiters re-check and return/throw"
+  ],
+  "termination_points": [
+    "`IllegalArgumentException` — capacity ≤ 0 in constructor",
+    "`NullPointerException` — null item in `put` (ArrayDeque disallows nulls by convention)",
+    "`InterruptedException` — thread interrupted while blocked (rethrown)",
+    "`QueueClosedException` — `put` on a closed queue",
+    "Timed variants: return `false` / `null` on timeout (not an exception)"
+  ],
+
+  "entity_intro": "This problem has exactly **one class**. Over-engineering with multiple entities is a red flag — the interviewer wants to see correct primitives, not architecture.",
+  "entities": [
+    {
+      "name": "BoundedBlockingQueue<T>",
+      "role": "**The entire problem.** Holds items, capacity, a `ReentrantLock`, two `Condition` objects (`notFull`, `notEmpty`), and a `closed` flag. All methods acquire the lock, wait on the appropriate condition, and signal the other condition after modification.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — the only class"
+    },
+    {
+      "name": "Item wrapper",
+      "role": "Don't wrap items in a node class unless you need linking. `ArrayDeque<T>` already handles storage. No Item entity needed.",
+      "verdict": "no",
+      "verdict_label": "✗ Don't over-engineer — use ArrayDeque directly"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "BoundedBlockingQueue", "owns": "`ArrayDeque<T>` storage, `ReentrantLock`, two `Condition` vars, capacity, closed flag", "rel": "Standalone — no collaborators"}
+  ],
+
+  "mvc_note": "**MVC doesn't apply here** — this is a single-class concurrency primitive, not an application. The design principle is: **one lock + two conditions** — the Monitor Pattern from Hoare/Brinch-Hansen's 1970s papers. Don't invent extra layers.",
+
+  "classes": [
+    {
+      "name": "BoundedBlockingQueue<T>", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "queue", "type": "ArrayDeque<T>"},
+        {"name": "capacity", "type": "int"},
+        {"name": "lock", "type": "ReentrantLock"},
+        {"name": "notFull", "type": "Condition"},
+        {"name": "notEmpty", "type": "Condition"},
+        {"name": "closed", "type": "boolean"}
+      ],
+      "methods": [
+        {"name": "put(item)", "returns": "void (blocking)"},
+        {"name": "take()", "returns": "T (blocking)"},
+        {"name": "offer(item, timeout)", "returns": "boolean"},
+        {"name": "poll(timeout)", "returns": "T"},
+        {"name": "size()", "returns": "int"},
+        {"name": "close()", "returns": "void"}
+      ]
+    }
+  ],
+
+  "db_schema": [],
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Core — Lock + Two Conditions",
+      "flow": "**One lock, two conditions.** `notFull` = producers wait here when queue is full. `notEmpty` = consumers wait here when queue is empty. `put()` waits on `notFull`, signals `notEmpty`. `take()` waits on `notEmpty`, signals `notFull`. This is the canonical bounded buffer solution.",
+      "edge_cases": "**Always use `while` not `if`** for wait loops — spurious wakeups are real. **Always signal the other condition** in a finally-like way — if you forget, the counterpart thread blocks forever.",
+      "code": "import java.util.ArrayDeque;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.locks.Condition;\nimport java.util.concurrent.locks.ReentrantLock;\n\npublic class BoundedBlockingQueue<T> {\n    private final ArrayDeque<T> queue;\n    private final int capacity;\n    private final ReentrantLock lock = new ReentrantLock();\n    private final Condition notFull  = lock.newCondition();\n    private final Condition notEmpty = lock.newCondition();\n    private boolean closed = false;\n\n    public BoundedBlockingQueue(int capacity) {\n        if (capacity <= 0)\n            throw new IllegalArgumentException(\"Capacity must be positive\");\n        this.capacity = capacity;\n        this.queue = new ArrayDeque<>(capacity);\n    }\n\n    // ── put ─────────────────────────────────\n    // Blocks until space is available or interrupted\n    public void put(T item) throws InterruptedException {\n        if (item == null)\n            throw new NullPointerException(\"null items not allowed\");\n\n        lock.lockInterruptibly();\n        try {\n            // WHILE not IF — guards against spurious wakeups\n            while (queue.size() == capacity) {\n                if (closed) throw new QueueClosedException();\n                notFull.await();  // releases lock, waits, re-acquires\n            }\n            if (closed) throw new QueueClosedException();\n\n            queue.addLast(item);\n            notEmpty.signal();  // wake ONE consumer\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    // ── take ────────────────────────────────\n    // Blocks until an item is available or interrupted\n    public T take() throws InterruptedException {\n        lock.lockInterruptibly();\n        try {\n            while (queue.isEmpty()) {\n                if (closed) throw new QueueClosedException();\n                notEmpty.await();\n            }\n            T item = queue.pollFirst();\n            notFull.signal();   // wake ONE producer\n            return item;\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    public int size() {\n        lock.lock();\n        try {\n            return queue.size();\n        } finally {\n            lock.unlock();\n        }\n    }\n}"
+    },
+    {
+      "label": "Timed Variants — offer() and poll() with Deadline",
+      "flow": "Use `Condition.awaitNanos(nanos)` instead of `await()`. It returns remaining nanos — use this to track remaining time across loop iterations (spurious wakeups can eat time).",
+      "edge_cases": "**Remaining nanos ≤ 0** → timeout expired, return false/null. **Interrupt** during await → `InterruptedException` is thrown, propagate it.",
+      "code": "// ── offer with timeout ──────────────────\npublic boolean offer(T item, long timeout, TimeUnit unit)\n        throws InterruptedException {\n    if (item == null) throw new NullPointerException();\n\n    long nanos = unit.toNanos(timeout);\n    lock.lockInterruptibly();\n    try {\n        while (queue.size() == capacity) {\n            if (closed) throw new QueueClosedException();\n            if (nanos <= 0) return false;  // timeout expired\n            nanos = notFull.awaitNanos(nanos);\n            // awaitNanos returns remaining nanos (negative if expired)\n        }\n        if (closed) throw new QueueClosedException();\n        queue.addLast(item);\n        notEmpty.signal();\n        return true;\n    } finally {\n        lock.unlock();\n    }\n}\n\n// ── poll with timeout ───────────────────\npublic T poll(long timeout, TimeUnit unit) throws InterruptedException {\n    long nanos = unit.toNanos(timeout);\n    lock.lockInterruptibly();\n    try {\n        while (queue.isEmpty()) {\n            if (closed) return null;  // draining closed queue\n            if (nanos <= 0) return null;\n            nanos = notEmpty.awaitNanos(nanos);\n        }\n        T item = queue.pollFirst();\n        notFull.signal();\n        return item;\n    } finally {\n        lock.unlock();\n    }\n}"
+    },
+    {
+      "label": "Graceful Shutdown — close() with signalAll",
+      "flow": "Set `closed = true` → **`signalAll`** on both conditions to wake every blocked thread. Each awoken thread re-checks the loop condition and sees `closed` → throws or returns accordingly.",
+      "edge_cases": "**Must use `signalAll`, not `signal`** — multiple threads might be blocked on each condition. Waking only one leaves the others hanging forever.",
+      "code": "// ── close ───────────────────────────────\npublic void close() {\n    lock.lock();\n    try {\n        closed = true;\n        // Wake ALL waiters so they can re-check 'closed'\n        notFull.signalAll();\n        notEmpty.signalAll();\n    } finally {\n        lock.unlock();\n    }\n}\n\nclass QueueClosedException extends RuntimeException {\n    public QueueClosedException() {\n        super(\"Queue is closed\");\n    }\n}"
+    },
+    {
+      "label": "Usage Example — Producer-Consumer Demo",
+      "code": "// Demo: 2 producers, 3 consumers, capacity 5\nBoundedBlockingQueue<Integer> bq = new BoundedBlockingQueue<>(5);\n\n// Producers\nfor (int p = 0; p < 2; p++) {\n    int id = p;\n    new Thread(() -> {\n        try {\n            for (int i = 0; i < 100; i++) {\n                bq.put(id * 1000 + i);  // blocks if full\n                System.out.println(\"P\" + id + \" put \" + i);\n            }\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }).start();\n}\n\n// Consumers\nfor (int c = 0; c < 3; c++) {\n    int id = c;\n    new Thread(() -> {\n        try {\n            while (true) {\n                Integer item = bq.take();  // blocks if empty\n                System.out.println(\"C\" + id + \" took \" + item);\n                Thread.sleep(10);  // simulate work\n            }\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }).start();\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Monitor Pattern (one lock + conditions)",
+      "why": "Classical concurrency pattern: an object owns its state and a single lock that all methods acquire. Condition variables let threads wait inside the monitor for state changes. The canonical formulation of bounded-buffer by Hoare/Brinch-Hansen uses **exactly this structure**: one lock, two conditions — one per 'waiting for' predicate.",
+      "where": "`ReentrantLock lock` + `notFull`, `notEmpty` conditions — one per wait predicate"
+    },
+    {
+      "name": "Producer-Consumer",
+      "why": "This queue **is** the decoupling primitive for the Producer-Consumer pattern. Producers don't need to know about consumers or vice versa — they only interact through the queue. The queue handles backpressure (blocking producers when full) and flow control (blocking consumers when empty).",
+      "where": "The queue itself — no code to point to, it's the architectural role"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Spurious wakeups — `await()` returns without being signaled",
+      "fix": "**Always use `while` not `if`** in the wait loop. JVM-level condition variables can return spuriously (rare, but specified by POSIX and Java docs). `while (queue.size() == capacity) await();` re-checks the condition on wakeup — if spurious, loops back to await. `if` would incorrectly proceed."
+    },
+    {
+      "issue": "Lost wakeup — producer adds item but no consumer sees it",
+      "fix": "`await()` **atomically releases the lock and waits**. The producer can't acquire the lock and signal until the consumer has called `await()`. There's no window for the signal to be lost because the wait+release is atomic. **This is why you must wait while holding the lock — don't check the condition outside the lock.**"
+    },
+    {
+      "issue": "Thundering herd — `signalAll` wakes everyone, they all try to proceed",
+      "fix": "Use `signal` (wake one) for `put`/`take` — only one waiter can make progress at a time (there's only one new slot / one new item). `signalAll` is only for `close()` where every waiter needs to see the closed flag. **Wake exactly as many as can succeed** — wasteful wake-ups cause cache thrashing and lock contention."
+    },
+    {
+      "issue": "Interrupted while blocked in `await()`",
+      "fix": "`lockInterruptibly()` + `await()` both throw `InterruptedException`. The thread's interrupt flag is cleared when the exception is thrown. Propagate the exception (`throws InterruptedException`) so the caller can handle it. Don't swallow it — it's the **interruption contract** for blocking methods."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why one lock and two conditions instead of two locks?",
+      "answer": "Two locks (one for producers, one for consumers) would require coordinating state visibility between them — the `size` field would need to be atomic or cross-lock synchronized. **One lock with two conditions** is simpler and correct: all mutations happen under the same lock, so state is always consistent. The two conditions just let you wake producers and consumers independently. `LinkedBlockingQueue` actually uses two locks (`putLock`, `takeLock`) for throughput, but it's more complex and only wins under extreme contention."
+    },
+    {
+      "question": "Why `signal()` not `signalAll()` in put/take?",
+      "answer": "Only one thread can benefit from a single new slot or item. `signalAll` wakes everyone; they all race to grab the lock, one wins, the rest go back to waiting. That's O(N) wasted wakeups. `signal` wakes exactly one — the other waiters stay blocked efficiently. **Exception:** `close()` needs `signalAll` because every waiter must re-check the `closed` flag."
+    },
+    {
+      "question": "Why `while` loop around `await()` instead of `if`?",
+      "answer": "Three reasons: (1) **Spurious wakeups** — specified as possible by Java's Condition docs. (2) **Signal-based wakeups are stale** — another thread could acquire the lock between your wakeup and your re-check, changing state. (3) **Correctness** — re-checking is cheap, incorrect state progression is catastrophic. The rule: **wait in a while loop around the predicate, always.**"
+    },
+    {
+      "question": "How does this compare to `java.util.concurrent.ArrayBlockingQueue`?",
+      "answer": "`ArrayBlockingQueue` uses the **exact same design**: one `ReentrantLock`, two `Condition` vars (`notEmpty`, `notFull`), circular array storage. You can literally look at its source — it's ~300 lines. Our implementation is simpler (ArrayDeque vs circular array) but semantically equivalent. `LinkedBlockingQueue` uses **two locks** for higher throughput but has weaker size consistency."
+    },
+    {
+      "question": "What's the deal with `lockInterruptibly()` vs `lock()`?",
+      "answer": "`lock()` is **not** interruptible — if a thread is waiting for the lock and gets interrupted, it sets the interrupt flag but keeps waiting. `lockInterruptibly()` throws `InterruptedException` immediately on interrupt, even while waiting for the lock. For a blocking queue, interruption should propagate through **every** blocking point: waiting for the lock AND waiting on the condition. So always use `lockInterruptibly()` in blocking primitives."
+    },
+    {
+      "question": "How would you make this fair (longest-waiting thread goes first)?",
+      "answer": "Use `new ReentrantLock(true)` — the `true` enables fair mode. Threads acquire the lock in FIFO order. **But** fair locks are ~10x slower than unfair ones due to the cost of maintaining the wait queue. Production code almost always uses unfair locks. Mention fairness exists; don't recommend it by default."
+    },
+    {
+      "question": "How would you make it lock-free?",
+      "answer": "Use `ConcurrentLinkedQueue` (already unbounded lock-free, Michael-Scott algorithm). For bounded+lock-free: the **Disruptor** pattern (LMAX) uses a ring buffer with memory barriers and sequence counters — no locks, but complex. For an interview, mention that lock-free is possible but justify why locks are fine: contention on a single lock at O(1) per op is fast; the JVM handles bias-locking and escalation. Don't go lock-free unless profiling demands it."
+    }
+  ]
+}

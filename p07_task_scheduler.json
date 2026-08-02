@@ -1,0 +1,286 @@
+{
+  "title": "Distributed Task Scheduler",
+  "description": "Design an in-process task scheduler that runs tasks at specific times, supports priorities, retries on failure, and uses a worker pool for parallel execution. The core data structure is a priority queue ordered by execution time.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Command Pattern"},
+    {"type": "pattern", "label": "Producer-Consumer"},
+    {"type": "concept", "label": "Priority Queue"},
+    {"type": "concept", "label": "Concurrency"}
+  ],
+  "prompt": "Design a task scheduler that runs tasks at a specific time with support for retries and priorities.",
+  "prompt_note": "Scheduler problems are producer-consumer under the hood. Producers submit tasks; a dispatcher thread pulls due tasks from a priority queue and hands them to worker threads. The interesting bits are: efficient 'wait until next task is due' (use `DelayQueue` or condition variables), retry with backoff, and graceful shutdown.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Is this in-process (single JVM) or distributed across multiple machines?\"",
+      "answer": "Interviewer: \"In-process. A single JVM with a worker pool.\"",
+      "why": "Distributed would need a shared store (Redis/DB) + leader election. In-process = `DelayQueue` + `ExecutorService`."
+    },
+    {
+      "question": "You: \"One-time tasks, or recurring (cron-like)?\"",
+      "answer": "Interviewer: \"Both. One-time with `scheduleAt(time)` and recurring with `scheduleEvery(interval)`.\"",
+      "why": "Recurring tasks reschedule themselves after execution. Need to handle the re-enqueue safely."
+    },
+    {
+      "question": "You: \"What if a task fails — retry? How many times? With backoff?\"",
+      "answer": "Interviewer: \"Yes — retry with exponential backoff, max 3 retries, then mark as failed.\"",
+      "why": "Need a retry policy per task. Exponential backoff = delay * 2^attempt."
+    },
+    {
+      "question": "You: \"Priorities — do higher-priority tasks run before lower-priority ones?\"",
+      "answer": "Interviewer: \"Yes, but execution time takes precedence. If two tasks are due at the same time, higher priority wins.\"",
+      "why": "Comparator: order by `executionTime` first, then by `priority`. Primary sort is time."
+    },
+    {
+      "question": "You: \"Can tasks be cancelled after submission?\"",
+      "answer": "Interviewer: \"Yes. Return a handle (task ID) that supports `cancel()`.\"",
+      "why": "Tasks need a CANCELLED state. The worker must check this before executing."
+    },
+    {
+      "question": "You: \"How does the scheduler shut down? Should it wait for in-flight tasks?\"",
+      "answer": "Interviewer: \"Graceful shutdown — wait for running tasks to finish, reject new submissions.\"",
+      "why": "Need a `stopped` flag and `ExecutorService.shutdown()` semantics."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "`scheduleAt(task, time)` → one-time execution at a specific timestamp.",
+      "`scheduleEvery(task, interval)` → recurring execution at fixed intervals.",
+      "**Priority support:** tasks at the same time execute in priority order (HIGH > MEDIUM > LOW).",
+      "**Retry on failure:** exponential backoff, max 3 retries, then mark FAILED.",
+      "**Cancellation:** `cancel(taskId)` marks the task as CANCELLED. Worker skips cancelled tasks.",
+      "**Worker pool:** configurable number of worker threads for parallel execution.",
+      "**Graceful shutdown:** stop accepting new tasks, drain in-flight work."
+    ],
+    "out_of_scope": [
+      "Distributed scheduling, persistence (tasks lost on restart), task result/callback propagation, CRON expressions, task dependencies/DAGs."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Efficient wait:** dispatcher thread must not busy-wait. Block until next task is due using `DelayQueue.take()` (condition variable under the hood).",
+      "**Thread-safe:** concurrent `scheduleAt()` calls from multiple producers. Concurrent cancellation while dispatching.",
+      "**No starvation:** long-running low-priority tasks must not block high-priority due tasks. Worker pool decouples dispatch from execution."
+    ],
+    "out_of_scope": [
+      "Strict real-time guarantees, millisecond precision across clock adjustments."
+    ]
+  },
+
+  "primary_scope": [
+    "`scheduleAt(task, time)` → wrap in ScheduledTask → add to DelayQueue → return taskId",
+    "Dispatcher loop: `queue.take()` (blocks until due) → submit to worker pool",
+    "Worker executes task → if recurring, reschedule → if failed, retry with backoff → else mark DONE",
+    "`cancel(taskId)` → mark status CANCELLED → worker skips on execution",
+    "`shutdown()` → stop dispatcher → drain workers → reject new tasks"
+  ],
+  "termination_points": [
+    "`SchedulerStoppedException` — submission after `shutdown()`",
+    "Task reaches max retries → status = FAILED, optional dead-letter callback",
+    "Task cancelled → worker sees CANCELLED status, skips execution",
+    "Dispatcher interrupted → break loop, stop workers"
+  ],
+
+  "entity_intro": "The core insight: separate the **time-ordered queue** (which task runs next) from the **execution pool** (who runs it). This prevents slow tasks from blocking the dispatcher.",
+  "entities": [
+    {
+      "name": "TaskScheduler",
+      "role": "**Controller.** Public API: `scheduleAt`, `scheduleEvery`, `cancel`, `shutdown`. Owns the DelayQueue, dispatcher thread, and worker pool. One scheduler per application.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    },
+    {
+      "name": "ScheduledTask",
+      "role": "**Model.** Wraps a user-submitted task with metadata: taskId, executionTime, priority, status, retry state, recurring interval. Implements `Delayed` interface so it can live in a `DelayQueue`.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — rich state"
+    },
+    {
+      "name": "Task (Runnable)",
+      "role": "**Interface.** User-provided work. Just a `Runnable` (or `Callable<V>` if we want results). Minimal — we don't need a custom interface.",
+      "verdict": "yes",
+      "verdict_label": "✓ Interface — user code contract"
+    },
+    {
+      "name": "RetryPolicy",
+      "role": "**Strategy.** Computes next retry delay given attempt count. `ExponentialBackoff`, `FixedDelay`, `NoRetry`. Per-task or global config.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Strategy Pattern"
+    },
+    {
+      "name": "Dispatcher",
+      "role": "Internal thread that loops: `queue.take()` → submit to worker pool. Not a separate class — just a `Runnable` inside TaskScheduler.",
+      "verdict": "maybe",
+      "verdict_label": "? Inline thread — could extract if dispatcher logic grows"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "TaskScheduler", "owns": "`DelayQueue<ScheduledTask>`, `ExecutorService workerPool`, dispatcher thread, `ConcurrentHashMap<taskId, ScheduledTask>`", "rel": "1→1 queue, 1→1 pool, 1→N tasks"},
+    {"entity": "ScheduledTask", "owns": "taskId, Runnable, executionTime, priority, status, RetryPolicy, attempt count", "rel": "1→1 Runnable (user code)"},
+    {"entity": "RetryPolicy", "owns": "maxRetries, base delay, multiplier", "rel": "N tasks → 1 policy (reusable)"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = ScheduledTask, TaskStatus enum, Priority enum, RetryPolicy. **Service** = Dispatcher loop, worker execution logic. **Controller** = TaskScheduler (public API: schedule/cancel/shutdown).",
+
+  "classes": [
+    {
+      "name": "TaskScheduler", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "queue", "type": "DelayQueue<ScheduledTask>"},
+        {"name": "workerPool", "type": "ExecutorService"},
+        {"name": "dispatcher", "type": "Thread"},
+        {"name": "allTasks", "type": "ConcurrentHashMap<String, ScheduledTask>"},
+        {"name": "running", "type": "volatile boolean"}
+      ],
+      "methods": [
+        {"name": "scheduleAt(runnable, time, priority)", "returns": "String (taskId)"},
+        {"name": "scheduleEvery(runnable, interval, priority)", "returns": "String"},
+        {"name": "cancel(taskId)", "returns": "boolean"},
+        {"name": "shutdown()", "returns": "void"}
+      ]
+    },
+    {
+      "name": "ScheduledTask", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "taskId", "type": "String (UUID)"},
+        {"name": "runnable", "type": "Runnable"},
+        {"name": "executionTime", "type": "long (epoch ms)"},
+        {"name": "priority", "type": "Priority"},
+        {"name": "status", "type": "volatile TaskStatus"},
+        {"name": "retryPolicy", "type": "RetryPolicy"},
+        {"name": "attempt", "type": "int"},
+        {"name": "intervalMs", "type": "long (0 if one-time)"}
+      ],
+      "methods": [
+        {"name": "getDelay(unit)", "returns": "long (Delayed interface)"},
+        {"name": "compareTo(other)", "returns": "int"},
+        {"name": "isRecurring()", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "RetryPolicy", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "shouldRetry(attempt)", "returns": "boolean"},
+        {"name": "nextDelayMs(attempt)", "returns": "long"}
+      ]
+    },
+    {
+      "name": "ExponentialBackoff", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "baseDelayMs", "type": "long"},
+        {"name": "maxRetries", "type": "int"},
+        {"name": "multiplier", "type": "double"}
+      ],
+      "methods": [
+        {"name": "shouldRetry(attempt)", "returns": "boolean"},
+        {"name": "nextDelayMs(attempt)", "returns": "long"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "scheduled_tasks (optional persistence)",
+      "columns": [
+        {"name": "task_id", "type": "UUID", "pk": true},
+        {"name": "execution_time", "type": "TIMESTAMP", "idx": true},
+        {"name": "priority", "type": "ENUM(HIGH,MED,LOW)"},
+        {"name": "status", "type": "ENUM(PENDING,RUNNING,DONE,FAILED,CANCELLED)", "idx": true},
+        {"name": "interval_ms", "type": "BIGINT"},
+        {"name": "attempt", "type": "INT"},
+        {"name": "max_retries", "type": "INT"},
+        {"name": "payload", "type": "JSONB"}
+      ]
+    }
+  ],
+  "schema_note": "For persistence, add a DB. Index `(status, execution_time)` for 'find next due task'. On startup, load all PENDING tasks into the DelayQueue. Not in LLD scope unless interviewer asks — in-memory by default.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — ScheduledTask (implements Delayed)",
+      "flow": "`Delayed.getDelay()`: returns nanos until `executionTime`. Negative = overdue (DelayQueue releases immediately). `compareTo()`: sort by executionTime, then priority — primary order is time, tie-break on priority.",
+      "edge_cases": "Two tasks with identical executionTime + priority → stable order not guaranteed (use taskId as final tie-breaker for determinism). executionTime in the past → delay is negative, runs immediately.",
+      "code": "enum Priority { HIGH(3), MEDIUM(2), LOW(1); final int weight; Priority(int w) { this.weight = w; } }\nenum TaskStatus { PENDING, RUNNING, DONE, FAILED, CANCELLED }\n\nclass ScheduledTask implements Delayed {\n    private final String taskId;\n    private final Runnable runnable;\n    private volatile long executionTime; // epoch ms (volatile — re-scheduled on retry/recurring)\n    private final Priority priority;\n    private volatile TaskStatus status = TaskStatus.PENDING;\n    private final RetryPolicy retryPolicy;\n    private int attempt = 0;\n    private final long intervalMs; // 0 = one-time\n\n    public ScheduledTask(Runnable r, long time, Priority p,\n                         RetryPolicy policy, long intervalMs) {\n        this.taskId = UUID.randomUUID().toString();\n        this.runnable = r;\n        this.executionTime = time;\n        this.priority = p;\n        this.retryPolicy = policy;\n        this.intervalMs = intervalMs;\n    }\n\n    @Override\n    public long getDelay(TimeUnit unit) {\n        long diffMs = executionTime - System.currentTimeMillis();\n        return unit.convert(diffMs, TimeUnit.MILLISECONDS);\n    }\n\n    @Override\n    public int compareTo(Delayed other) {\n        ScheduledTask o = (ScheduledTask) other;\n        // Primary: execution time\n        int timeCompare = Long.compare(this.executionTime, o.executionTime);\n        if (timeCompare != 0) return timeCompare;\n        // Tie-break: priority (higher weight = earlier)\n        int priCompare = Integer.compare(o.priority.weight, this.priority.weight);\n        if (priCompare != 0) return priCompare;\n        // Final: taskId for deterministic ordering\n        return this.taskId.compareTo(o.taskId);\n    }\n\n    public boolean isRecurring() { return intervalMs > 0; }\n    public String getTaskId() { return taskId; }\n    public Runnable getRunnable() { return runnable; }\n    public TaskStatus getStatus() { return status; }\n    public void setStatus(TaskStatus s) { this.status = s; }\n    public int getAttempt() { return attempt; }\n    public void incrementAttempt() { this.attempt++; }\n    public RetryPolicy getRetryPolicy() { return retryPolicy; }\n    public void setExecutionTime(long t) { this.executionTime = t; }\n    public long getIntervalMs() { return intervalMs; }\n}"
+    },
+    {
+      "label": "Strategy — RetryPolicy (Exponential Backoff)",
+      "code": "interface RetryPolicy {\n    boolean shouldRetry(int attempt);\n    long nextDelayMs(int attempt);\n\n    RetryPolicy NO_RETRY = new RetryPolicy() {\n        public boolean shouldRetry(int a) { return false; }\n        public long nextDelayMs(int a) { return 0; }\n    };\n}\n\nclass ExponentialBackoff implements RetryPolicy {\n    private final long baseDelayMs;\n    private final int maxRetries;\n    private final double multiplier;\n\n    public ExponentialBackoff(long baseDelayMs, int maxRetries, double multiplier) {\n        this.baseDelayMs = baseDelayMs;\n        this.maxRetries = maxRetries;\n        this.multiplier = multiplier;\n    }\n\n    @Override\n    public boolean shouldRetry(int attempt) {\n        return attempt < maxRetries;\n    }\n\n    @Override\n    public long nextDelayMs(int attempt) {\n        // Delay = base * multiplier^attempt\n        // With jitter to prevent thundering herd\n        double delay = baseDelayMs * Math.pow(multiplier, attempt);\n        double jitter = ThreadLocalRandom.current().nextDouble(0.8, 1.2);\n        return (long) (delay * jitter);\n    }\n}"
+    },
+    {
+      "label": "Controller — TaskScheduler (Dispatcher Loop + Worker Pool)",
+      "flow": "**Constructor:** start dispatcher thread that runs `dispatchLoop()`.\n**`dispatchLoop()`:** `queue.take()` blocks until next task is due → check status (skip if CANCELLED) → submit to workerPool → worker runs task, handles retry/reschedule/completion.\n**`scheduleAt()`:** create ScheduledTask → put in queue + allTasks map.\n**`cancel()`:** set status CANCELLED (worker checks before execution).\n**`shutdown()`:** set `running = false` → interrupt dispatcher → `workerPool.shutdown()` → await termination.",
+      "edge_cases": "Task submitted after shutdown → `SchedulerStoppedException`. Dispatcher interrupted → break loop cleanly. Worker throws → catch, check retry, reschedule or mark FAILED. Recurring task → re-enqueue with `executionTime += intervalMs`. Retry with backoff → re-enqueue with `executionTime = now + backoffDelay`.",
+      "code": "class TaskScheduler {\n    private final DelayQueue<ScheduledTask> queue = new DelayQueue<>();\n    private final ExecutorService workerPool;\n    private final Thread dispatcher;\n    private final ConcurrentHashMap<String, ScheduledTask> allTasks = new ConcurrentHashMap<>();\n    private volatile boolean running = true;\n\n    public TaskScheduler(int numWorkers) {\n        this.workerPool = Executors.newFixedThreadPool(numWorkers);\n        this.dispatcher = new Thread(this::dispatchLoop, \"task-dispatcher\");\n        this.dispatcher.setDaemon(true);\n        this.dispatcher.start();\n    }\n\n    // ── Public API ──────────────────────────\n    public String scheduleAt(Runnable task, long epochMs,\n                             Priority priority, RetryPolicy policy) {\n        if (!running)\n            throw new SchedulerStoppedException(\"Scheduler stopped\");\n        ScheduledTask st = new ScheduledTask(task, epochMs, priority, policy, 0);\n        allTasks.put(st.getTaskId(), st);\n        queue.put(st);\n        return st.getTaskId();\n    }\n\n    public String scheduleEvery(Runnable task, long intervalMs,\n                                Priority priority) {\n        if (!running)\n            throw new SchedulerStoppedException(\"Scheduler stopped\");\n        long firstRun = System.currentTimeMillis() + intervalMs;\n        ScheduledTask st = new ScheduledTask(\n            task, firstRun, priority, RetryPolicy.NO_RETRY, intervalMs);\n        allTasks.put(st.getTaskId(), st);\n        queue.put(st);\n        return st.getTaskId();\n    }\n\n    public boolean cancel(String taskId) {\n        ScheduledTask st = allTasks.get(taskId);\n        if (st == null) return false;\n        if (st.getStatus() == TaskStatus.PENDING) {\n            st.setStatus(TaskStatus.CANCELLED);\n            return true;\n        }\n        return false; // already running or done\n    }\n\n    public void shutdown() {\n        running = false;\n        dispatcher.interrupt();\n        workerPool.shutdown();\n        try {\n            workerPool.awaitTermination(30, TimeUnit.SECONDS);\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }\n\n    // ── Dispatcher loop ─────────────────────\n    private void dispatchLoop() {\n        while (running) {\n            try {\n                ScheduledTask task = queue.take(); // blocks until due\n                if (task.getStatus() == TaskStatus.CANCELLED) {\n                    allTasks.remove(task.getTaskId());\n                    continue;\n                }\n                task.setStatus(TaskStatus.RUNNING);\n                workerPool.submit(() -> executeTask(task));\n            } catch (InterruptedException e) {\n                if (!running) break; // shutdown signal\n                Thread.currentThread().interrupt();\n            }\n        }\n    }\n\n    // ── Worker execution logic ──────────────\n    private void executeTask(ScheduledTask task) {\n        // Double-check cancellation just before execution\n        if (task.getStatus() == TaskStatus.CANCELLED) {\n            allTasks.remove(task.getTaskId());\n            return;\n        }\n\n        try {\n            task.getRunnable().run();\n\n            // Success path\n            if (task.isRecurring()) {\n                // Reschedule for next interval\n                task.setExecutionTime(\n                    System.currentTimeMillis() + task.getIntervalMs());\n                task.setStatus(TaskStatus.PENDING);\n                queue.put(task);\n            } else {\n                task.setStatus(TaskStatus.DONE);\n                allTasks.remove(task.getTaskId());\n            }\n        } catch (Exception e) {\n            // Failure path — retry with backoff?\n            task.incrementAttempt();\n            if (task.getRetryPolicy().shouldRetry(task.getAttempt())) {\n                long delay = task.getRetryPolicy().nextDelayMs(task.getAttempt());\n                task.setExecutionTime(System.currentTimeMillis() + delay);\n                task.setStatus(TaskStatus.PENDING);\n                queue.put(task);\n            } else {\n                task.setStatus(TaskStatus.FAILED);\n                // Optional: send to dead-letter queue / callback\n                allTasks.remove(task.getTaskId());\n            }\n        }\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Command Pattern → ScheduledTask wraps Runnable",
+      "why": "A `Runnable` is the classic Command object — encapsulates an operation. ScheduledTask adds scheduling metadata (time, priority, retry) around the command. The scheduler doesn't know what the task does — just that it can `run()` it. Decouples the scheduler from the work itself.",
+      "where": "`ScheduledTask.runnable` field — user-provided `Runnable`"
+    },
+    {
+      "name": "Strategy Pattern → RetryPolicy",
+      "why": "Different tasks may want different retry behaviors. `ExponentialBackoff` for external API calls, `NoRetry` for idempotent operations, `FixedDelay` for simple cases. The scheduler calls `policy.shouldRetry()` and `policy.nextDelayMs()` without knowing which policy is in use.",
+      "where": "`RetryPolicy` interface + `ExponentialBackoff`, `NO_RETRY` implementations"
+    },
+    {
+      "name": "Producer-Consumer → DelayQueue + Worker Pool",
+      "why": "Producers = callers of `scheduleAt()`. Consumer = dispatcher thread. The `DelayQueue` is a thread-safe, time-aware producer-consumer queue. The worker pool further decouples dispatch from execution — slow tasks don't block the dispatcher.",
+      "where": "`DelayQueue<ScheduledTask>` + `ExecutorService workerPool`"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Dispatcher busy-waiting on an empty queue",
+      "fix": "`DelayQueue.take()` blocks using a `Condition` variable internally. No CPU spin. When a new task is added, the producer signals the condition. When a task becomes due, the condition fires based on the head's `getDelay()`. This is **the reason to use DelayQueue** over a raw PriorityQueue."
+    },
+    {
+      "issue": "Cancellation race: task is dequeued by dispatcher, then cancelled just before worker runs it",
+      "fix": "**Double-check pattern:** dispatcher checks status after `queue.take()`. Worker re-checks status inside `executeTask()` just before calling `runnable.run()`. Between those checks, a concurrent `cancel()` can set the status → worker sees it and skips. The race window is harmless — worst case, the task runs and cancellation is ignored."
+    },
+    {
+      "issue": "Recurring task reschedule race: task is running, producer tries to cancel it",
+      "fix": "`cancel()` only succeeds if status == PENDING. If the task is RUNNING, cancel returns false. After execution, the reschedule path sets status back to PENDING and re-enqueues. If cancel was called during execution, the caller got false — they know cancellation failed and can retry after completion."
+    },
+    {
+      "issue": "Graceful shutdown while tasks are in-flight",
+      "fix": "`shutdown()` sets `running = false` → interrupts the dispatcher (breaking the `take()` call) → calls `workerPool.shutdown()` → `awaitTermination(30s)`. This means: no new tasks dispatched, in-flight workers complete, 30-second max wait. For a hard stop, use `workerPool.shutdownNow()` which interrupts running tasks."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why DelayQueue instead of PriorityQueue + sleep?",
+      "answer": "`PriorityQueue + Thread.sleep(delay)` has two problems: (1) If a higher-priority earlier task is submitted while sleeping, the dispatcher misses it — you'd need to interrupt-and-recheck on every add. (2) Clock drift and wakeup jitter. `DelayQueue` handles both: it's a priority queue where elements aren't returned until their `getDelay()` becomes non-positive. When a new element with earlier delay is added, the waiting thread is notified via a condition variable. **It's the correct primitive for this problem.**"
+    },
+    {
+      "question": "Why a separate worker pool instead of running tasks in the dispatcher thread?",
+      "answer": "The dispatcher has one job: **decide what runs next**. If the dispatcher executes tasks inline, a slow task (5 seconds) blocks the dispatcher for 5 seconds — higher-priority tasks due during that window are delayed. The worker pool decouples **scheduling decisions from execution**, so the dispatcher is always responsive. Classic separation of concerns."
+    },
+    {
+      "question": "How does exponential backoff with jitter prevent thundering herd?",
+      "answer": "Thundering herd: 100 tasks all fail at the same time (e.g., downstream service down). Without jitter, they all retry at `base * 2^1`, then `base * 2^2`, etc. — synchronized waves of load hit the recovering service. **Jitter** adds randomness: `delay * random(0.8, 1.2)`. Now the 100 retries spread across a ~40% window, smoothing the load. AWS and Google SRE books recommend this pattern."
+    },
+    {
+      "question": "How would you persist tasks so they survive a restart?",
+      "answer": "Before enqueueing in DelayQueue, write to DB: `INSERT INTO scheduled_tasks (task_id, execution_time, status, payload) ...`. On successful execution, `UPDATE status = 'DONE'`. On startup, load all `PENDING` tasks from DB into the DelayQueue. **Challenge:** the Runnable can't be serialized — store a `taskType` enum + params, and a factory reconstructs the Runnable at load time. This turns into a full **job queue** (Sidekiq, Celery, Quartz)."
+    },
+    {
+      "question": "Distributed version — how would you design this?",
+      "answer": "**Option 1 — Shared DB:** all schedulers poll the DB for due tasks. Use `SELECT ... FOR UPDATE SKIP LOCKED` so only one scheduler picks up each task. **Option 2 — Redis sorted set:** score = executionTime. `ZRANGEBYSCORE 0 NOW` gets due tasks; `ZREM` atomically claims them. **Option 3 — Kafka with delayed topics:** produce to a topic with a delay header; consumers respect it. Leader election (via Zookeeper/etcd) ensures only one instance triggers recurring tasks to avoid duplication."
+    },
+    {
+      "question": "How do you handle clock adjustments (NTP sync)?",
+      "answer": "`DelayQueue` uses `System.nanoTime()` internally which is monotonic — not affected by wall clock jumps. However, we store `executionTime` as `System.currentTimeMillis()` which **is** affected by NTP adjustments. A backward NTP jump could make tasks fire late. Fix: use `Instant.now(Clock.systemUTC())` for scheduling and convert to nanos-from-now for the DelayQueue. For extreme precision, inject a `Clock` and test with a fake."
+    }
+  ]
+}

@@ -1,0 +1,2684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>LLD Interview Mastery — 15 Complete Problems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#08090e;
+  --s1:#0d0f18;
+  --s2:#12151f;
+  --s3:#181c28;
+  --border:#1f2535;
+  --borderl:#28314a;
+  --text:#dde4f0;
+  --muted:#7a869e;
+  --dim:#424d63;
+  --acc:#4f8ef7;
+  --accl:#7aabff;
+  --accg:rgba(79,142,247,0.12);
+  --green:#2dd4a0;
+  --greeng:rgba(45,212,160,0.1);
+  --red:#f7614f;
+  --redg:rgba(247,97,79,0.1);
+  --amber:#f5b942;
+  --amberg:rgba(245,185,66,0.1);
+  --purple:#b478f5;
+  --purpleg:rgba(180,120,245,0.1);
+  --cyan:#38c9e8;
+  --cyang:rgba(56,201,232,0.1);
+  --r:10px;--rs:6px;
+
+    --bg:#ffffff;
+  --s1:#f8f9fc;
+  --s2:#f1f3f8;
+  --s3:#e9edf5;
+  --border:#e2e6ef;
+  --borderl:#cfd6e6;
+  --text:#0f172a;
+  --muted:#475569;
+  --dim:#94a3b8;
+  --acc:#2563eb;
+  --accl:#1d4ed8;
+  --accg:rgba(37,99,235,0.08);
+}
+
+
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Sora',sans-serif;font-size:14px;line-height:1.7;min-height:100vh}
+
+/* ── NAV ── */
+.topbar{background:var(--s1);border-bottom:1px solid var(--border);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.logo{font-size:18px;font-weight:800;letter-spacing:-0.04em;color:var(--text)}.logo em{color:var(--acc);font-style:normal}
+.nav-pills{display:flex;gap:6px}
+.nav-pill{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;text-decoration:none;color:var(--muted);border:1px solid var(--border);transition:all .15s}
+.nav-pill:hover{color:var(--text);border-color:var(--borderl)}
+.nav-pill.active{background:var(--accg);color:var(--accl);border-color:rgba(79,142,247,.35)}
+
+/* ── LAYOUT ── */
+.layout{display:flex;max-width:1400px;margin:0 auto;padding:0 24px;gap:36px}
+
+/* ── SIDEBAR ── */
+.sidebar{width:260px;flex-shrink:0;padding-top:32px;position:sticky;top:68px;align-self:flex-start;max-height:calc(100vh - 68px);overflow-y:auto}
+.sidebar::-webkit-scrollbar{width:3px}.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.sb-title{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;padding:0 10px}
+.sb-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--rs);text-decoration:none;color:var(--muted);font-size:12.5px;transition:all .15s;cursor:pointer}
+.sb-item:hover{background:var(--s2);color:var(--text)}
+.sb-item.active{background:var(--accg);color:var(--accl)}
+.sb-num{width:20px;height:20px;border-radius:4px;background:var(--s3);border:1px solid var(--border);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--dim);flex-shrink:0}
+.sb-item.active .sb-num{background:var(--accg);border-color:rgba(79,142,247,.4);color:var(--acc)}
+.sb-section{margin-bottom:20px}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0;padding:32px 0 120px}
+
+/* ── HERO ── */
+.hero{margin-bottom:48px;padding:40px;background:linear-gradient(135deg,rgba(79,142,247,.08),rgba(180,120,245,.06));border:1px solid rgba(79,142,247,.2);border-radius:16px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(79,142,247,.15),transparent 70%);border-radius:50%}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:var(--accg);border:1px solid rgba(79,142,247,.3);border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accl);margin-bottom:16px}
+.hero-title{font-size:38px;font-weight:800;letter-spacing:-.04em;color:var(--text);line-height:1.1;margin-bottom:12px}
+.hero-title span{background:linear-gradient(135deg,var(--acc),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:15px;color:var(--muted);max-width:600px;line-height:1.7;margin-bottom:24px}
+.hero-pills{display:flex;gap:8px;flex-wrap:wrap}
+.hero-pill{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid var(--border);color:var(--muted)}
+.hero-pill.green{background:var(--greeng);border-color:rgba(45,212,160,.25);color:var(--green)}
+.hero-pill.purple{background:var(--purpleg);border-color:rgba(180,120,245,.25);color:var(--purple)}
+.hero-pill.amber{background:var(--amberg);border-color:rgba(245,185,66,.25);color:var(--amber)}
+
+/* ── PROBLEM CARD ── */
+.problem{margin-bottom:72px;scroll-margin-top:80px}
+.problem-header{display:flex;align-items:flex-start;gap:16px;margin-bottom:24px;padding:24px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r)}
+.problem-num{font-size:32px;font-weight:800;letter-spacing:-.04em;color:var(--acc);opacity:.4;min-width:52px;font-family:'JetBrains Mono',monospace}
+.problem-meta{flex:1}
+.problem-title{font-size:24px;font-weight:700;letter-spacing:-.03em;color:var(--text);margin-bottom:6px}
+.problem-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.ptag{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:20px}
+.ptag-hard{background:var(--redg);color:var(--red);border:1px solid rgba(247,97,79,.25)}
+.ptag-med{background:var(--amberg);color:var(--amber);border:1px solid rgba(245,185,66,.25)}
+.ptag-easy{background:var(--greeng);color:var(--green);border:1px solid rgba(45,212,160,.25)}
+.ptag-pat{background:var(--purpleg);color:var(--purple);border:1px solid rgba(180,120,245,.25)}
+.ptag-cyan{background:var(--cyang);color:var(--cyan);border:1px solid rgba(56,201,232,.25)}
+.problem-desc{font-size:13.5px;color:var(--muted);line-height:1.7}
+
+/* ── SECTION HEADINGS ── */
+h2{font-size:19px;font-weight:700;letter-spacing:-.025em;color:var(--text);margin:36px 0 12px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
+h2:first-of-type{border-top:none;margin-top:0}
+h3{font-size:15px;font-weight:600;color:var(--text);margin:22px 0 8px}
+h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:16px 0 6px}
+p{margin-bottom:12px;color:var(--muted);line-height:1.75}
+p strong{color:var(--text);font-weight:600}
+a{color:var(--accl);text-decoration:none}
+
+/* ── REQ BOX ── */
+.req-wrap{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin:14px 0;overflow:hidden}
+.req-head{padding:10px 16px;background:var(--s2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:flex;align-items:center;gap:7px}
+.req-body{padding:14px 16px}
+.req-group{margin-bottom:14px}.req-group:last-child{margin-bottom:0}
+.req-glabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);margin-bottom:7px}
+.req-list{list-style:none}
+.req-item{display:flex;align-items:flex-start;gap:9px;padding:6px 0;font-size:13px;color:var(--muted);border-bottom:1px solid var(--border)}
+.req-item:last-child{border-bottom:none}
+.rn{width:20px;height:20px;border-radius:50%;background:var(--accg);border:1px solid rgba(79,142,247,.4);color:var(--acc);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.rn-x{background:var(--s2);border-color:var(--border);color:var(--dim)}
+
+/* ── CODE BLOCKS ── */
+pre{background:#060810;border:1px solid var(--border);border-radius:var(--r);padding:20px;overflow-x:auto;margin:14px 0;line-height:1.6}
+pre{
+  background:var(--s2);
+  border:1px solid var(--border);
+  color:var(--text);
+}
+.light-theme pre{
+  background:#f6f8fa;
+}
+
+/* optional syntax tuning */
+.light-theme .cm{color:#6b7280}
+.light-theme .kw{color:#d73a49}
+.light-theme .fn{color:#005cc5}
+.light-theme .str{color:#032f62}
+.light-theme .num{color:#6f42c1}
+code,pre{font-family:'JetBrains Mono',monospace;font-size:12.5px}
+.code-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:6px;display:block}
+.lang-tag{display:inline-block;padding:2px 8px;background:var(--s3);border:1px solid var(--border);border-radius:4px;font-size:10px;font-weight:600;color:var(--muted);margin-bottom:8px;font-family:'JetBrains Mono',monospace}
+/* syntax */
+.kw{color:#ff79c6}.cl{color:#4fa8bc}.fn{color:#268f40}
+.str{color:#aeb938}.cm{color:#6272a4;font-style:italic}
+.num{color:#bd93f9}.dec{color:#ffb86c}.pr{color:#61a1cd}
+.op{color:#ff79c6}.ty{color:#429cb0}
+
+/* ── SOLUTION CARDS ── */
+.sol{border-radius:var(--r);border:1px solid var(--border);margin:14px 0;overflow:hidden}
+.sol-head{padding:12px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);background:var(--s1)}
+.badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:20px}
+.badge-bad{background:var(--redg);color:var(--red);border:1px solid rgba(247,97,79,.25)}
+.badge-good{background:var(--amberg);color:var(--amber);border:1px solid rgba(245,185,66,.25)}
+.badge-great{background:var(--greeng);color:var(--green);border:1px solid rgba(45,212,160,.25)}
+.sol-title{font-size:14px;font-weight:600;color:var(--text)}
+.sol-body{padding:18px;background:var(--s2)}
+.sl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:14px 0 6px}.sl:first-child{margin-top:0}
+
+/* ── BOXES ── */
+.box{border-radius:var(--r);padding:14px 16px;margin:14px 0;font-size:13.5px;color:var(--muted)}
+.box strong{font-weight:600}
+.box-acc{background:var(--accg);border:1px solid rgba(79,142,247,.25);border-left:3px solid var(--acc)}.box-acc strong{color:var(--accl)}
+.box-green{background:var(--greeng);border:1px solid rgba(45,212,160,.2);border-left:3px solid var(--green)}.box-green strong{color:var(--green)}
+.box-amber{background:var(--amberg);border:1px solid rgba(245,185,66,.2);border-left:3px solid var(--amber)}.box-amber strong{color:var(--amber)}
+.box-red{background:var(--redg);border:1px solid rgba(247,97,79,.2);border-left:3px solid var(--red)}.box-red strong{color:var(--red)}
+.box-purple{background:var(--purpleg);border:1px solid rgba(180,120,245,.2);border-left:3px solid var(--purple)}.box-purple strong{color:var(--purple)}
+
+/* ── TABLE ── */
+.tw{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin:14px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 13px;background:var(--s2);color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;border-bottom:1px solid var(--border)}
+td{padding:9px 13px;border-bottom:1px solid var(--border);color:var(--muted);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--s2)}
+td strong{color:var(--text);font-weight:500}
+
+/* ── ENTITY CARDS ── */
+.entities{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:14px 0}
+.ent{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px;transition:border-color .15s}
+.ent:hover{border-color:var(--acc)}
+.ent-name{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px;font-family:'JetBrains Mono',monospace}
+.ent-fields{font-size:11.5px;color:var(--dim);line-height:1.9;font-family:'JetBrains Mono',monospace}
+.ek{color:var(--accl)}.et{color:var(--dim)}
+
+/* ── PILL ── */
+.pill{display:inline-flex;align-items:center;background:var(--s2);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:11.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;vertical-align:middle}
+.pill-a{background:var(--accg);border-color:rgba(79,142,247,.3);color:var(--accl)}
+
+/* ── STEP LIST ── */
+.steps{list-style:none;margin:12px 0}
+.step{display:flex;gap:13px;padding:11px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.step:last-child{border-bottom:none}
+.step-n{width:26px;height:26px;flex-shrink:0;background:var(--acc);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;margin-top:1px}
+.step-a{width:26px;height:26px;flex-shrink:0;background:var(--s3);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--dim);margin-top:1px}
+.step-b{flex:1}
+.step-t{font-size:13.5px;font-weight:600;color:var(--text);margin-bottom:3px}
+.step-d{font-size:13px;color:var(--muted);line-height:1.6}
+
+/* ── TRADEOFFS ── */
+.trow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.tcol{border-radius:var(--r);padding:13px}
+.tcol.pros{background:var(--greeng);border:1px solid rgba(45,212,160,.18)}
+.tcol.cons{background:var(--redg);border:1px solid rgba(247,97,79,.18)}
+.tcol-t{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.tcol.pros .tcol-t{color:var(--green)}.tcol.cons .tcol-t{color:var(--red)}
+.ti{display:flex;gap:6px;font-size:12.5px;color:var(--muted);margin-bottom:6px;line-height:1.5}
+.ti:last-child{margin-bottom:0}
+
+/* ── DEEP DIVE HEADER ── */
+.dd-head{display:flex;align-items:center;gap:12px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin:22px 0 12px}
+.dd-n{width:30px;height:30px;background:linear-gradient(135deg,var(--acc),var(--purple));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0}
+.dd-t{font-size:15px;font-weight:600;color:var(--text)}
+
+/* ── CLASS DIAGRAM ── */
+.class-diagram{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:22px;margin:14px 0;font-family:'JetBrains Mono',monospace;font-size:12px;overflow-x:auto}
+.cd-class{display:inline-block;background:var(--s2);border:1.5px solid var(--borderl);border-radius:6px;margin:6px;vertical-align:top;min-width:180px}
+.cd-class.interface{border-color:var(--purple);border-style:dashed}
+.cd-class.abstract{border-color:var(--amber)}
+.cd-head{padding:8px 12px;background:var(--s3);border-bottom:1px solid var(--border);font-weight:700;color:var(--text);font-size:12px}
+.cd-head .interface-label{font-size:9px;color:var(--purple);display:block;font-weight:400}
+.cd-head .abstract-label{font-size:9px;color:var(--amber);display:block;font-weight:400}
+.cd-body{padding:10px 12px}
+.cd-field{color:var(--muted);font-size:11.5px;line-height:1.8}
+.cd-field .vis{color:var(--green)}
+.cd-field .field-name{color:var(--accl)}
+.cd-field .field-type{color:var(--dim)}
+.cd-divider{border-top:1px solid var(--border);margin:6px 0}
+.cd-method{color:var(--muted);font-size:11.5px;line-height:1.8}
+.cd-method .vis{color:var(--amber)}
+.cd-method .method-name{color:var(--green)}
+.cd-method .return-type{color:var(--purple)}
+.cd-grid{display:flex;flex-wrap:wrap;gap:4px}
+.cd-arrow{color:var(--dim);padding:8px;font-size:13px;align-self:center}
+
+/* ── CONCURRENCY BOX ── */
+.conc-box{background:linear-gradient(135deg,rgba(247,97,79,.06),rgba(245,185,66,.04));border:1px solid rgba(247,97,79,.2);border-radius:var(--r);padding:16px;margin:14px 0}
+.conc-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.conc-items{display:grid;gap:8px}
+.conc-item{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);padding:10px 13px}
+.conc-item-t{font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:3px}
+.conc-item-d{font-size:12.5px;color:var(--muted);line-height:1.55}
+
+/* ── DIVIDER ── */
+.divider{height:1px;background:var(--border);margin:28px 0}
+
+/* ── DB SCHEMA ── */
+.schema-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:14px 0}
+.schema-table{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.schema-thead{padding:8px 12px;background:var(--s3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.schema-tname{font-size:12.5px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace}
+.schema-tbody{padding:6px 0}
+.schema-col{display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:11.5px;font-family:'JetBrains Mono',monospace}
+.schema-col-name{color:var(--accl);flex:1}
+.schema-col-type{color:var(--dim)}
+.schema-col-pk{font-size:9px;background:var(--amberg);color:var(--amber);border:1px solid rgba(245,185,66,.25);padding:1px 5px;border-radius:3px}
+.schema-col-fk{font-size:9px;background:var(--purpleg);color:var(--purple);border:1px solid rgba(180,120,245,.25);padding:1px 5px;border-radius:3px}
+.schema-col-idx{font-size:9px;background:var(--cyang);color:var(--cyan);border:1px solid rgba(56,201,232,.25);padding:1px 5px;border-radius:3px}
+
+/* ── PROBLEM DIVIDER ── */
+.prob-divider{border:none;border-top:2px dashed var(--border);margin:60px 0}
+
+@media(max-width:900px){.sidebar{display:none}.hero-title{font-size:26px}.trow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+  <script>
+const btn = document.getElementById("themeToggle");
+
+btn.addEventListener("click", () => {
+  document.body.classList.toggle("light-theme");
+
+  if(document.body.classList.contains("light-theme")){
+    localStorage.setItem("theme","light");
+  } else {
+    localStorage.setItem("theme","dark");
+  }
+});
+
+// load saved theme
+window.onload = () => {
+  const theme = localStorage.getItem("theme");
+  if(theme === "light"){
+    document.body.classList.add("light-theme");
+  }
+};
+
+// optional: auto-detect system theme
+if(!localStorage.getItem("theme")){
+  if(window.matchMedia("(prefers-color-scheme: light)").matches){
+    document.body.classList.add("light-theme");
+  }
+}
+</script>
+
+<nav class="topbar">
+  <div class="logo"><em>interview</em> <span style="color:var(--dim);font-size:12px;font-weight:400;margin-left:8px">/ LLD Mastery</span></div>
+  <div class="nav-pills">
+    <a href="#p1" class="nav-pill active">P1–5</a>
+    <a href="#p6" class="nav-pill">P6–10</a>
+    <a href="#p11" class="nav-pill">P11–15</a>
+    <button id="themeToggle" style="
+  margin-left:12px;
+  padding:6px 12px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:var(--s2);
+  color:var(--text);
+  cursor:pointer;
+">
+  Toggle Theme
+</button>
+  </div>
+</nav>
+
+<div class="layout">
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sb-section">
+    <div class="sb-title">Creational / State</div>
+    <a href="#p1" class="sb-item active"><span class="sb-num">01</span>Parking Lot</a>
+    <a href="#p2" class="sb-item"><span class="sb-num">02</span>Elevator System</a>
+    <a href="#p3" class="sb-item"><span class="sb-num">03</span>Amazon Locker</a>
+    <a href="#p4" class="sb-item"><span class="sb-num">04</span>Vending Machine</a>
+    <a href="#p5" class="sb-item"><span class="sb-num">05</span>ATM System</a>
+  </div>
+  <div class="sb-section">
+    <div class="sb-title">Concurrency Heavy</div>
+    <a href="#p6" class="sb-item"><span class="sb-num">06</span>Rate Limiter</a>
+    <a href="#p7" class="sb-item"><span class="sb-num">07</span>Task Scheduler</a>
+    <a href="#p8" class="sb-item"><span class="sb-num">08</span>Thread-Safe Queue</a>
+    <a href="#p9" class="sb-item"><span class="sb-num">09</span>Pub/Sub System</a>
+    <a href="#p10" class="sb-item"><span class="sb-num">10</span>Connection Pool</a>
+  </div>
+  <div class="sb-section">
+    <div class="sb-title">Game / Logic</div>
+    <a href="#p11" class="sb-item"><span class="sb-num">11</span>Chess / Board Game</a>
+    <a href="#p12" class="sb-item"><span class="sb-num">12</span>Splitwise</a>
+    <a href="#p13" class="sb-item"><span class="sb-num">13</span>Movie Ticket Booking</a>
+    <a href="#p14" class="sb-item"><span class="sb-num">14</span>Library Management</a>
+    <a href="#p15" class="sb-item"><span class="sb-num">15</span>Food Delivery</a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">📚 LLD Interview Prep — 2025</div>
+  <div class="hero-title">Master <span>15 LLD Problems</span><br/>in One Guide</div>
+  <div class="hero-sub">Every problem includes: Requirements → Entities → DB Schema → Class Design → Code Implementation → Concurrency Handling → Deep Dives. Designed for FAANG-level interviews tomorrow.</div>
+  <div class="hero-pills">
+    <span class="hero-pill green">✓ SOLID Principles</span>
+    <span class="hero-pill purple">✓ Design Patterns</span>
+    <span class="hero-pill amber">✓ Concurrency</span>
+    <span class="hero-pill green">✓ Full Code</span>
+    <span class="hero-pill purple">✓ DB Schema</span>
+    <span class="hero-pill amber">✓ Deep Dives</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 1: PARKING LOT
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p1">
+<div class="problem-header">
+  <div class="problem-num">01</div>
+  <div class="problem-meta">
+    <div class="problem-title">Parking Lot System</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-med">Medium</span>
+      <span class="ptag ptag-pat">State Machine</span>
+      <span class="ptag ptag-pat">Strategy Pattern</span>
+      <span class="ptag ptag-cyan">Concurrency</span>
+    </div>
+    <div class="problem-desc">Design a parking lot system that manages multiple floors, different vehicle types, and generates tickets. Classic state machine problem with real concurrency challenges around slot assignment.</div>
+  </div>
+</div>
+
+<h2>📋 Requirements</h2>
+<div class="req-wrap">
+  <div class="req-head">📋 Functional Requirements</div>
+  <div class="req-body">
+    <div class="req-group">
+      <div class="req-glabel">✅ Core</div>
+      <ul class="req-list">
+        <li class="req-item"><span class="rn">1</span>Support multiple vehicle types: Motorcycle, Car, Truck — each needs a different slot size.</li>
+        <li class="req-item"><span class="rn">2</span>Vehicle parks: system finds nearest available slot, issues a ticket with entry time.</li>
+        <li class="req-item"><span class="rn">3</span>Vehicle exits: system calculates fee based on duration and vehicle type, marks slot free.</li>
+        <li class="req-item"><span class="rn">4</span>Query available slots by floor and vehicle type.</li>
+        <li class="req-item"><span class="rn">5</span>Support multiple floors.</li>
+      </ul>
+    </div>
+    <div class="req-group">
+      <div class="req-glabel">🚫 Out of scope</div>
+      <ul class="req-list">
+        <li class="req-item"><span class="rn rn-x">—</span>Payment processing integration, online reservation</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h2>🗄️ Database Schema</h2>
+<div class="schema-grid">
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">parking_slots</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">slot_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">floor_number</span><span class="schema-col-type">INT</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">slot_number</span><span class="schema-col-type">INT</span></div>
+      <div class="schema-col"><span class="schema-col-name">slot_type</span><span class="schema-col-type">ENUM(SMALL,MED,LARGE)</span></div>
+      <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">ENUM(FREE,OCCUPIED)</span><span class="schema-col-idx">IDX</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">tickets</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">ticket_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">slot_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">vehicle_type</span><span class="schema-col-type">ENUM</span></div>
+      <div class="schema-col"><span class="schema-col-name">license_plate</span><span class="schema-col-type">VARCHAR</span></div>
+      <div class="schema-col"><span class="schema-col-name">entry_time</span><span class="schema-col-type">TIMESTAMP</span></div>
+      <div class="schema-col"><span class="schema-col-name">exit_time</span><span class="schema-col-type">TIMESTAMP</span></div>
+      <div class="schema-col"><span class="schema-col-name">fee_charged</span><span class="schema-col-type">DECIMAL</span></div>
+    </div>
+  </div>
+</div>
+<div class="box box-acc"><strong>Indexing strategy:</strong> Composite index on <span class="pill">(floor_number, slot_type, status)</span> for fast "find nearest available slot" queries. The ticket table has index on <span class="pill">slot_id</span> for fast exit processing.</div>
+
+<h2>🏗️ Class Design</h2>
+<div class="class-diagram">
+  <div class="cd-grid">
+    <div class="cd-class interface">
+      <div class="cd-head"><span class="interface-label">&lt;&lt;interface&gt;&gt;</span>FeeStrategy</div>
+      <div class="cd-body">
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">calculateFee</span>(hours: double): <span class="return-type">double</span></div>
+      </div>
+    </div>
+    <div class="cd-arrow">←implements</div>
+    <div class="cd-class">
+      <div class="cd-head">HourlyFeeStrategy</div>
+      <div class="cd-body">
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">ratePerHour</span>: <span class="field-type">double</span></div>
+        <div class="cd-divider"></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">calculateFee</span>(hours): <span class="return-type">double</span></div>
+      </div>
+    </div>
+    <div class="cd-class">
+      <div class="cd-head">ParkingSlot</div>
+      <div class="cd-body">
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">slotId</span>: <span class="field-type">String</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">floorNumber</span>: <span class="field-type">int</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">slotNumber</span>: <span class="field-type">int</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">slotType</span>: <span class="field-type">SlotType</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">status</span>: <span class="field-type">SlotStatus</span></div>
+        <div class="cd-divider"></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">park</span>(): <span class="return-type">void</span></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">free</span>(): <span class="return-type">void</span></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">isAvailable</span>(): <span class="return-type">boolean</span></div>
+      </div>
+    </div>
+    <div class="cd-class">
+      <div class="cd-head">ParkingLot (Singleton)</div>
+      <div class="cd-body">
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">instance</span>: <span class="field-type">ParkingLot</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">floors</span>: <span class="field-type">List&lt;Floor&gt;</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">feeStrategy</span>: <span class="field-type">FeeStrategy</span></div>
+        <div class="cd-divider"></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">park</span>(v: Vehicle): <span class="return-type">Ticket</span></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">exit</span>(t: Ticket): <span class="return-type">double</span></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">getAvailableSlots</span>(t): <span class="return-type">List</span></div>
+      </div>
+    </div>
+    <div class="cd-class">
+      <div class="cd-head">Ticket</div>
+      <div class="cd-body">
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">ticketId</span>: <span class="field-type">String</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">slot</span>: <span class="field-type">ParkingSlot</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">vehicle</span>: <span class="field-type">Vehicle</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">entryTime</span>: <span class="field-type">LocalDateTime</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── Enums ──────────────────────────────────────</span>
+<span class="kw">enum</span> <span class="cl">VehicleType</span> { MOTORCYCLE, CAR, TRUCK }
+<span class="kw">enum</span> <span class="cl">SlotType</span>    { SMALL, MEDIUM, LARGE }
+<span class="kw">enum</span> <span class="cl">SlotStatus</span>  { FREE, OCCUPIED }
+
+<span class="cm">// ── Fee Strategy (Strategy Pattern) ────────────</span>
+<span class="kw">interface</span> <span class="cl">FeeStrategy</span> {
+    <span class="ty">double</span> <span class="fn">calculateFee</span>(<span class="ty">long</span> durationMinutes);
+}
+
+<span class="kw">class</span> <span class="cl">HourlyFeeStrategy</span> <span class="kw">implements</span> <span class="cl">FeeStrategy</span> {
+    <span class="kw">private final</span> <span class="ty">double</span> ratePerHour;
+
+    <span class="kw">public</span> <span class="cl">HourlyFeeStrategy</span>(<span class="ty">double</span> ratePerHour) {
+        <span class="kw">this</span>.ratePerHour = ratePerHour;
+    }
+
+    <span class="kw">@Override</span>
+    <span class="kw">public</span> <span class="ty">double</span> <span class="fn">calculateFee</span>(<span class="ty">long</span> durationMinutes) {
+        <span class="ty">double</span> hours = Math.ceil(durationMinutes / <span class="num">60.0</span>);
+        <span class="kw">return</span> hours * ratePerHour;
+    }
+}
+
+<span class="cm">// ── Parking Slot ────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">ParkingSlot</span> {
+    <span class="kw">private final</span> <span class="cl">String</span> slotId;
+    <span class="kw">private final</span> <span class="ty">int</span> floorNumber;
+    <span class="kw">private final</span> <span class="ty">int</span> slotNumber;
+    <span class="kw">private final</span> <span class="cl">SlotType</span> slotType;
+    <span class="kw">private volatile</span> <span class="cl">SlotStatus</span> status;  <span class="cm">// volatile for visibility</span>
+
+    <span class="kw">public synchronized boolean</span> <span class="fn">park</span>() {
+        <span class="kw">if</span> (status == <span class="cl">SlotStatus</span>.FREE) {
+            status = <span class="cl">SlotStatus</span>.OCCUPIED;
+            <span class="kw">return true</span>;
+        }
+        <span class="kw">return false</span>;  <span class="cm">// already taken — race condition handled</span>
+    }
+
+    <span class="kw">public synchronized void</span> <span class="fn">free</span>() {
+        status = <span class="cl">SlotStatus</span>.FREE;
+    }
+
+    <span class="kw">public boolean</span> <span class="fn">isAvailable</span>() { <span class="kw">return</span> status == <span class="cl">SlotStatus</span>.FREE; }
+    <span class="cm">// getters omitted for brevity</span>
+}
+
+<span class="cm">// ── Ticket ──────────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">Ticket</span> {
+    <span class="kw">private final</span> <span class="cl">String</span> ticketId;
+    <span class="kw">private final</span> <span class="cl">ParkingSlot</span> slot;
+    <span class="kw">private final</span> <span class="cl">VehicleType</span> vehicleType;
+    <span class="kw">private final</span> <span class="cl">String</span> licensePlate;
+    <span class="kw">private final</span> <span class="cl">LocalDateTime</span> entryTime;
+
+    <span class="kw">public</span> <span class="cl">Ticket</span>(<span class="cl">ParkingSlot</span> slot, <span class="cl">VehicleType</span> type, <span class="cl">String</span> plate) {
+        <span class="kw">this</span>.ticketId = <span class="cl">UUID</span>.randomUUID().toString();
+        <span class="kw">this</span>.slot = slot;
+        <span class="kw">this</span>.vehicleType = type;
+        <span class="kw">this</span>.licensePlate = plate;
+        <span class="kw">this</span>.entryTime = <span class="cl">LocalDateTime</span>.now();
+    }
+
+    <span class="kw">public long</span> <span class="fn">getDurationMinutes</span>() {
+        <span class="kw">return</span> <span class="cl">ChronoUnit</span>.MINUTES.between(entryTime, <span class="cl">LocalDateTime</span>.now());
+    }
+}
+
+<span class="cm">// ── Floor ───────────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">Floor</span> {
+    <span class="kw">private final</span> <span class="ty">int</span> floorNumber;
+    <span class="cm">// Map: SlotType → TreeSet sorted by slotNumber for nearest-first</span>
+    <span class="kw">private final</span> <span class="cl">Map</span>&lt;<span class="cl">SlotType</span>, <span class="cl">TreeSet</span>&lt;<span class="cl">ParkingSlot</span>&gt;&gt; availableSlots;
+    <span class="kw">private final</span> <span class="cl">ReentrantLock</span> lock = <span class="kw">new</span> <span class="cl">ReentrantLock</span>();
+
+    <span class="kw">public</span> <span class="cl">Optional</span>&lt;<span class="cl">ParkingSlot</span>&gt; <span class="fn">findAndOccupySlot</span>(<span class="cl">SlotType</span> type) {
+        lock.lock();
+        <span class="kw">try</span> {
+            <span class="cl">TreeSet</span>&lt;<span class="cl">ParkingSlot</span>&gt; slots = availableSlots.get(type);
+            <span class="kw">if</span> (slots == <span class="kw">null</span> || slots.isEmpty()) <span class="kw">return</span> <span class="cl">Optional</span>.empty();
+            <span class="cl">ParkingSlot</span> slot = slots.first(); <span class="cm">// nearest slot</span>
+            <span class="kw">if</span> (slot.park()) {   <span class="cm">// atomic park attempt</span>
+                slots.remove(slot);
+                <span class="kw">return</span> <span class="cl">Optional</span>.of(slot);
+            }
+            <span class="kw">return</span> <span class="cl">Optional</span>.empty();
+        } <span class="kw">finally</span> {
+            lock.unlock();
+        }
+    }
+
+    <span class="kw">public void</span> <span class="fn">returnSlot</span>(<span class="cl">ParkingSlot</span> slot) {
+        lock.lock();
+        <span class="kw">try</span> {
+            slot.free();
+            availableSlots.get(slot.getSlotType()).add(slot);
+        } <span class="kw">finally</span> {
+            lock.unlock();
+        }
+    }
+}
+
+<span class="cm">// ── ParkingLot (Singleton) ───────────────────────</span>
+<span class="kw">public class</span> <span class="cl">ParkingLot</span> {
+    <span class="kw">private static volatile</span> <span class="cl">ParkingLot</span> instance;
+    <span class="kw">private final</span> <span class="cl">List</span>&lt;<span class="cl">Floor</span>&gt; floors;
+    <span class="kw">private final</span> <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Ticket</span>&gt; activeTickets;  <span class="cm">// ticketId → Ticket</span>
+    <span class="kw">private final</span> <span class="cl">FeeStrategy</span> feeStrategy;
+
+    <span class="cm">// Double-checked locking Singleton</span>
+    <span class="kw">public static</span> <span class="cl">ParkingLot</span> <span class="fn">getInstance</span>() {
+        <span class="kw">if</span> (instance == <span class="kw">null</span>) {
+            <span class="kw">synchronized</span> (<span class="cl">ParkingLot</span>.class) {
+                <span class="kw">if</span> (instance == <span class="kw">null</span>) {
+                    instance = <span class="kw">new</span> <span class="cl">ParkingLot</span>();
+                }
+            }
+        }
+        <span class="kw">return</span> instance;
+    }
+
+    <span class="kw">public</span> <span class="cl">Ticket</span> <span class="fn">park</span>(<span class="cl">VehicleType</span> vehicleType, <span class="cl">String</span> licensePlate) {
+        <span class="cl">SlotType</span> required = <span class="fn">getRequiredSlotType</span>(vehicleType);
+        <span class="kw">for</span> (<span class="cl">Floor</span> floor : floors) {   <span class="cm">// prefer ground floor first</span>
+            <span class="cl">Optional</span>&lt;<span class="cl">ParkingSlot</span>&gt; slot = floor.findAndOccupySlot(required);
+            <span class="kw">if</span> (slot.isPresent()) {
+                <span class="cl">Ticket</span> ticket = <span class="kw">new</span> <span class="cl">Ticket</span>(slot.get(), vehicleType, licensePlate);
+                activeTickets.put(ticket.getTicketId(), ticket);
+                <span class="kw">return</span> ticket;
+            }
+        }
+        <span class="kw">throw new</span> <span class="cl">ParkingFullException</span>(<span class="str">"No slots available for "</span> + vehicleType);
+    }
+
+    <span class="kw">public double</span> <span class="fn">exit</span>(<span class="cl">String</span> ticketId) {
+        <span class="cl">Ticket</span> ticket = activeTickets.remove(ticketId);
+        <span class="kw">if</span> (ticket == <span class="kw">null</span>) <span class="kw">throw new</span> <span class="cl">InvalidTicketException</span>(ticketId);
+        <span class="ty">double</span> fee = feeStrategy.calculateFee(ticket.getDurationMinutes());
+        <span class="cm">// return slot to its floor</span>
+        <span class="ty">int</span> floorIdx = ticket.getSlot().getFloorNumber();
+        floors.get(floorIdx).returnSlot(ticket.getSlot());
+        <span class="kw">return</span> fee;
+    }
+
+    <span class="kw">private</span> <span class="cl">SlotType</span> <span class="fn">getRequiredSlotType</span>(<span class="cl">VehicleType</span> v) {
+        <span class="kw">return switch</span> (v) {
+            <span class="kw">case</span> MOTORCYCLE -> <span class="cl">SlotType</span>.SMALL;
+            <span class="kw">case</span> CAR        -> <span class="cl">SlotType</span>.MEDIUM;
+            <span class="kw">case</span> TRUCK      -> <span class="cl">SlotType</span>.LARGE;
+        };
+    }
+}
+</pre>
+
+<div class="dd-head"><div class="dd-n">⚡</div><div class="dd-t">Concurrency Deep Dive</div></div>
+<div class="conc-box">
+  <div class="conc-title">⚠️ Race Conditions to Handle</div>
+  <div class="conc-items">
+    <div class="conc-item">
+      <div class="conc-item-t">Double-booking a slot</div>
+      <div class="conc-item-d">Two threads both see a slot as FREE simultaneously. Fix: <strong>ReentrantLock on each Floor</strong> wraps the find-and-mark-occupied operation atomically. The <code>slot.park()</code> method is also <code>synchronized</code> as a secondary guard.</div>
+    </div>
+    <div class="conc-item">
+      <div class="conc-item-t">Singleton initialization race</div>
+      <div class="conc-item-d">Use <strong>double-checked locking</strong> with <code>volatile</code> on the instance field. Without <code>volatile</code>, the JVM can reorder instructions and return a partially-constructed object.</div>
+    </div>
+    <div class="conc-item">
+      <div class="conc-item-t">activeTickets ConcurrentModification</div>
+      <div class="conc-item-d">Use <code>ConcurrentHashMap</code> for the activeTickets map instead of HashMap to handle concurrent park/exit calls safely.</div>
+    </div>
+  </div>
+</div>
+
+<div class="dd-head"><div class="dd-n">🔍</div><div class="dd-t">Design Deep Dive — Interviewer Questions</div></div>
+<div class="steps">
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">What if a motorcycle can park in a larger slot when small slots are full?</div><div class="step-d">Modify <code>getRequiredSlotType</code> to return a priority list. In <code>park()</code>, iterate through SlotType.SMALL → MEDIUM → LARGE until a slot is found. This is the <strong>fallback strategy</strong>.</div></div></li>
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">How would you add hourly rate variations (weekday vs weekend)?</div><div class="step-d">The <strong>Strategy Pattern</strong> for FeeStrategy already handles this. Create a <code>TimeSensitiveFeeStrategy</code> that checks <code>DayOfWeek</code> inside <code>calculateFee()</code>. The ParkingLot just calls the interface.</div></div></li>
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">How would you support reservations (pre-booking a slot)?</div><div class="step-d">Add a RESERVED status to SlotStatus enum. Add a <code>ReservationService</code> that creates time-bounded reservations. A background job scans for expired reservations and frees them. The <code>findAndOccupySlot</code> method skips RESERVED slots unless the reservation token matches.</div></div></li>
+</div>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 2: ELEVATOR SYSTEM
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p2">
+<div class="problem-header">
+  <div class="problem-num">02</div>
+  <div class="problem-meta">
+    <div class="problem-title">Elevator Control System</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">State Machine</span>
+      <span class="ptag ptag-pat">SCAN Algorithm</span>
+      <span class="ptag ptag-cyan">Simulation</span>
+    </div>
+    <div class="problem-desc">Design an elevator system for a building with multiple elevators. Handle hall calls, destination selection, dispatch algorithm, and concurrent request handling.</div>
+  </div>
+</div>
+
+<h2>📋 Requirements</h2>
+<div class="req-wrap">
+  <div class="req-head">📋 Requirements</div>
+  <div class="req-body">
+    <div class="req-group">
+      <div class="req-glabel">✅ Core</div>
+      <ul class="req-list">
+        <li class="req-item"><span class="rn">1</span>Multiple elevators (e.g., 3 elevators, 10 floors 0–9).</li>
+        <li class="req-item"><span class="rn">2</span>Hall call: user presses UP/DOWN on a floor → system dispatches best elevator.</li>
+        <li class="req-item"><span class="rn">3</span>Destination call: user inside elevator presses a floor button.</li>
+        <li class="req-item"><span class="rn">4</span>System runs as a simulation with discrete <code>step()</code> ticks.</li>
+        <li class="req-item"><span class="rn">5</span>Reject invalid floor requests gracefully.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h2>🏗️ Class Design</h2>
+<div class="class-diagram">
+  <div class="cd-grid">
+    <div class="cd-class">
+      <div class="cd-head">ElevatorSystem</div>
+      <div class="cd-body">
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">elevators</span>: <span class="field-type">List&lt;Elevator&gt;</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">numFloors</span>: <span class="field-type">int</span></div>
+        <div class="cd-divider"></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">requestElevator</span>(floor, dir): <span class="return-type">void</span></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">step</span>(): <span class="return-type">void</span></div>
+      </div>
+    </div>
+    <div class="cd-class">
+      <div class="cd-head">Elevator</div>
+      <div class="cd-body">
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">id</span>: <span class="field-type">int</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">currentFloor</span>: <span class="field-type">int</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">direction</span>: <span class="field-type">Direction</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">state</span>: <span class="field-type">ElevatorState</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">upStops</span>: <span class="field-type">TreeSet&lt;Integer&gt;</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">downStops</span>: <span class="field-type">TreeSet&lt;Integer&gt;</span></div>
+        <div class="cd-divider"></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">addStop</span>(floor, dir): <span class="return-type">void</span></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">step</span>(): <span class="return-type">void</span></div>
+        <div class="cd-method"><span class="vis">+</span> <span class="method-name">getCost</span>(floor, dir): <span class="return-type">int</span></div>
+      </div>
+    </div>
+    <div class="cd-class">
+      <div class="cd-head">Request</div>
+      <div class="cd-body">
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">floor</span>: <span class="field-type">int</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">direction</span>: <span class="field-type">Direction?</span></div>
+        <div class="cd-field"><span class="vis">-</span> <span class="field-name">type</span>: <span class="field-type">RequestType</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="kw">enum</span> <span class="cl">Direction</span>     { UP, DOWN, IDLE }
+<span class="kw">enum</span> <span class="cl">ElevatorState</span> { MOVING, STOPPED, IDLE }
+
+<span class="kw">class</span> <span class="cl">Elevator</span> {
+    <span class="kw">private final</span> <span class="ty">int</span> id;
+    <span class="kw">private</span> <span class="ty">int</span> currentFloor;
+    <span class="kw">private</span> <span class="cl">Direction</span> direction = <span class="cl">Direction</span>.IDLE;
+    <span class="kw">private</span> <span class="cl">ElevatorState</span> state = <span class="cl">ElevatorState</span>.IDLE;
+
+    <span class="cm">// SCAN algorithm: two TreeSets for UP and DOWN stops</span>
+    <span class="kw">private final</span> <span class="cl">TreeSet</span>&lt;<span class="cl">Integer</span>&gt; upStops   = <span class="kw">new</span> <span class="cl">TreeSet</span>&lt;&gt;();
+    <span class="kw">private final</span> <span class="cl">TreeSet</span>&lt;<span class="cl">Integer</span>&gt; downStops = <span class="kw">new</span> <span class="cl">TreeSet</span>&lt;&gt;(<span class="cl">Comparator</span>.reverseOrder());
+
+    <span class="kw">public synchronized void</span> <span class="fn">addStop</span>(<span class="ty">int</span> floor, <span class="cl">Direction</span> dir) {
+        <span class="kw">if</span> (dir == <span class="cl">Direction</span>.UP || (dir == <span class="cl">Direction</span>.IDLE && floor > currentFloor))
+            upStops.add(floor);
+        <span class="kw">else</span>
+            downStops.add(floor);
+        <span class="kw">if</span> (state == <span class="cl">ElevatorState</span>.IDLE) updateDirection();
+    }
+
+    <span class="cm">// Called once per simulation tick</span>
+    <span class="kw">public synchronized void</span> <span class="fn">step</span>() {
+        <span class="kw">if</span> (state == <span class="cl">ElevatorState</span>.IDLE) <span class="kw">return</span>;
+
+        <span class="cm">// Move one floor in current direction</span>
+        <span class="kw">if</span> (direction == <span class="cl">Direction</span>.UP)  currentFloor++;
+        <span class="kw">else</span>                              currentFloor--;
+
+        <span class="cm">// Check if we stop at this floor</span>
+        <span class="cl">TreeSet</span>&lt;<span class="cl">Integer</span>&gt; activeSet = (direction == <span class="cl">Direction</span>.UP) ? upStops : downStops;
+        <span class="kw">if</span> (activeSet.contains(currentFloor)) {
+            activeSet.remove(currentFloor);
+            state = <span class="cl">ElevatorState</span>.STOPPED;
+            <span class="cl">System</span>.out.println(<span class="str">"Elevator "</span> + id + <span class="str">" stopped at floor "</span> + currentFloor);
+        }
+
+        <span class="cm">// Reverse direction if no more stops in current direction</span>
+        <span class="kw">if</span> (activeSet.isEmpty()) {
+            <span class="kw">if</span> (direction == <span class="cl">Direction</span>.UP && !downStops.isEmpty()) {
+                direction = <span class="cl">Direction</span>.DOWN;
+                state = <span class="cl">ElevatorState</span>.MOVING;
+            } <span class="kw">else if</span> (direction == <span class="cl">Direction</span>.DOWN && !upStops.isEmpty()) {
+                direction = <span class="cl">Direction</span>.UP;
+                state = <span class="cl">ElevatorState</span>.MOVING;
+            } <span class="kw">else</span> {
+                direction = <span class="cl">Direction</span>.IDLE;
+                state = <span class="cl">ElevatorState</span>.IDLE;
+            }
+        } <span class="kw">else</span> {
+            state = <span class="cl">ElevatorState</span>.MOVING;
+        }
+    }
+
+    <span class="cm">// Cost heuristic for dispatch: estimated floors to serve this request</span>
+    <span class="kw">public int</span> <span class="fn">getCost</span>(<span class="ty">int</span> floor, <span class="cl">Direction</span> requestDir) {
+        <span class="kw">if</span> (state == <span class="cl">ElevatorState</span>.IDLE) <span class="kw">return</span> Math.abs(currentFloor - floor);
+        <span class="kw">if</span> (direction == requestDir) {
+            <span class="cm">// Going same way — can pick up en route</span>
+            <span class="kw">if</span> (direction == <span class="cl">Direction</span>.UP && floor >= currentFloor)
+                <span class="kw">return</span> floor - currentFloor;
+            <span class="kw">if</span> (direction == <span class="cl">Direction</span>.DOWN && floor &lt;= currentFloor)
+                <span class="kw">return</span> currentFloor - floor;
+        }
+        <span class="cm">// Must complete current direction first, then come back</span>
+        <span class="ty">int</span> maxUp   = upStops.isEmpty()   ? currentFloor : upStops.last();
+        <span class="ty">int</span> maxDown = downStops.isEmpty() ? currentFloor : downStops.last();
+        <span class="kw">return</span> (direction == <span class="cl">Direction</span>.UP)
+            ? (maxUp - currentFloor) + (maxUp - floor)
+            : (currentFloor - maxDown) + (floor - maxDown);
+    }
+}
+
+<span class="kw">class</span> <span class="cl">ElevatorSystem</span> {
+    <span class="kw">private final</span> <span class="cl">List</span>&lt;<span class="cl">Elevator</span>&gt; elevators;
+    <span class="kw">private final</span> <span class="ty">int</span> numFloors;
+
+    <span class="cm">// Dispatch: pick elevator with minimum cost</span>
+    <span class="kw">public boolean</span> <span class="fn">requestElevator</span>(<span class="ty">int</span> floor, <span class="cl">Direction</span> direction) {
+        <span class="kw">if</span> (floor &lt; <span class="num">0</span> || floor >= numFloors) {
+            System.err.println(<span class="str">"Invalid floor: "</span> + floor);
+            <span class="kw">return false</span>;
+        }
+        <span class="cl">Elevator</span> best = elevators.stream()
+            .min(<span class="cl">Comparator</span>.comparingInt(e -> e.getCost(floor, direction)))
+            .orElseThrow();
+        best.addStop(floor, direction);
+        <span class="kw">return true</span>;
+    }
+
+    <span class="cm">// Advance all elevators one tick</span>
+    <span class="kw">public void</span> <span class="fn">step</span>() {
+        elevators.forEach(<span class="cl">Elevator</span>::step);
+    }
+
+    <span class="cm">// Add destination from inside elevator</span>
+    <span class="kw">public boolean</span> <span class="fn">selectFloor</span>(<span class="ty">int</span> elevatorId, <span class="ty">int</span> floor) {
+        <span class="kw">if</span> (floor &lt; <span class="num">0</span> || floor >= numFloors) <span class="kw">return false</span>;
+        elevators.get(elevatorId).addStop(floor, <span class="cl">Direction</span>.IDLE);
+        <span class="kw">return true</span>;
+    }
+}
+</pre>
+
+<div class="dd-head"><div class="dd-n">⚡</div><div class="dd-t">Concurrency Deep Dive</div></div>
+<div class="conc-box">
+  <div class="conc-title">⚠️ Concurrency Concerns</div>
+  <div class="conc-items">
+    <div class="conc-item">
+      <div class="conc-item-t">addStop() vs step() race</div>
+      <div class="conc-item-d">A new stop could be added while <code>step()</code> is reading the TreeSet. Both methods are <code>synchronized</code> on the Elevator instance to prevent this. In a real async system, use <code>ReentrantReadWriteLock</code> — reads of <code>getCost</code> can be concurrent, writes need exclusive lock.</div>
+    </div>
+    <div class="conc-item">
+      <div class="conc-item-t">Dispatch selection race</div>
+      <div class="conc-item-d">Two concurrent hall calls may both pick the same elevator as "best" before either adds the stop. In a real system, the dispatch + addStop must be atomic. Use a lock around the dispatch selection + addStop call.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 3: AMAZON LOCKER
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p3">
+<div class="problem-header">
+  <div class="problem-num">03</div>
+  <div class="problem-meta">
+    <div class="problem-title">Amazon Locker System</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-med">Medium</span>
+      <span class="ptag ptag-pat">Factory Pattern</span>
+      <span class="ptag ptag-pat">Token TTL</span>
+    </div>
+    <div class="problem-desc">Self-service package pickup system. Delivery drivers deposit packages; customers retrieve with a time-limited access code. Focus on token expiry, size matching, and concurrent access.</div>
+  </div>
+</div>
+
+<h2>🗄️ DB Schema</h2>
+<div class="schema-grid">
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">compartments</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">compartment_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">size</span><span class="schema-col-type">ENUM(S,M,L)</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">ENUM(FREE,OCCUPIED,EXPIRED)</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">access_tokens</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">token</span><span class="schema-col-type">VARCHAR</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">compartment_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">expires_at</span><span class="schema-col-type">TIMESTAMP</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">used_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="kw">enum</span> <span class="cl">PackageSize</span>      { SMALL, MEDIUM, LARGE }
+<span class="kw">enum</span> <span class="cl">CompartmentStatus</span> { FREE, OCCUPIED }
+
+<span class="kw">class</span> <span class="cl">AccessToken</span> {
+    <span class="kw">private final</span> <span class="cl">String</span> code;
+    <span class="kw">private final</span> <span class="cl">String</span> compartmentId;
+    <span class="kw">private final</span> <span class="cl">Instant</span> expiresAt;
+
+    <span class="kw">public</span> <span class="cl">AccessToken</span>(<span class="cl">String</span> compartmentId) {
+        <span class="kw">this</span>.code = <span class="fn">generateSecureCode</span>();
+        <span class="kw">this</span>.compartmentId = compartmentId;
+        <span class="kw">this</span>.expiresAt = <span class="cl">Instant</span>.now().plus(<span class="num">7</span>, <span class="cl">ChronoUnit</span>.DAYS);
+    }
+
+    <span class="kw">public boolean</span> <span class="fn">isExpired</span>() { <span class="kw">return</span> <span class="cl">Instant</span>.now().isAfter(expiresAt); }
+
+    <span class="kw">private</span> <span class="cl">String</span> <span class="fn">generateSecureCode</span>() {
+        <span class="kw">return</span> <span class="cl">String</span>.format(<span class="str">"%06d"</span>, <span class="kw">new</span> <span class="cl">SecureRandom</span>().nextInt(<span class="num">1_000_000</span>));
+    }
+}
+
+<span class="kw">class</span> <span class="cl">Compartment</span> {
+    <span class="kw">private final</span> <span class="cl">String</span> id;
+    <span class="kw">private final</span> <span class="cl">PackageSize</span> size;
+    <span class="kw">private volatile</span> <span class="cl">CompartmentStatus</span> status = <span class="cl">CompartmentStatus</span>.FREE;
+
+    <span class="kw">public synchronized boolean</span> <span class="fn">tryOccupy</span>() {
+        <span class="kw">if</span> (status == <span class="cl">CompartmentStatus</span>.FREE) {
+            status = <span class="cl">CompartmentStatus</span>.OCCUPIED;
+            <span class="kw">return true</span>;
+        }
+        <span class="kw">return false</span>;
+    }
+
+    <span class="kw">public synchronized void</span> <span class="fn">release</span>() { status = <span class="cl">CompartmentStatus</span>.FREE; }
+    <span class="kw">public boolean</span> <span class="fn">isFree</span>() { <span class="kw">return</span> status == <span class="cl">CompartmentStatus</span>.FREE; }
+    <span class="kw">public</span> <span class="cl">PackageSize</span> <span class="fn">getSize</span>() { <span class="kw">return</span> size; }
+    <span class="kw">public</span> <span class="cl">String</span> <span class="fn">getId</span>() { <span class="kw">return</span> id; }
+}
+
+<span class="kw">class</span> <span class="cl">Locker</span> {
+    <span class="cm">// size → list of compartments for that size</span>
+    <span class="kw">private final</span> <span class="cl">Map</span>&lt;<span class="cl">PackageSize</span>, <span class="cl">List</span>&lt;<span class="cl">Compartment</span>&gt;&gt; compartments;
+    <span class="cm">// token code → AccessToken</span>
+    <span class="kw">private final</span> <span class="cl">ConcurrentHashMap</span>&lt;<span class="cl">String</span>, <span class="cl">AccessToken</span>&gt; tokenMap = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+    <span class="kw">private final</span> <span class="cl">ReentrantLock</span> depositLock = <span class="kw">new</span> <span class="cl">ReentrantLock</span>();
+
+    <span class="kw">public</span> <span class="cl">String</span> <span class="fn">deposit</span>(<span class="cl">PackageSize</span> size) {
+        depositLock.lock();
+        <span class="kw">try</span> {
+            <span class="cl">Compartment</span> c = compartments.getOrDefault(size, <span class="cl">Collections</span>.emptyList())
+                .stream()
+                .filter(<span class="cl">Compartment</span>::isFree)
+                .findFirst()
+                .orElseThrow(() -> <span class="kw">new</span> <span class="cl">NoSpaceException</span>(<span class="str">"No "</span> + size + <span class="str">" compartment available"</span>));
+            c.tryOccupy();
+            <span class="cl">AccessToken</span> token = <span class="kw">new</span> <span class="cl">AccessToken</span>(c.getId());
+            tokenMap.put(token.getCode(), token);
+            <span class="kw">return</span> token.getCode();  <span class="cm">// return to caller (notify customer)</span>
+        } <span class="kw">finally</span> {
+            depositLock.unlock();
+        }
+    }
+
+    <span class="kw">public void</span> <span class="fn">pickup</span>(<span class="cl">String</span> tokenCode) {
+        <span class="cl">AccessToken</span> token = tokenMap.get(tokenCode);
+        <span class="kw">if</span> (token == <span class="kw">null</span>)    <span class="kw">throw new</span> <span class="cl">InvalidTokenException</span>(<span class="str">"Token not found"</span>);
+        <span class="kw">if</span> (token.isExpired()) <span class="kw">throw new</span> <span class="cl">ExpiredTokenException</span>(<span class="str">"Token expired"</span>);
+        <span class="cm">// find compartment, open it, release</span>
+        findCompartmentById(token.getCompartmentId()).release();
+        tokenMap.remove(tokenCode);
+    }
+
+    <span class="cm">// Staff cleanup: open all compartments with expired tokens</span>
+    <span class="kw">public</span> <span class="cl">List</span>&lt;<span class="cl">String</span>&gt; <span class="fn">clearExpiredCompartments</span>() {
+        <span class="kw">return</span> tokenMap.entrySet().stream()
+            .filter(e -> e.getValue().isExpired())
+            .map(e -> {
+                findCompartmentById(e.getValue().getCompartmentId()).release();
+                tokenMap.remove(e.getKey());
+                <span class="kw">return</span> e.getValue().getCompartmentId();
+            })
+            .collect(<span class="cl">Collectors</span>.toList());
+    }
+}
+</pre>
+
+<div class="dd-head"><div class="dd-n">🔍</div><div class="dd-t">Deep Dive — Key Design Decisions</div></div>
+<div class="steps">
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">Why is Package not an entity?</div><div class="step-d">Package is <strong>external to the locker system</strong> — it belongs to Amazon's fulfillment system. The locker only cares about the package's <em>size</em>, which is an input parameter, not a stored entity. This is a common interview trap: not every noun deserves a class.</div></div></li>
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">How do you prevent two drivers depositing simultaneously to the same slot?</div><div class="step-d">The <code>ReentrantLock depositLock</code> wraps the find-and-occupy operation. Additionally, <code>tryOccupy()</code> on the compartment is <code>synchronized</code> as a double guard. Only one thread can occupy a slot at a time.</div></div></li>
+</div>
+
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 4: VENDING MACHINE
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p4">
+<div class="problem-header">
+  <div class="problem-num">04</div>
+  <div class="problem-meta">
+    <div class="problem-title">Vending Machine</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-med">Medium</span>
+      <span class="ptag ptag-pat">State Machine</span>
+      <span class="ptag ptag-pat">State Pattern</span>
+    </div>
+    <div class="problem-desc">Classic state machine problem. The machine transitions through well-defined states: Idle → HasMoney → Dispensing → Change. The State Pattern eliminates massive if-else chains.</div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── State Interface ─────────────────────────────</span>
+<span class="kw">interface</span> <span class="cl">VendingState</span> {
+    <span class="ty">void</span> <span class="fn">insertMoney</span>(<span class="cl">VendingMachine</span> vm, <span class="ty">double</span> amount);
+    <span class="ty">void</span> <span class="fn">selectItem</span>(<span class="cl">VendingMachine</span> vm, <span class="cl">String</span> itemCode);
+    <span class="ty">void</span> <span class="fn">dispense</span>(<span class="cl">VendingMachine</span> vm);
+    <span class="ty">void</span> <span class="fn">cancel</span>(<span class="cl">VendingMachine</span> vm);
+}
+
+<span class="cm">// ── Idle State ─────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">IdleState</span> <span class="kw">implements</span> <span class="cl">VendingState</span> {
+    <span class="kw">@Override</span>
+    <span class="kw">public void</span> <span class="fn">insertMoney</span>(<span class="cl">VendingMachine</span> vm, <span class="ty">double</span> amount) {
+        vm.addBalance(amount);
+        vm.setState(vm.getHasMoneyState());  <span class="cm">// transition</span>
+        System.out.println(<span class="str">"Money inserted: $"</span> + amount);
+    }
+
+    <span class="kw">@Override</span>
+    <span class="kw">public void</span> <span class="fn">selectItem</span>(<span class="cl">VendingMachine</span> vm, <span class="cl">String</span> code) {
+        System.out.println(<span class="str">"Please insert money first."</span>);
+    }
+    <span class="kw">@Override public void</span> <span class="fn">dispense</span>(<span class="cl">VendingMachine</span> vm)    { System.out.println(<span class="str">"No item selected."</span>); }
+    <span class="kw">@Override public void</span> <span class="fn">cancel</span>(<span class="cl">VendingMachine</span> vm)      { System.out.println(<span class="str">"Nothing to cancel."</span>); }
+}
+
+<span class="cm">// ── Has Money State ────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">HasMoneyState</span> <span class="kw">implements</span> <span class="cl">VendingState</span> {
+    <span class="kw">@Override</span>
+    <span class="kw">public void</span> <span class="fn">insertMoney</span>(<span class="cl">VendingMachine</span> vm, <span class="ty">double</span> amount) {
+        vm.addBalance(amount);
+        System.out.println(<span class="str">"Added $"</span> + amount + <span class="str">". Balance: $"</span> + vm.getBalance());
+    }
+
+    <span class="kw">@Override</span>
+    <span class="kw">public void</span> <span class="fn">selectItem</span>(<span class="cl">VendingMachine</span> vm, <span class="cl">String</span> code) {
+        <span class="cl">Item</span> item = vm.getInventory().get(code);
+        <span class="kw">if</span> (item == <span class="kw">null</span>)          { System.out.println(<span class="str">"Item not found."</span>);  <span class="kw">return</span>; }
+        <span class="kw">if</span> (item.getQuantity() == <span class="num">0</span>) { System.out.println(<span class="str">"Out of stock."</span>);    <span class="kw">return</span>; }
+        <span class="kw">if</span> (vm.getBalance() &lt; item.getPrice()) {
+            System.out.println(<span class="str">"Insufficient funds. Need $"</span> + (item.getPrice() - vm.getBalance()));
+            <span class="kw">return</span>;
+        }
+        vm.setSelectedItem(item);
+        vm.setState(vm.getDispensingState());
+        vm.getState().dispense(vm);  <span class="cm">// auto-dispense</span>
+    }
+
+    <span class="kw">@Override public void</span> <span class="fn">dispense</span>(<span class="cl">VendingMachine</span> vm)  { System.out.println(<span class="str">"Select an item first."</span>); }
+    <span class="kw">@Override</span>
+    <span class="kw">public void</span> <span class="fn">cancel</span>(<span class="cl">VendingMachine</span> vm) {
+        System.out.println(<span class="str">"Returning $"</span> + vm.getBalance());
+        vm.setBalance(<span class="num">0</span>);
+        vm.setState(vm.getIdleState());
+    }
+}
+
+<span class="cm">// ── Dispensing State ───────────────────────────</span>
+<span class="kw">class</span> <span class="cl">DispensingState</span> <span class="kw">implements</span> <span class="cl">VendingState</span> {
+    <span class="kw">@Override</span>
+    <span class="kw">public void</span> <span class="fn">dispense</span>(<span class="cl">VendingMachine</span> vm) {
+        <span class="cl">Item</span> item = vm.getSelectedItem();
+        item.decrementQuantity();
+        <span class="ty">double</span> change = vm.getBalance() - item.getPrice();
+        vm.setBalance(<span class="num">0</span>);
+        System.out.println(<span class="str">"Dispensing: "</span> + item.getName());
+        <span class="kw">if</span> (change > <span class="num">0</span>) System.out.println(<span class="str">"Change: $"</span> + change);
+        vm.setState(vm.getIdleState());
+    }
+
+    <span class="kw">@Override public void</span> <span class="fn">insertMoney</span>(<span class="cl">VendingMachine</span> vm, <span class="ty">double</span> a) { System.out.println(<span class="str">"Dispensing..."</span>); }
+    <span class="kw">@Override public void</span> <span class="fn">selectItem</span>(<span class="cl">VendingMachine</span> vm, <span class="cl">String</span> c)  { System.out.println(<span class="str">"Dispensing..."</span>); }
+    <span class="kw">@Override public void</span> <span class="fn">cancel</span>(<span class="cl">VendingMachine</span> vm)               { System.out.println(<span class="str">"Cannot cancel."</span>); }
+}
+
+<span class="cm">// ── Machine Context ────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">VendingMachine</span> {
+    <span class="kw">private</span> <span class="cl">VendingState</span> currentState;
+    <span class="kw">private</span> <span class="ty">double</span> balance;
+    <span class="kw">private</span> <span class="cl">Item</span> selectedItem;
+    <span class="kw">private final</span> <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Item</span>&gt; inventory = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+    <span class="cm">// State instances (flyweight)</span>
+    <span class="kw">private final</span> <span class="cl">VendingState</span> idleState = <span class="kw">new</span> <span class="cl">IdleState</span>();
+    <span class="kw">private final</span> <span class="cl">VendingState</span> hasMoneyState = <span class="kw">new</span> <span class="cl">HasMoneyState</span>();
+    <span class="kw">private final</span> <span class="cl">VendingState</span> dispensingState = <span class="kw">new</span> <span class="cl">DispensingState</span>();
+
+    <span class="kw">public</span> <span class="cl">VendingMachine</span>() { currentState = idleState; }
+
+    <span class="cm">// Delegated to current state</span>
+    <span class="kw">public void</span> <span class="fn">insertMoney</span>(<span class="ty">double</span> amount)   { currentState.insertMoney(<span class="kw">this</span>, amount); }
+    <span class="kw">public void</span> <span class="fn">selectItem</span>(<span class="cl">String</span> code)     { currentState.selectItem(<span class="kw">this</span>, code); }
+    <span class="kw">public void</span> <span class="fn">cancel</span>()                      { currentState.cancel(<span class="kw">this</span>); }
+    <span class="cm">// setters/getters for state transitions omitted for brevity</span>
+}
+</pre>
+
+<div class="box box-purple"><strong>State Pattern key insight:</strong> Each state class encapsulates all valid behavior for that state. Invalid operations print an error and return — they never throw. The machine's <code>currentState</code> reference switches atomically. No giant switch/if-else anywhere.</div>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 5: ATM SYSTEM
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p5">
+<div class="problem-header">
+  <div class="problem-num">05</div>
+  <div class="problem-meta">
+    <div class="problem-title">ATM System</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">State Machine</span>
+      <span class="ptag ptag-pat">Chain of Responsibility</span>
+      <span class="ptag ptag-cyan">Concurrency Critical</span>
+    </div>
+    <div class="problem-desc">Full ATM simulation with card insertion, PIN verification, balance check, cash withdrawal, and deposit. The cash dispensing uses Chain of Responsibility pattern for bill denominations.</div>
+  </div>
+</div>
+
+<h2>🗄️ DB Schema</h2>
+<div class="schema-grid">
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">accounts</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">account_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">card_number</span><span class="schema-col-type">VARCHAR</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">pin_hash</span><span class="schema-col-type">VARCHAR</span></div>
+      <div class="schema-col"><span class="schema-col-name">balance</span><span class="schema-col-type">DECIMAL(15,2)</span></div>
+      <div class="schema-col"><span class="schema-col-name">pin_attempts</span><span class="schema-col-type">INT DEFAULT 0</span></div>
+      <div class="schema-col"><span class="schema-col-name">locked</span><span class="schema-col-type">BOOLEAN</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">transactions</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">tx_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">account_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">type</span><span class="schema-col-type">ENUM(WITHDRAW,DEPOSIT)</span></div>
+      <div class="schema-col"><span class="schema-col-name">amount</span><span class="schema-col-type">DECIMAL(15,2)</span></div>
+      <div class="schema-col"><span class="schema-col-name">timestamp</span><span class="schema-col-type">TIMESTAMP</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── Bill Dispenser (Chain of Responsibility) ───</span>
+<span class="kw">abstract class</span> <span class="cl">BillHandler</span> {
+    <span class="kw">protected</span> <span class="cl">BillHandler</span> next;
+    <span class="kw">protected final</span> <span class="ty">int</span> denomination;
+    <span class="kw">protected</span> <span class="ty">int</span> count;
+
+    <span class="kw">public</span> <span class="cl">BillHandler</span>(<span class="ty">int</span> denomination, <span class="ty">int</span> count) {
+        <span class="kw">this</span>.denomination = denomination;
+        <span class="kw">this</span>.count = count;
+    }
+
+    <span class="kw">public</span> <span class="cl">BillHandler</span> <span class="fn">setNext</span>(<span class="cl">BillHandler</span> next) {
+        <span class="kw">this</span>.next = next;
+        <span class="kw">return</span> next;
+    }
+
+    <span class="kw">public</span> <span class="cl">Map</span>&lt;<span class="cl">Integer</span>, <span class="cl">Integer</span>&gt; <span class="fn">dispense</span>(<span class="ty">int</span> amount) {
+        <span class="cl">Map</span>&lt;<span class="cl">Integer</span>, <span class="cl">Integer</span>&gt; bills = <span class="kw">new</span> <span class="cl">LinkedHashMap</span>&lt;&gt;();
+        <span class="ty">int</span> numBills = Math.min(amount / denomination, count);
+        <span class="kw">if</span> (numBills > <span class="num">0</span>) {
+            bills.put(denomination, numBills);
+            count -= numBills;
+            amount -= numBills * denomination;
+        }
+        <span class="kw">if</span> (amount > <span class="num">0</span> && next != <span class="kw">null</span>) {
+            bills.putAll(next.dispense(amount));
+        }
+        <span class="kw">return</span> bills;
+    }
+
+    <span class="kw">public boolean</span> <span class="fn">canDispense</span>(<span class="ty">int</span> amount) {
+        <span class="ty">int</span> remaining = amount;
+        <span class="cl">BillHandler</span> current = <span class="kw">this</span>;
+        <span class="kw">while</span> (current != <span class="kw">null</span>) {
+            remaining -= Math.min(remaining / current.denomination, current.count) * current.denomination;
+            current = current.next;
+        }
+        <span class="kw">return</span> remaining == <span class="num">0</span>;
+    }
+}
+
+<span class="cm">// ── Account Service ────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">AccountService</span> {
+    <span class="kw">private final</span> <span class="cl">AccountRepository</span> repo;
+
+    <span class="cm">// Optimistic locking via @Version in JPA or check-and-update SQL</span>
+    <span class="kw">public boolean</span> <span class="fn">withdraw</span>(<span class="cl">String</span> accountId, <span class="ty">double</span> amount) {
+        <span class="cm">// SQL: UPDATE accounts SET balance = balance - ? </span>
+        <span class="cm">//      WHERE account_id = ? AND balance >= ? AND locked = false</span>
+        <span class="ty">int</span> rowsAffected = repo.decrementBalance(accountId, amount);
+        <span class="kw">return</span> rowsAffected > <span class="num">0</span>;
+    }
+
+    <span class="kw">public boolean</span> <span class="fn">verifyPin</span>(<span class="cl">String</span> cardNumber, <span class="cl">String</span> pin) {
+        <span class="cl">Account</span> account = repo.findByCardNumber(cardNumber);
+        <span class="kw">if</span> (account.isLocked()) <span class="kw">throw new</span> <span class="cl">AccountLockedException</span>();
+        <span class="kw">if</span> (!BCrypt.checkpw(pin, account.getPinHash())) {
+            repo.incrementPinAttempts(account.getId());
+            <span class="kw">if</span> (account.getPinAttempts() + <span class="num">1</span> >= <span class="num">3</span>) {
+                repo.lockAccount(account.getId());
+                <span class="kw">throw new</span> <span class="cl">AccountLockedException</span>(<span class="str">"Too many failed attempts"</span>);
+            }
+            <span class="kw">return false</span>;
+        }
+        repo.resetPinAttempts(account.getId());
+        <span class="kw">return true</span>;
+    }
+}
+
+<span class="cm">// ── ATM Machine ───────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">ATM</span> {
+    <span class="kw">private</span> <span class="cl">ATMState</span> currentState = <span class="kw">new</span> <span class="cl">IdleState</span>();
+    <span class="kw">private</span> <span class="cl">String</span> currentCardNumber;
+    <span class="kw">private</span> <span class="cl">Account</span> authenticatedAccount;
+    <span class="kw">private final</span> <span class="cl">BillHandler</span> cashDispenser;
+    <span class="kw">private final</span> <span class="cl">AccountService</span> accountService;
+
+    <span class="kw">public</span> <span class="cl">ATM</span>(<span class="cl">AccountService</span> svc) {
+        <span class="kw">this</span>.accountService = svc;
+        <span class="cm">// Set up chain: $100 → $50 → $20 → $10</span>
+        <span class="cl">BillHandler</span> h100 = <span class="kw">new</span> <span class="cl">BillHandler</span>(<span class="num">100</span>, <span class="num">50</span>) {};
+        <span class="cl">BillHandler</span> h50  = <span class="kw">new</span> <span class="cl">BillHandler</span>(<span class="num">50</span>,  <span class="num">100</span>) {};
+        <span class="cl">BillHandler</span> h20  = <span class="kw">new</span> <span class="cl">BillHandler</span>(<span class="num">20</span>,  <span class="num">200</span>) {};
+        <span class="cl">BillHandler</span> h10  = <span class="kw">new</span> <span class="cl">BillHandler</span>(<span class="num">10</span>,  <span class="num">500</span>) {};
+        h100.setNext(h50).setNext(h20).setNext(h10);
+        <span class="kw">this</span>.cashDispenser = h100;
+    }
+
+    <span class="kw">public void</span> <span class="fn">withdraw</span>(<span class="ty">int</span> amount) {
+        <span class="kw">if</span> (!cashDispenser.canDispense(amount))
+            <span class="kw">throw new</span> <span class="cl">InsufficientCashException</span>(<span class="str">"ATM cannot dispense $"</span> + amount);
+        <span class="kw">if</span> (!accountService.withdraw(authenticatedAccount.getId(), amount))
+            <span class="kw">throw new</span> <span class="cl">InsufficientFundsException</span>();
+        <span class="cm">// Only dispense cash after successful DB debit</span>
+        <span class="cl">Map</span>&lt;<span class="cl">Integer</span>, <span class="cl">Integer</span>&gt; bills = cashDispenser.dispense(amount);
+        System.out.println(<span class="str">"Dispensing: "</span> + bills);
+    }
+}
+</pre>
+
+<div class="conc-box">
+  <div class="conc-title">⚠️ Critical: TOCTOU Race on Balance</div>
+  <div class="conc-items">
+    <div class="conc-item">
+      <div class="conc-item-t">Check-then-act vulnerability</div>
+      <div class="conc-item-d">Never do: <code>if (balance >= amount) { balance -= amount; }</code> — two threads can both pass the check before either subtracts. Fix: use a single atomic SQL <code>UPDATE accounts SET balance = balance - ? WHERE balance >= ? AND account_id = ?</code>. Check rows affected = 1. If 0, balance was insufficient.</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 6: RATE LIMITER
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p6">
+<div class="problem-header">
+  <div class="problem-num">06</div>
+  <div class="problem-meta">
+    <div class="problem-title">Rate Limiter</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">Token Bucket</span>
+      <span class="ptag ptag-pat">Sliding Window</span>
+      <span class="ptag ptag-cyan">High Concurrency</span>
+    </div>
+    <div class="problem-desc">Implement multiple rate limiting algorithms. Highly concurrent — multiple threads call <code>allowRequest()</code> simultaneously. Atomic operations are critical.</div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation — All 3 Algorithms</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── Interface ──────────────────────────────────</span>
+<span class="kw">interface</span> <span class="cl">RateLimiter</span> {
+    <span class="ty">boolean</span> <span class="fn">allowRequest</span>(<span class="cl">String</span> clientId);
+}
+
+<span class="cm">// ════════════════════════════════════════════════
+// ALGORITHM 1: Token Bucket
+// Best for: bursty traffic (allows burst up to bucketSize)
+// ════════════════════════════════════════════════</span>
+<span class="kw">class</span> <span class="cl">TokenBucketRateLimiter</span> <span class="kw">implements</span> <span class="cl">RateLimiter</span> {
+    <span class="kw">private final</span> <span class="ty">int</span> capacity;
+    <span class="kw">private final</span> <span class="ty">double</span> refillRatePerSecond;
+    <span class="cm">// Per-client bucket state</span>
+    <span class="kw">private final</span> <span class="cl">ConcurrentHashMap</span>&lt;<span class="cl">String</span>, <span class="cl">double[]</span>&gt; buckets = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+    <span class="kw">private final</span> <span class="cl">ConcurrentHashMap</span>&lt;<span class="cl">String</span>, <span class="ty">long</span>[]&gt; lastRefill = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+
+    <span class="kw">public</span> <span class="cl">TokenBucketRateLimiter</span>(<span class="ty">int</span> capacity, <span class="ty">double</span> refillPerSec) {
+        <span class="kw">this</span>.capacity = capacity;
+        <span class="kw">this</span>.refillRatePerSecond = refillPerSec;
+    }
+
+    <span class="kw">@Override</span>
+    <span class="kw">public synchronized boolean</span> <span class="fn">allowRequest</span>(<span class="cl">String</span> clientId) {
+        <span class="cm">// Initialize bucket if first request</span>
+        buckets.putIfAbsent(clientId, <span class="kw">new double</span>[] {capacity});
+        lastRefill.putIfAbsent(clientId, <span class="kw">new long</span>[] {<span class="cl">System</span>.currentTimeMillis()});
+
+        <span class="ty">long</span> now = <span class="cl">System</span>.currentTimeMillis();
+        <span class="ty">long</span> elapsed = now - lastRefill.get(clientId)[<span class="num">0</span>];
+        lastRefill.get(clientId)[<span class="num">0</span>] = now;
+
+        <span class="cm">// Refill tokens based on elapsed time</span>
+        <span class="ty">double</span>[] tokens = buckets.get(clientId);
+        tokens[<span class="num">0</span>] = Math.min(capacity, tokens[<span class="num">0</span>] + (elapsed / <span class="num">1000.0</span>) * refillRatePerSecond);
+
+        <span class="kw">if</span> (tokens[<span class="num">0</span>] >= <span class="num">1.0</span>) {
+            tokens[<span class="num">0</span>]--;
+            <span class="kw">return true</span>;  <span class="cm">// Request allowed</span>
+        }
+        <span class="kw">return false</span>;  <span class="cm">// Rate limited</span>
+    }
+}
+
+<span class="cm">// ════════════════════════════════════════════════
+// ALGORITHM 2: Fixed Window Counter
+// Best for: simple per-minute/hour limits
+// ════════════════════════════════════════════════</span>
+<span class="kw">class</span> <span class="cl">FixedWindowRateLimiter</span> <span class="kw">implements</span> <span class="cl">RateLimiter</span> {
+    <span class="kw">private final</span> <span class="ty">int</span> maxRequests;
+    <span class="kw">private final</span> <span class="ty">long</span> windowSizeMs;
+    <span class="kw">private final</span> <span class="cl">ConcurrentHashMap</span>&lt;<span class="cl">String</span>, <span class="cl">AtomicInteger</span>&gt; counters = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+    <span class="kw">private final</span> <span class="cl">ConcurrentHashMap</span>&lt;<span class="cl">String</span>, <span class="ty">long</span>[]&gt; windowStart = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+
+    <span class="kw">@Override</span>
+    <span class="kw">public boolean</span> <span class="fn">allowRequest</span>(<span class="cl">String</span> clientId) {
+        <span class="ty">long</span> now = <span class="cl">System</span>.currentTimeMillis();
+        windowStart.putIfAbsent(clientId, <span class="kw">new long</span>[] {now});
+        counters.putIfAbsent(clientId, <span class="kw">new</span> <span class="cl">AtomicInteger</span>(<span class="num">0</span>));
+
+        <span class="cm">// Reset window if expired</span>
+        <span class="kw">if</span> (now - windowStart.get(clientId)[<span class="num">0</span>] >= windowSizeMs) {
+            windowStart.get(clientId)[<span class="num">0</span>] = now;
+            counters.get(clientId).set(<span class="num">0</span>);
+        }
+        <span class="cm">// Atomic increment and check</span>
+        <span class="kw">return</span> counters.get(clientId).incrementAndGet() &lt;= maxRequests;
+    }
+}
+
+<span class="cm">// ════════════════════════════════════════════════
+// ALGORITHM 3: Sliding Window Log
+// Best for: strict accuracy (no boundary spikes)
+// ════════════════════════════════════════════════</span>
+<span class="kw">class</span> <span class="cl">SlidingWindowLogRateLimiter</span> <span class="kw">implements</span> <span class="cl">RateLimiter</span> {
+    <span class="kw">private final</span> <span class="ty">int</span> maxRequests;
+    <span class="kw">private final</span> <span class="ty">long</span> windowSizeMs;
+    <span class="cm">// Per-client: sorted deque of timestamps</span>
+    <span class="kw">private final</span> <span class="cl">ConcurrentHashMap</span>&lt;<span class="cl">String</span>, <span class="cl">ArrayDeque</span>&lt;<span class="cl">Long</span>&gt;&gt; logs = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+
+    <span class="kw">@Override</span>
+    <span class="kw">public synchronized boolean</span> <span class="fn">allowRequest</span>(<span class="cl">String</span> clientId) {
+        <span class="ty">long</span> now = <span class="cl">System</span>.currentTimeMillis();
+        logs.putIfAbsent(clientId, <span class="kw">new</span> <span class="cl">ArrayDeque</span>&lt;&gt;());
+        <span class="cl">ArrayDeque</span>&lt;<span class="cl">Long</span>&gt; log = logs.get(clientId);
+
+        <span class="cm">// Remove timestamps outside the window</span>
+        <span class="kw">while</span> (!log.isEmpty() && now - log.peekFirst() > windowSizeMs) {
+            log.pollFirst();
+        }
+
+        <span class="kw">if</span> (log.size() &lt; maxRequests) {
+            log.addLast(now);
+            <span class="kw">return true</span>;
+        }
+        <span class="kw">return false</span>;
+    }
+}
+</pre>
+
+<div class="tw"><table>
+  <thead><tr><th>Algorithm</th><th>Memory</th><th>Accuracy</th><th>Burst Handling</th><th>Best For</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Token Bucket</strong></td><td>O(1)</td><td>Approximate</td><td>✅ Allows bursts</td><td>APIs with burst tolerance</td></tr>
+    <tr><td><strong>Fixed Window</strong></td><td>O(1)</td><td>Has boundary spike</td><td>❌ 2x at boundary</td><td>Simple per-hour limits</td></tr>
+    <tr><td><strong>Sliding Window Log</strong></td><td>O(requests)</td><td>✅ Exact</td><td>❌ No burst</td><td>Strict API rate limiting</td></tr>
+  </tbody>
+</table></div>
+
+<div class="conc-box">
+  <div class="conc-title">⚠️ Concurrency — Why This Is Hard</div>
+  <div class="conc-items">
+    <div class="conc-item">
+      <div class="conc-item-t">Fixed Window — Lost Updates</div>
+      <div class="conc-item-d">Use <code>AtomicInteger.incrementAndGet()</code> — not <code>counter++</code>. The non-atomic version has a classic read-modify-write race: two threads read 99, both write 100, but the true count should be 101.</div>
+    </div>
+    <div class="conc-item">
+      <div class="conc-item-t">Token Bucket / Sliding Log — Lock Granularity</div>
+      <div class="conc-item-d">Lock <em>per client ID</em>, not on the entire map. Use <code>ConcurrentHashMap.compute(clientId, ...)</code> for atomic per-key operations, or maintain a per-client <code>ReentrantLock</code> via a <code>ConcurrentHashMap&lt;String, Lock&gt;</code>. Global synchronization is a throughput killer.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 7: TASK SCHEDULER
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p7">
+<div class="problem-header">
+  <div class="problem-num">07</div>
+  <div class="problem-meta">
+    <div class="problem-title">Distributed Task Scheduler</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">Thread Pool</span>
+      <span class="ptag ptag-pat">Priority Queue</span>
+      <span class="ptag ptag-cyan">Concurrency Heavy</span>
+    </div>
+    <div class="problem-desc">Schedule one-time and recurring tasks with priority. Uses a thread pool + priority queue. Key challenges: thread safety, task cancellation, and avoiding missed scheduled times.</div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="kw">class</span> <span class="cl">ScheduledTask</span> <span class="kw">implements</span> <span class="cl">Comparable</span>&lt;<span class="cl">ScheduledTask</span>&gt; {
+    <span class="kw">private final</span> <span class="cl">String</span> taskId;
+    <span class="kw">private final</span> <span class="cl">Runnable</span> task;
+    <span class="kw">private final</span> <span class="ty">long</span> scheduledTimeMs;   <span class="cm">// when to run</span>
+    <span class="kw">private final</span> <span class="ty">long</span> intervalMs;         <span class="cm">// 0 = one-time</span>
+    <span class="kw">private final</span> <span class="ty">int</span> priority;            <span class="cm">// higher = more urgent</span>
+    <span class="kw">private volatile boolean</span> cancelled = <span class="kw">false</span>;
+
+    <span class="kw">@Override</span>
+    <span class="kw">public int</span> <span class="fn">compareTo</span>(<span class="cl">ScheduledTask</span> other) {
+        <span class="cm">// Earlier time first; break ties by priority (higher = first)</span>
+        <span class="ty">int</span> cmp = <span class="cl">Long</span>.compare(<span class="kw">this</span>.scheduledTimeMs, other.scheduledTimeMs);
+        <span class="kw">return</span> cmp != <span class="num">0</span> ? cmp : <span class="cl">Integer</span>.compare(other.priority, <span class="kw">this</span>.priority);
+    }
+
+    <span class="kw">public boolean</span> <span class="fn">isRecurring</span>()  { <span class="kw">return</span> intervalMs > <span class="num">0</span>; }
+    <span class="kw">public void</span>    <span class="fn">cancel</span>()       { cancelled = <span class="kw">true</span>; }
+    <span class="kw">public boolean</span> <span class="fn">isCancelled</span>() { <span class="kw">return</span> cancelled; }
+}
+
+<span class="kw">class</span> <span class="cl">TaskScheduler</span> {
+    <span class="cm">// Min-heap: task with earliest scheduledTime is at front</span>
+    <span class="kw">private final</span> <span class="cl">PriorityBlockingQueue</span>&lt;<span class="cl">ScheduledTask</span>&gt; queue = <span class="kw">new</span> <span class="cl">PriorityBlockingQueue</span>&lt;&gt;();
+    <span class="kw">private final</span> <span class="cl">ExecutorService</span> workerPool;
+    <span class="kw">private final</span> <span class="cl">ScheduledExecutorService</span> pollerThread;
+    <span class="kw">private volatile boolean</span> running = <span class="kw">false</span>;
+
+    <span class="kw">public</span> <span class="cl">TaskScheduler</span>(<span class="ty">int</span> threadPoolSize) {
+        <span class="kw">this</span>.workerPool = <span class="cl">Executors</span>.newFixedThreadPool(threadPoolSize);
+        <span class="kw">this</span>.pollerThread = <span class="cl">Executors</span>.newSingleThreadScheduledExecutor();
+    }
+
+    <span class="kw">public void</span> <span class="fn">start</span>() {
+        running = <span class="kw">true</span>;
+        <span class="cm">// Poll every 10ms for tasks ready to run</span>
+        pollerThread.scheduleAtFixedRate(<span class="kw">this</span>::<span class="fn">pollAndExecute</span>, <span class="num">0</span>, <span class="num">10</span>, <span class="cl">TimeUnit</span>.MILLISECONDS);
+    }
+
+    <span class="kw">private void</span> <span class="fn">pollAndExecute</span>() {
+        <span class="ty">long</span> now = <span class="cl">System</span>.currentTimeMillis();
+        <span class="kw">while</span> (!queue.isEmpty()) {
+            <span class="cl">ScheduledTask</span> task = queue.peek();
+            <span class="kw">if</span> (task == <span class="kw">null</span> || task.getScheduledTimeMs() > now) <span class="kw">break</span>;
+
+            task = queue.poll();  <span class="cm">// remove it</span>
+            <span class="kw">if</span> (task == <span class="kw">null</span>) <span class="kw">break</span>;
+            <span class="kw">if</span> (task.isCancelled()) <span class="kw">continue</span>;
+
+            <span class="kw">final</span> <span class="cl">ScheduledTask</span> finalTask = task;
+            workerPool.submit(() -> {
+                <span class="kw">try</span> {
+                    finalTask.getTask().run();
+                } <span class="kw">catch</span> (<span class="cl">Exception</span> e) {
+                    System.err.println(<span class="str">"Task failed: "</span> + finalTask.getTaskId() + <span class="str">" - "</span> + e.getMessage());
+                }
+                <span class="cm">// Re-schedule if recurring</span>
+                <span class="kw">if</span> (finalTask.isRecurring() && !finalTask.isCancelled()) {
+                    <span class="cl">ScheduledTask</span> next = finalTask.withNextScheduledTime(
+                        finalTask.getScheduledTimeMs() + finalTask.getIntervalMs()
+                    );
+                    queue.add(next);
+                }
+            });
+        }
+    }
+
+    <span class="kw">public</span> <span class="cl">ScheduledTask</span> <span class="fn">schedule</span>(<span class="cl">Runnable</span> task, <span class="ty">long</span> delayMs, <span class="ty">int</span> priority) {
+        <span class="cl">ScheduledTask</span> st = <span class="kw">new</span> <span class="cl">ScheduledTask</span>(task, <span class="cl">System</span>.currentTimeMillis() + delayMs, <span class="num">0</span>, priority);
+        queue.add(st);
+        <span class="kw">return</span> st;
+    }
+
+    <span class="kw">public</span> <span class="cl">ScheduledTask</span> <span class="fn">scheduleRecurring</span>(<span class="cl">Runnable</span> task, <span class="ty">long</span> initialDelayMs, <span class="ty">long</span> intervalMs) {
+        <span class="cl">ScheduledTask</span> st = <span class="kw">new</span> <span class="cl">ScheduledTask</span>(task, <span class="cl">System</span>.currentTimeMillis() + initialDelayMs, intervalMs, <span class="num">5</span>);
+        queue.add(st);
+        <span class="kw">return</span> st;
+    }
+
+    <span class="kw">public void</span> <span class="fn">shutdown</span>() {
+        running = <span class="kw">false</span>;
+        pollerThread.shutdown();
+        workerPool.shutdown();
+    }
+}
+</pre>
+
+<div class="box box-acc"><strong>Why PriorityBlockingQueue?</strong> It's thread-safe, unbounded, and provides O(log n) insert/extract. The queue's natural order (our <code>compareTo</code>) ensures the earliest task is always at the head. The <code>peek()</code> without <code>poll()</code> lets us check without consuming until we're sure the task is ready.</div>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 8: THREAD-SAFE BLOCKING QUEUE
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p8">
+<div class="problem-header">
+  <div class="problem-num">08</div>
+  <div class="problem-meta">
+    <div class="problem-title">Thread-Safe Blocking Queue</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-cyan">Core Concurrency</span>
+      <span class="ptag ptag-pat">Monitor Pattern</span>
+    </div>
+    <div class="problem-desc">Implement a bounded blocking queue from scratch using only locks and condition variables. This is the core of producer-consumer pattern and tests deep understanding of Java concurrency primitives.</div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="kw">class</span> <span class="cl">BoundedBlockingQueue</span>&lt;T&gt; {
+    <span class="kw">private final</span> <span class="cl">Queue</span>&lt;T&gt; queue;
+    <span class="kw">private final</span> <span class="ty">int</span> capacity;
+    <span class="kw">private final</span> <span class="cl">ReentrantLock</span> lock = <span class="kw">new</span> <span class="cl">ReentrantLock</span>();
+    <span class="kw">private final</span> <span class="cl">Condition</span> notFull  = lock.newCondition(); <span class="cm">// signal when space available</span>
+    <span class="kw">private final</span> <span class="cl">Condition</span> notEmpty = lock.newCondition(); <span class="cm">// signal when item available</span>
+
+    <span class="kw">public</span> <span class="cl">BoundedBlockingQueue</span>(<span class="ty">int</span> capacity) {
+        <span class="kw">this</span>.capacity = capacity;
+        <span class="kw">this</span>.queue = <span class="kw">new</span> <span class="cl">LinkedList</span>&lt;&gt;();
+    }
+
+    <span class="cm">// Producer: blocks if full</span>
+    <span class="kw">public void</span> <span class="fn">put</span>(T item) <span class="kw">throws</span> <span class="cl">InterruptedException</span> {
+        lock.lock();
+        <span class="kw">try</span> {
+            <span class="kw">while</span> (queue.size() == capacity) {
+                notFull.await();  <span class="cm">// release lock, wait for signal</span>
+            }
+            queue.add(item);
+            notEmpty.signal();  <span class="cm">// wake one waiting consumer</span>
+        } <span class="kw">finally</span> {
+            lock.unlock();
+        }
+    }
+
+    <span class="cm">// Consumer: blocks if empty</span>
+    <span class="kw">public</span> T <span class="fn">take</span>() <span class="kw">throws</span> <span class="cl">InterruptedException</span> {
+        lock.lock();
+        <span class="kw">try</span> {
+            <span class="kw">while</span> (queue.isEmpty()) {
+                notEmpty.await();  <span class="cm">// release lock, wait for signal</span>
+            }
+            T item = queue.poll();
+            notFull.signal();   <span class="cm">// wake one waiting producer</span>
+            <span class="kw">return</span> item;
+        } <span class="kw">finally</span> {
+            lock.unlock();
+        }
+    }
+
+    <span class="cm">// Non-blocking offer with timeout</span>
+    <span class="kw">public boolean</span> <span class="fn">offer</span>(T item, <span class="ty">long</span> timeout, <span class="cl">TimeUnit</span> unit) <span class="kw">throws</span> <span class="cl">InterruptedException</span> {
+        lock.lock();
+        <span class="kw">try</span> {
+            <span class="ty">long</span> nanos = unit.toNanos(timeout);
+            <span class="kw">while</span> (queue.size() == capacity) {
+                <span class="kw">if</span> (nanos &lt;= <span class="num">0</span>) <span class="kw">return false</span>;  <span class="cm">// timed out</span>
+                nanos = notFull.awaitNanos(nanos);
+            }
+            queue.add(item);
+            notEmpty.signal();
+            <span class="kw">return true</span>;
+        } <span class="kw">finally</span> {
+            lock.unlock();
+        }
+    }
+
+    <span class="kw">public int</span> <span class="fn">size</span>()     { lock.lock(); <span class="kw">try</span> { <span class="kw">return</span> queue.size(); } <span class="kw">finally</span> { lock.unlock(); } }
+    <span class="kw">public boolean</span> <span class="fn">isEmpty</span>() { <span class="kw">return</span> size() == <span class="num">0</span>; }
+    <span class="kw">public boolean</span> <span class="fn">isFull</span>()  { <span class="kw">return</span> size() == capacity; }
+}
+</pre>
+
+<div class="box box-red"><strong>⚠️ Critical: Use while, not if</strong><br/>Always use <code>while (condition) { await(); }</code> — never <code>if (condition) { await(); }</code>. This is because <strong>spurious wakeups</strong> can occur: a thread may wake from <code>await()</code> without being signaled. The <code>while</code> re-checks the condition and waits again if it's still true. Using <code>if</code> here is a classic concurrency bug.</div>
+
+<div class="box box-acc"><strong>Why two Condition variables?</strong> Using a single <code>notifyAll()</code> would wake <em>every</em> waiting thread — both producers and consumers. With two Conditions, <code>notFull.signal()</code> wakes only a producer and <code>notEmpty.signal()</code> wakes only a consumer. This halves unnecessary wakeups and improves throughput.</div>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 9: PUB/SUB SYSTEM
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p9">
+<div class="problem-header">
+  <div class="problem-num">09</div>
+  <div class="problem-meta">
+    <div class="problem-title">In-Memory Pub/Sub System</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">Observer Pattern</span>
+      <span class="ptag ptag-pat">Topic-Based</span>
+      <span class="ptag ptag-cyan">Async Delivery</span>
+    </div>
+    <div class="problem-desc">Design a Kafka-like in-process pub/sub system with topics, subscriber groups, async delivery, and at-least-once semantics. Tests Observer pattern + concurrency.</div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── Message ────────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">Message</span> {
+    <span class="kw">private final</span> <span class="cl">String</span> id;
+    <span class="kw">private final</span> <span class="cl">String</span> topic;
+    <span class="kw">private final</span> <span class="cl">Object</span> payload;
+    <span class="kw">private final</span> <span class="ty">long</span> timestamp;
+
+    <span class="kw">public</span> <span class="cl">Message</span>(<span class="cl">String</span> topic, <span class="cl">Object</span> payload) {
+        <span class="kw">this</span>.id = <span class="cl">UUID</span>.randomUUID().toString();
+        <span class="kw">this</span>.topic = topic;
+        <span class="kw">this</span>.payload = payload;
+        <span class="kw">this</span>.timestamp = <span class="cl">System</span>.currentTimeMillis();
+    }
+}
+
+<span class="cm">// ── Subscriber Interface ──────────────────────</span>
+<span class="kw">interface</span> <span class="cl">Subscriber</span> {
+    <span class="cl">String</span> <span class="fn">getId</span>();
+    <span class="ty">void</span> <span class="fn">onMessage</span>(<span class="cl">Message</span> message);
+}
+
+<span class="cm">// ── Topic ─────────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">Topic</span> {
+    <span class="kw">private final</span> <span class="cl">String</span> name;
+    <span class="cm">// subscriberId → Subscriber</span>
+    <span class="kw">private final</span> <span class="cl">ConcurrentHashMap</span>&lt;<span class="cl">String</span>, <span class="cl">Subscriber</span>&gt; subscribers = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+    <span class="cm">// Message log (append-only, for replay)</span>
+    <span class="kw">private final</span> <span class="cl">List</span>&lt;<span class="cl">Message</span>&gt; log = Collections.synchronizedList(<span class="kw">new</span> <span class="cl">ArrayList</span>&lt;&gt;());
+    <span class="kw">private final</span> <span class="cl">ExecutorService</span> deliveryPool = <span class="cl">Executors</span>.newCachedThreadPool();
+
+    <span class="kw">public void</span> <span class="fn">subscribe</span>(<span class="cl">Subscriber</span> sub) {
+        subscribers.put(sub.getId(), sub);
+    }
+
+    <span class="kw">public void</span> <span class="fn">unsubscribe</span>(<span class="cl">String</span> subscriberId) {
+        subscribers.remove(subscriberId);
+    }
+
+    <span class="kw">public void</span> <span class="fn">publish</span>(<span class="cl">Message</span> message) {
+        log.add(message);  <span class="cm">// append to log</span>
+        <span class="cm">// Async delivery to each subscriber</span>
+        subscribers.values().forEach(sub ->
+            deliveryPool.submit(() -> {
+                <span class="kw">try</span> {
+                    sub.onMessage(message);
+                } <span class="kw">catch</span> (<span class="cl">Exception</span> e) {
+                    System.err.println(<span class="str">"Delivery failed to "</span> + sub.getId() + <span class="str">": "</span> + e.getMessage());
+                    <span class="cm">// In real system: retry queue or DLQ</span>
+                }
+            })
+        );
+    }
+
+    <span class="cm">// Replay messages from offset (for new subscribers)</span>
+    <span class="kw">public void</span> <span class="fn">replayFrom</span>(<span class="cl">Subscriber</span> sub, <span class="ty">int</span> fromOffset) {
+        <span class="kw">synchronized</span> (log) {
+            log.subList(Math.max(<span class="num">0</span>, fromOffset), log.size())
+               .forEach(msg -> deliveryPool.submit(() -> sub.onMessage(msg)));
+        }
+    }
+}
+
+<span class="cm">// ── Message Broker ─────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">MessageBroker</span> {
+    <span class="kw">private final</span> <span class="cl">ConcurrentHashMap</span>&lt;<span class="cl">String</span>, <span class="cl">Topic</span>&gt; topics = <span class="kw">new</span> <span class="cl">ConcurrentHashMap</span>&lt;&gt;();
+
+    <span class="kw">public void</span> <span class="fn">createTopic</span>(<span class="cl">String</span> topicName) {
+        topics.putIfAbsent(topicName, <span class="kw">new</span> <span class="cl">Topic</span>(topicName));
+    }
+
+    <span class="kw">public void</span> <span class="fn">subscribe</span>(<span class="cl">String</span> topicName, <span class="cl">Subscriber</span> subscriber) {
+        <span class="fn">getOrCreateTopic</span>(topicName).subscribe(subscriber);
+    }
+
+    <span class="kw">public void</span> <span class="fn">publish</span>(<span class="cl">String</span> topicName, <span class="cl">Object</span> payload) {
+        <span class="cl">Topic</span> topic = topics.get(topicName);
+        <span class="kw">if</span> (topic == <span class="kw">null</span>) <span class="kw">throw new</span> <span class="cl">TopicNotFoundException</span>(topicName);
+        topic.publish(<span class="kw">new</span> <span class="cl">Message</span>(topicName, payload));
+    }
+
+    <span class="kw">private</span> <span class="cl">Topic</span> <span class="fn">getOrCreateTopic</span>(<span class="cl">String</span> name) {
+        <span class="kw">return</span> topics.computeIfAbsent(name, <span class="cl">Topic</span>::new);
+    }
+}
+
+<span class="cm">// ── Usage Example ─────────────────────────────</span>
+<span class="cm">// MessageBroker broker = new MessageBroker();</span>
+<span class="cm">// broker.subscribe("orders", msg -> System.out.println("Order: " + msg.getPayload()));</span>
+<span class="cm">// broker.publish("orders", new OrderEvent("ORDER-123", "CREATED"));</span>
+</pre>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 10: DATABASE CONNECTION POOL
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p10">
+<div class="problem-header">
+  <div class="problem-num">10</div>
+  <div class="problem-meta">
+    <div class="problem-title">Database Connection Pool</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">Object Pool Pattern</span>
+      <span class="ptag ptag-cyan">Core Concurrency</span>
+    </div>
+    <div class="problem-desc">Implement a thread-safe connection pool with min/max connections, connection health checking, timeout on acquire, and automatic cleanup of stale connections.</div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="kw">class</span> <span class="cl">ConnectionPool</span> {
+    <span class="kw">private final</span> <span class="ty">int</span> maxSize;
+    <span class="kw">private final</span> <span class="ty">int</span> minSize;
+    <span class="kw">private final</span> <span class="ty">long</span> connectionTimeoutMs;
+    <span class="kw">private final</span> <span class="cl">String</span> jdbcUrl;
+
+    <span class="cm">// Available connections</span>
+    <span class="kw">private final</span> <span class="cl">ArrayBlockingQueue</span>&lt;<span class="cl">PooledConnection</span>&gt; available;
+    <span class="cm">// All connections (for lifecycle management)</span>
+    <span class="kw">private final</span> <span class="cl">Set</span>&lt;<span class="cl">PooledConnection</span>&gt; allConnections = <span class="cl">ConcurrentHashMap</span>.newKeySet();
+    <span class="kw">private final</span> <span class="cl">AtomicInteger</span> totalConnections = <span class="kw">new</span> <span class="cl">AtomicInteger</span>(<span class="num">0</span>);
+    <span class="kw">private volatile boolean</span> shutdown = <span class="kw">false</span>;
+
+    <span class="kw">public</span> <span class="cl">ConnectionPool</span>(<span class="ty">int</span> minSize, <span class="ty">int</span> maxSize, <span class="ty">long</span> timeoutMs, <span class="cl">String</span> jdbcUrl) {
+        <span class="kw">this</span>.minSize = minSize;
+        <span class="kw">this</span>.maxSize = maxSize;
+        <span class="kw">this</span>.connectionTimeoutMs = timeoutMs;
+        <span class="kw">this</span>.jdbcUrl = jdbcUrl;
+        <span class="kw">this</span>.available = <span class="kw">new</span> <span class="cl">ArrayBlockingQueue</span>&lt;&gt;(maxSize);
+        <span class="fn">initializeMinConnections</span>();
+        <span class="fn">startHealthCheckThread</span>();
+    }
+
+    <span class="kw">private void</span> <span class="fn">initializeMinConnections</span>() {
+        <span class="kw">for</span> (<span class="ty">int</span> i = <span class="num">0</span>; i &lt; minSize; i++) {
+            <span class="cl">PooledConnection</span> conn = <span class="fn">createConnection</span>();
+            available.offer(conn);
+            allConnections.add(conn);
+        }
+    }
+
+    <span class="cm">// Acquire a connection — blocks up to timeout</span>
+    <span class="kw">public</span> <span class="cl">PooledConnection</span> <span class="fn">acquire</span>() <span class="kw">throws</span> <span class="cl">Exception</span> {
+        <span class="kw">if</span> (shutdown) <span class="kw">throw new</span> <span class="cl">IllegalStateException</span>(<span class="str">"Pool is shut down"</span>);
+
+        <span class="cl">PooledConnection</span> conn = available.poll();
+        <span class="kw">if</span> (conn != <span class="kw">null</span>) {
+            <span class="kw">if</span> (conn.isValid()) {
+                conn.markInUse();
+                <span class="kw">return</span> conn;
+            }
+            <span class="cm">// Stale connection — discard and create new</span>
+            allConnections.remove(conn);
+            totalConnections.decrementAndGet();
+        }
+
+        <span class="cm">// Try to create a new connection if under max</span>
+        <span class="kw">if</span> (totalConnections.get() &lt; maxSize) {
+            <span class="kw">if</span> (totalConnections.incrementAndGet() &lt;= maxSize) {
+                conn = <span class="fn">createConnection</span>();
+                allConnections.add(conn);
+                conn.markInUse();
+                <span class="kw">return</span> conn;
+            }
+            totalConnections.decrementAndGet();  <span class="cm">// undo increment</span>
+        }
+
+        <span class="cm">// Wait for a connection to be returned</span>
+        conn = available.poll(connectionTimeoutMs, <span class="cl">TimeUnit</span>.MILLISECONDS);
+        <span class="kw">if</span> (conn == <span class="kw">null</span>) <span class="kw">throw new</span> <span class="cl">TimeoutException</span>(<span class="str">"Timeout waiting for connection"</span>);
+        conn.markInUse();
+        <span class="kw">return</span> conn;
+    }
+
+    <span class="cm">// Release a connection back to pool</span>
+    <span class="kw">public void</span> <span class="fn">release</span>(<span class="cl">PooledConnection</span> conn) {
+        <span class="kw">if</span> (conn == <span class="kw">null</span>) <span class="kw">return</span>;
+        conn.markAvailable();
+        <span class="kw">if</span> (shutdown || !conn.isValid()) {
+            allConnections.remove(conn);
+            totalConnections.decrementAndGet();
+            conn.closePhysically();
+            <span class="kw">return</span>;
+        }
+        <span class="kw">if</span> (!available.offer(conn)) {
+            <span class="cm">// Pool full — close the excess connection</span>
+            allConnections.remove(conn);
+            totalConnections.decrementAndGet();
+            conn.closePhysically();
+        }
+    }
+
+    <span class="cm">// Health check: evict stale, ensure min connections</span>
+    <span class="kw">private void</span> <span class="fn">startHealthCheckThread</span>() {
+        <span class="cl">ScheduledExecutorService</span> checker = <span class="cl">Executors</span>.newSingleThreadScheduledExecutor();
+        checker.scheduleAtFixedRate(() -> {
+            <span class="kw">if</span> (shutdown) <span class="kw">return</span>;
+            <span class="kw">int</span> toCreate = minSize - totalConnections.get();
+            <span class="kw">for</span> (<span class="ty">int</span> i = <span class="num">0</span>; i &lt; toCreate; i++) {
+                <span class="kw">try</span> {
+                    <span class="cl">PooledConnection</span> conn = <span class="fn">createConnection</span>();
+                    allConnections.add(conn);
+                    available.offer(conn);
+                    totalConnections.incrementAndGet();
+                } <span class="kw">catch</span> (<span class="cl">Exception</span> e) {
+                    System.err.println(<span class="str">"Health check: failed to create connection"</span>);
+                }
+            }
+        }, <span class="num">30</span>, <span class="num">30</span>, <span class="cl">TimeUnit</span>.SECONDS);
+    }
+
+    <span class="cm">// Try-with-resources support</span>
+    <span class="kw">public</span> <span class="cl">AutoCloseable</span> <span class="fn">withConnection</span>(<span class="cl">Consumer</span>&lt;<span class="cl">PooledConnection</span>&gt; action) <span class="kw">throws</span> <span class="cl">Exception</span> {
+        <span class="cl">PooledConnection</span> conn = acquire();
+        <span class="kw">return</span> () -> {
+            action.accept(conn);
+            release(conn);
+        };
+    }
+
+    <span class="kw">private</span> <span class="cl">PooledConnection</span> <span class="fn">createConnection</span>() {
+        <span class="kw">return new</span> <span class="cl">PooledConnection</span>(<span class="cl">DriverManager</span>.getConnection(jdbcUrl), <span class="kw">this</span>);
+    }
+}
+</pre>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 11: CHESS / BOARD GAME
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p11">
+<div class="problem-header">
+  <div class="problem-num">11</div>
+  <div class="problem-meta">
+    <div class="problem-title">Chess (Board Game Framework)</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">Polymorphism</span>
+      <span class="ptag ptag-pat">Template Method</span>
+      <span class="ptag ptag-pat">Command Pattern</span>
+    </div>
+    <div class="problem-desc">Full chess game with all pieces, move validation, turn management, and check detection. Extensible to any board game. Interviewer often asks about undo (Command pattern) and piece movement polymorphism.</div>
+  </div>
+</div>
+
+<h2>🗄️ DB Schema</h2>
+<div class="schema-grid">
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">games</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">game_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">player_white</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">player_black</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">ENUM(ACTIVE,WHITE_WIN,BLACK_WIN,DRAW,RESIGNED)</span></div>
+      <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">moves</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">move_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">game_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">move_number</span><span class="schema-col-type">INT</span></div>
+      <div class="schema-col"><span class="schema-col-name">from_pos</span><span class="schema-col-type">VARCHAR(2)</span></div>
+      <div class="schema-col"><span class="schema-col-name">to_pos</span><span class="schema-col-type">VARCHAR(2)</span></div>
+      <div class="schema-col"><span class="schema-col-name">piece_type</span><span class="schema-col-type">ENUM</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── Position ──────────────────────────────────</span>
+<span class="kw">record</span> <span class="cl">Position</span>(<span class="ty">int</span> row, <span class="ty">int</span> col) {
+    <span class="kw">public boolean</span> <span class="fn">isValid</span>() { <span class="kw">return</span> row >= <span class="num">0</span> && row &lt; <span class="num">8</span> && col >= <span class="num">0</span> && col &lt; <span class="num">8</span>; }
+    <span class="kw">public</span> <span class="cl">Position</span> <span class="fn">offset</span>(<span class="ty">int</span> dr, <span class="ty">int</span> dc) { <span class="kw">return new</span> <span class="cl">Position</span>(row+dr, col+dc); }
+}
+
+<span class="cm">// ── Abstract Piece ─────────────────────────────</span>
+<span class="kw">abstract class</span> <span class="cl">Piece</span> {
+    <span class="kw">protected final</span> <span class="cl">Color</span> color;
+    <span class="kw">protected</span> <span class="cl">Position</span> position;
+    <span class="kw">protected boolean</span> hasMoved = <span class="kw">false</span>;
+
+    <span class="kw">public</span> <span class="cl">Piece</span>(<span class="cl">Color</span> color, <span class="cl">Position</span> position) {
+        <span class="kw">this</span>.color = color; <span class="kw">this</span>.position = position;
+    }
+
+    <span class="cm">// Template Method: subclasses define valid moves</span>
+    <span class="kw">public abstract</span> <span class="cl">List</span>&lt;<span class="cl">Position</span>&gt; <span class="fn">getValidMoves</span>(<span class="cl">Board</span> board);
+
+    <span class="kw">public boolean</span> <span class="fn">canMoveTo</span>(<span class="cl">Position</span> target, <span class="cl">Board</span> board) {
+        <span class="kw">return</span> getValidMoves(board).contains(target);
+    }
+}
+
+<span class="cm">// ── Rook ──────────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">Rook</span> <span class="kw">extends</span> <span class="cl">Piece</span> {
+    <span class="kw">public</span> <span class="cl">Rook</span>(<span class="cl">Color</span> color, <span class="cl">Position</span> pos) { <span class="kw">super</span>(color, pos); }
+
+    <span class="kw">@Override</span>
+    <span class="kw">public</span> <span class="cl">List</span>&lt;<span class="cl">Position</span>&gt; <span class="fn">getValidMoves</span>(<span class="cl">Board</span> board) {
+        <span class="kw">return</span> <span class="fn">getSlidingMoves</span>(board, <span class="kw">new int</span>[][] {{<span class="num">1</span>,<span class="num">0</span>},{<span class="num">-1</span>,<span class="num">0</span>},{<span class="num">0</span>,<span class="num">1</span>},{<span class="num">0</span>,<span class="num">-1</span>}});
+    }
+
+    <span class="kw">protected</span> <span class="cl">List</span>&lt;<span class="cl">Position</span>&gt; <span class="fn">getSlidingMoves</span>(<span class="cl">Board</span> board, <span class="ty">int</span>[][] directions) {
+        <span class="cl">List</span>&lt;<span class="cl">Position</span>&gt; moves = <span class="kw">new</span> <span class="cl">ArrayList</span>&lt;&gt;();
+        <span class="kw">for</span> (<span class="ty">int</span>[] dir : directions) {
+            <span class="cl">Position</span> curr = position.offset(dir[<span class="num">0</span>], dir[<span class="num">1</span>]);
+            <span class="kw">while</span> (curr.isValid()) {
+                <span class="cl">Piece</span> occupant = board.getPieceAt(curr);
+                <span class="kw">if</span> (occupant == <span class="kw">null</span>) {
+                    moves.add(curr);
+                } <span class="kw">else</span> {
+                    <span class="kw">if</span> (occupant.getColor() != color) moves.add(curr); <span class="cm">// capture</span>
+                    <span class="kw">break</span>;  <span class="cm">// blocked</span>
+                }
+                curr = curr.offset(dir[<span class="num">0</span>], dir[<span class="num">1</span>]);
+            }
+        }
+        <span class="kw">return</span> moves;
+    }
+}
+
+<span class="cm">// ── Knight ────────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">Knight</span> <span class="kw">extends</span> <span class="cl">Piece</span> {
+    <span class="kw">private static final int</span>[][] MOVES = {{<span class="num">-2</span>,<span class="num">-1</span>},{<span class="num">-2</span>,<span class="num">1</span>},{<span class="num">2</span>,<span class="num">-1</span>},{<span class="num">2</span>,<span class="num">1</span>},{<span class="num">-1</span>,<span class="num">-2</span>},{<span class="num">1</span>,<span class="num">-2</span>},{<span class="num">-1</span>,<span class="num">2</span>},{<span class="num">1</span>,<span class="num">2</span>}};
+    <span class="kw">public</span> <span class="cl">Knight</span>(<span class="cl">Color</span> color, <span class="cl">Position</span> pos) { <span class="kw">super</span>(color, pos); }
+
+    <span class="kw">@Override</span>
+    <span class="kw">public</span> <span class="cl">List</span>&lt;<span class="cl">Position</span>&gt; <span class="fn">getValidMoves</span>(<span class="cl">Board</span> board) {
+        <span class="kw">return</span> <span class="cl">Arrays</span>.stream(MOVES)
+            .map(m -> position.offset(m[<span class="num">0</span>], m[<span class="num">1</span>]))
+            .filter(<span class="cl">Position</span>::isValid)
+            .filter(p -> board.getPieceAt(p) == <span class="kw">null</span> || board.getPieceAt(p).getColor() != color)
+            .collect(<span class="cl">Collectors</span>.toList());
+    }
+}
+
+<span class="cm">// ── Move Command (Command Pattern = supports undo) ──</span>
+<span class="kw">class</span> <span class="cl">MoveCommand</span> {
+    <span class="kw">private final</span> <span class="cl">Piece</span> piece;
+    <span class="kw">private final</span> <span class="cl">Position</span> from, to;
+    <span class="kw">private</span> <span class="cl">Piece</span> capturedPiece;
+    <span class="kw">private boolean</span> hadMoved;
+
+    <span class="kw">public void</span> <span class="fn">execute</span>(<span class="cl">Board</span> board) {
+        capturedPiece = board.getPieceAt(to);
+        hadMoved = piece.hasMoved;
+        board.movePiece(piece, to);
+        piece.hasMoved = <span class="kw">true</span>;
+    }
+
+    <span class="kw">public void</span> <span class="fn">undo</span>(<span class="cl">Board</span> board) {
+        board.movePiece(piece, from);
+        piece.hasMoved = hadMoved;
+        <span class="kw">if</span> (capturedPiece != <span class="kw">null</span>) board.placePiece(capturedPiece, to);
+    }
+}
+
+<span class="cm">// ── Game ──────────────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">ChessGame</span> {
+    <span class="kw">private final</span> <span class="cl">Board</span> board;
+    <span class="kw">private</span> <span class="cl">Color</span> currentTurn = <span class="cl">Color</span>.WHITE;
+    <span class="kw">private final</span> <span class="cl">Deque</span>&lt;<span class="cl">MoveCommand</span>&gt; moveHistory = <span class="kw">new</span> <span class="cl">ArrayDeque</span>&lt;&gt;();
+    <span class="kw">private</span> <span class="cl">GameStatus</span> status = <span class="cl">GameStatus</span>.IN_PROGRESS;
+
+    <span class="kw">public boolean</span> <span class="fn">makeMove</span>(<span class="cl">Color</span> playerColor, <span class="cl">Position</span> from, <span class="cl">Position</span> to) {
+        <span class="kw">if</span> (status != <span class="cl">GameStatus</span>.IN_PROGRESS)   <span class="kw">throw new</span> <span class="cl">GameOverException</span>();
+        <span class="kw">if</span> (playerColor != currentTurn)           <span class="kw">throw new</span> <span class="cl">WrongTurnException</span>();
+
+        <span class="cl">Piece</span> piece = board.getPieceAt(from);
+        <span class="kw">if</span> (piece == <span class="kw">null</span> || piece.getColor() != playerColor) <span class="kw">return false</span>;
+        <span class="kw">if</span> (!piece.canMoveTo(to, board)) <span class="kw">return false</span>;
+
+        <span class="cl">MoveCommand</span> cmd = <span class="kw">new</span> <span class="cl">MoveCommand</span>(piece, from, to);
+        cmd.execute(board);
+
+        <span class="cm">// Reject if own king in check after move</span>
+        <span class="kw">if</span> (board.isInCheck(playerColor)) {
+            cmd.undo(board);
+            <span class="kw">throw new</span> <span class="cl">MoveLeavesKingInCheckException</span>();
+        }
+
+        moveHistory.push(cmd);
+        <span class="fn">checkGameStatus</span>();
+        currentTurn = (currentTurn == <span class="cl">Color</span>.WHITE) ? <span class="cl">Color</span>.BLACK : <span class="cl">Color</span>.WHITE;
+        <span class="kw">return true</span>;
+    }
+
+    <span class="kw">public void</span> <span class="fn">undoLastMove</span>() {
+        <span class="kw">if</span> (!moveHistory.isEmpty()) moveHistory.pop().undo(board);
+    }
+}
+</pre>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 12: SPLITWISE
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p12">
+<div class="problem-header">
+  <div class="problem-num">12</div>
+  <div class="problem-meta">
+    <div class="problem-title">Splitwise — Expense Splitting</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">Graph Simplification</span>
+      <span class="ptag ptag-pat">Visitor Pattern</span>
+    </div>
+    <div class="problem-desc">Track group expenses with equal, percentage, and exact splits. The deep dive is the debt simplification algorithm — reducing N*(N-1) debts to at most N-1 transactions using a greedy graph algorithm.</div>
+  </div>
+</div>
+
+<h2>🗄️ DB Schema</h2>
+<div class="schema-grid">
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">expenses</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">expense_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">group_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">paid_by</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">total_amount</span><span class="schema-col-type">DECIMAL(10,2)</span></div>
+      <div class="schema-col"><span class="schema-col-name">split_type</span><span class="schema-col-type">ENUM(EQUAL,PCT,EXACT)</span></div>
+      <div class="schema-col"><span class="schema-col-name">description</span><span class="schema-col-type">VARCHAR</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">expense_splits</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">split_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">expense_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">owed_amount</span><span class="schema-col-type">DECIMAL(10,2)</span></div>
+      <div class="schema-col"><span class="schema-col-name">is_settled</span><span class="schema-col-type">BOOLEAN</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── Split Types (Visitor Pattern) ──────────────</span>
+<span class="kw">interface</span> <span class="cl">SplitStrategy</span> {
+    <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Double</span>&gt; <span class="fn">computeSplits</span>(<span class="ty">double</span> totalAmount, <span class="cl">List</span>&lt;<span class="cl">String</span>&gt; participants);
+}
+
+<span class="kw">class</span> <span class="cl">EqualSplit</span> <span class="kw">implements</span> <span class="cl">SplitStrategy</span> {
+    <span class="kw">@Override</span>
+    <span class="kw">public</span> <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Double</span>&gt; <span class="fn">computeSplits</span>(<span class="ty">double</span> total, <span class="cl">List</span>&lt;<span class="cl">String</span>&gt; participants) {
+        <span class="ty">double</span> share = total / participants.size();
+        <span class="kw">return</span> participants.stream().collect(<span class="cl">Collectors</span>.toMap(id -> id, id -> share));
+    }
+}
+
+<span class="kw">class</span> <span class="cl">PercentageSplit</span> <span class="kw">implements</span> <span class="cl">SplitStrategy</span> {
+    <span class="kw">private final</span> <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Double</span>&gt; percentages;  <span class="cm">// userId → percentage</span>
+    <span class="kw">@Override</span>
+    <span class="kw">public</span> <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Double</span>&gt; <span class="fn">computeSplits</span>(<span class="ty">double</span> total, <span class="cl">List</span>&lt;<span class="cl">String</span>&gt; participants) {
+        <span class="ty">double</span> sumPct = percentages.values().stream().mapToDouble(<span class="cl">Double</span>::doubleValue).sum();
+        <span class="kw">if</span> (Math.abs(sumPct - <span class="num">100.0</span>) > <span class="num">0.01</span>) <span class="kw">throw new</span> <span class="cl">InvalidSplitException</span>(<span class="str">"Percentages must sum to 100"</span>);
+        <span class="kw">return</span> percentages.entrySet().stream()
+            .collect(<span class="cl">Collectors</span>.toMap(<span class="cl">Map.Entry</span>::getKey, e -> total * e.getValue() / <span class="num">100.0</span>));
+    }
+}
+
+<span class="cm">// ── Expense Service ────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">ExpenseService</span> {
+    <span class="kw">private final</span> <span class="cl">ExpenseRepository</span> repo;
+
+    <span class="kw">public void</span> <span class="fn">addExpense</span>(<span class="cl">String</span> groupId, <span class="cl">String</span> paidBy, <span class="ty">double</span> amount,
+                           <span class="cl">List</span>&lt;<span class="cl">String</span>&gt; participants, <span class="cl">SplitStrategy</span> strategy) {
+        <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Double</span>&gt; splits = strategy.computeSplits(amount, participants);
+        <span class="cm">// Validate splits sum to total</span>
+        <span class="ty">double</span> splitSum = splits.values().stream().mapToDouble(<span class="cl">Double</span>::doubleValue).sum();
+        <span class="kw">if</span> (Math.abs(splitSum - amount) > <span class="num">0.01</span>) <span class="kw">throw new</span> <span class="cl">InvalidSplitException</span>(<span class="str">"Splits don't match total"</span>);
+        repo.saveExpense(groupId, paidBy, amount, splits);
+    }
+
+    <span class="cm">// Returns net balance for each user (positive = owed, negative = owes)</span>
+    <span class="kw">public</span> <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Double</span>&gt; <span class="fn">getNetBalances</span>(<span class="cl">String</span> groupId) {
+        <span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Double</span>&gt; balances = <span class="kw">new</span> <span class="cl">HashMap</span>&lt;&gt;();
+        repo.getExpenses(groupId).forEach(expense -> {
+            <span class="cm">// Payer gets credit</span>
+            balances.merge(expense.getPaidBy(), expense.getTotalAmount(), <span class="cl">Double</span>::sum);
+            <span class="cm">// Each participant owes their split</span>
+            expense.getSplits().forEach((userId, owed) ->
+                balances.merge(userId, -owed, <span class="cl">Double</span>::sum));
+        });
+        <span class="kw">return</span> balances;
+    }
+}
+
+<span class="cm">// ── Debt Simplification Algorithm ─────────────
+// O(n log n) greedy: reduces N*(N-1) debts to ≤ N-1 transactions
+// Key insight: compute net balance per person, then greedily 
+// match the biggest creditor with biggest debtor</span>
+<span class="kw">class</span> <span class="cl">DebtSimplifier</span> {
+    <span class="kw">public</span> <span class="cl">List</span>&lt;<span class="cl">Transaction</span>&gt; <span class="fn">simplify</span>(<span class="cl">Map</span>&lt;<span class="cl">String</span>, <span class="cl">Double</span>&gt; netBalances) {
+        <span class="cl">List</span>&lt;<span class="cl">Transaction</span>&gt; result = <span class="kw">new</span> <span class="cl">ArrayList</span>&lt;&gt;();
+
+        <span class="cm">// Max heap for creditors (positive balance), min heap for debtors</span>
+        <span class="cl">PriorityQueue</span>&lt;<span class="ty">double</span>[]&gt; creditors = <span class="kw">new</span> <span class="cl">PriorityQueue</span>&lt;&gt;((a,b) -> <span class="cl">Double</span>.compare(b[<span class="num">0</span>], a[<span class="num">0</span>]));
+        <span class="cl">PriorityQueue</span>&lt;<span class="ty">double</span>[]&gt; debtors   = <span class="kw">new</span> <span class="cl">PriorityQueue</span>&lt;&gt;((a,b) -> <span class="cl">Double</span>.compare(a[<span class="num">0</span>], b[<span class="num">0</span>]));
+
+        netBalances.forEach((userId, balance) -> {
+            <span class="kw">if</span> (balance > <span class="num">0.01</span>)  creditors.add(<span class="kw">new double</span>[] {balance,  userId.hashCode()});
+            <span class="kw">if</span> (balance &lt; -<span class="num">0.01</span>) debtors.add(  <span class="kw">new double</span>[] {balance,  userId.hashCode()});
+        });
+
+        <span class="kw">while</span> (!creditors.isEmpty() && !debtors.isEmpty()) {
+            <span class="ty">double</span>[] creditor = creditors.poll();
+            <span class="ty">double</span>[] debtor   = debtors.poll();
+            <span class="ty">double</span> settle = Math.min(creditor[<span class="num">0</span>], -debtor[<span class="num">0</span>]);
+            result.add(<span class="kw">new</span> <span class="cl">Transaction</span>(getUserId(debtor), getUserId(creditor), settle));
+            <span class="ty">double</span> remCredit = creditor[<span class="num">0</span>] - settle;
+            <span class="ty">double</span> remDebt   = debtor[<span class="num">0</span>]   + settle;
+            <span class="kw">if</span> (remCredit > <span class="num">0.01</span>) creditors.add(<span class="kw">new double</span>[] {remCredit, creditor[<span class="num">1</span>]});
+            <span class="kw">if</span> (remDebt &lt; -<span class="num">0.01</span>)  debtors.add(  <span class="kw">new double</span>[] {remDebt,   debtor[<span class="num">1</span>]});
+        }
+        <span class="kw">return</span> result;
+    }
+}
+</pre>
+
+<div class="box box-acc"><strong>Debt simplification is the hardest part.</strong> Example: A owes B $10, B owes C $10, C owes A $10 → after simplification: zero transactions (they all cancel). The greedy algorithm always produces ≤ N-1 transactions for N people — optimal result.</div>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 13: MOVIE TICKET BOOKING
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p13">
+<div class="problem-header">
+  <div class="problem-num">13</div>
+  <div class="problem-meta">
+    <div class="problem-title">Movie Ticket Booking (BookMyShow)</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">Seat Locking</span>
+      <span class="ptag ptag-pat">Optimistic Locking</span>
+      <span class="ptag ptag-cyan">Race Conditions</span>
+    </div>
+    <div class="problem-desc">Book movie seats with double-booking prevention. The core challenge is the race condition when two users try to book the same seat simultaneously. Multiple strategies with clear trade-offs.</div>
+  </div>
+</div>
+
+<h2>🗄️ DB Schema</h2>
+<div class="schema-grid">
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">seats</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">seat_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">show_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">row</span><span class="schema-col-type">CHAR(1)</span></div>
+      <div class="schema-col"><span class="schema-col-name">number</span><span class="schema-col-type">INT</span></div>
+      <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">ENUM(AVAILABLE,HELD,BOOKED)</span></div>
+      <div class="schema-col"><span class="schema-col-name">held_until</span><span class="schema-col-type">TIMESTAMP</span></div>
+      <div class="schema-col"><span class="schema-col-name">version</span><span class="schema-col-type">INT DEFAULT 0</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">bookings</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">booking_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">show_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">seat_ids</span><span class="schema-col-type">UUID[]</span></div>
+      <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">ENUM(PENDING,CONFIRMED,CANCELLED)</span></div>
+      <div class="schema-col"><span class="schema-col-name">total_price</span><span class="schema-col-type">DECIMAL(8,2)</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="kw">class</span> <span class="cl">BookingService</span> {
+
+    <span class="cm">// ── Strategy 1: Short-lived hold (best for real systems) ──</span>
+    <span class="cm">// SQL: UPDATE seats SET status='HELD', held_until=NOW()+10min, version=version+1</span>
+    <span class="cm">//      WHERE seat_id=? AND status='AVAILABLE' AND version=?</span>
+    <span class="kw">public</span> <span class="cl">String</span> <span class="fn">holdSeat</span>(<span class="cl">String</span> seatId, <span class="cl">String</span> userId) {
+        <span class="cl">Seat</span> seat = seatRepo.findById(seatId).orElseThrow();
+        <span class="kw">if</span> (seat.getStatus() != <span class="cl">SeatStatus</span>.AVAILABLE) {
+            <span class="kw">throw new</span> <span class="cl">SeatNotAvailableException</span>(seatId);
+        }
+        <span class="cm">// Optimistic locking via version check in SQL</span>
+        <span class="ty">int</span> rows = seatRepo.holdWithVersion(seatId, seat.getVersion(), userId,
+                                             <span class="cl">Instant</span>.now().plus(<span class="num">10</span>, <span class="cl">ChronoUnit</span>.MINUTES));
+        <span class="kw">if</span> (rows == <span class="num">0</span>) <span class="kw">throw new</span> <span class="cl">ConcurrentBookingException</span>(<span class="str">"Seat just taken by another user"</span>);
+
+        <span class="cm">// Create pending booking</span>
+        <span class="kw">return</span> bookingRepo.createPending(userId, seatId).getBookingId();
+    }
+
+    <span class="cm">// ── Confirm booking after payment ────────────</span>
+    <span class="kw">public void</span> <span class="fn">confirmBooking</span>(<span class="cl">String</span> bookingId, <span class="cl">String</span> paymentToken) {
+        <span class="cl">Booking</span> booking = bookingRepo.findById(bookingId).orElseThrow();
+        <span class="kw">if</span> (booking.getStatus() != <span class="cl">BookingStatus</span>.PENDING) <span class="kw">return</span>;
+
+        <span class="cm">// Check hold not expired</span>
+        <span class="kw">for</span> (<span class="cl">String</span> seatId : booking.getSeatIds()) {
+            <span class="cl">Seat</span> seat = seatRepo.findById(seatId).orElseThrow();
+            <span class="kw">if</span> (seat.getStatus() != <span class="cl">SeatStatus</span>.HELD || seat.getHeldUntil().isBefore(<span class="cl">Instant</span>.now())) {
+                <span class="kw">throw new</span> <span class="cl">HoldExpiredException</span>(<span class="str">"Hold expired for seat: "</span> + seatId);
+            }
+        }
+
+        <span class="cm">// Process payment (external call)</span>
+        paymentService.charge(booking.getUserId(), booking.getTotalPrice(), paymentToken);
+
+        <span class="cm">// Atomic: mark seats BOOKED + booking CONFIRMED</span>
+        <span class="kw">try</span> {
+            booking.getSeatIds().forEach(sid -> seatRepo.markBooked(sid));
+            bookingRepo.confirm(bookingId);
+        } <span class="kw">catch</span> (<span class="cl">Exception</span> e) {
+            <span class="cm">// Refund if confirmation fails after payment</span>
+            paymentService.refund(booking.getUserId(), booking.getTotalPrice());
+            <span class="kw">throw</span> e;
+        }
+    }
+
+    <span class="cm">// ── Background job: release expired holds ─────</span>
+    <span class="kw">@Scheduled</span>(fixedRate = <span class="num">30_000</span>)  <span class="cm">// every 30 seconds</span>
+    <span class="kw">public void</span> <span class="fn">releaseExpiredHolds</span>() {
+        <span class="cm">// SQL: UPDATE seats SET status='AVAILABLE', held_until=NULL</span>
+        <span class="cm">//      WHERE status='HELD' AND held_until &lt; NOW()</span>
+        <span class="ty">int</span> released = seatRepo.releaseExpiredHolds(<span class="cl">Instant</span>.now());
+        <span class="cm">// Also cancel associated pending bookings</span>
+        bookingRepo.cancelPendingForReleasedSeats();
+        System.out.println(<span class="str">"Released "</span> + released + <span class="str">" expired seat holds"</span>);
+    }
+}
+</pre>
+
+<div class="conc-box">
+  <div class="conc-title">⚠️ Race Condition Strategies Compared</div>
+  <div class="conc-items">
+    <div class="conc-item">
+      <div class="conc-item-t">Optimistic Locking (recommended)</div>
+      <div class="conc-item-d">Read version, update with WHERE version = old_version. If 0 rows updated, someone else won. No locks held during read. Best for low-contention situations. This is what the code above uses.</div>
+    </div>
+    <div class="conc-item">
+      <div class="conc-item-t">Pessimistic Locking (SELECT FOR UPDATE)</div>
+      <div class="conc-item-d">Lock the seat row on read. Prevents all concurrent access. Use for high-value events (concert tickets going on sale) where contention is extremely high and you need guaranteed serialization. Risk: deadlock if locking multiple seats.</div>
+    </div>
+    <div class="conc-item">
+      <div class="conc-item-t">Redis Distributed Lock (SETNX + TTL)</div>
+      <div class="conc-item-d"><code>SET lock:seat:{id} {userId} NX EX 10</code> — atomic set-if-not-exists with 10s TTL. Useful when DB is not the bottleneck but you need cross-service locking without DB row locks.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 14: LIBRARY MANAGEMENT
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p14">
+<div class="problem-header">
+  <div class="problem-num">14</div>
+  <div class="problem-meta">
+    <div class="problem-title">Library Management System</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-med">Medium</span>
+      <span class="ptag ptag-pat">Iterator Pattern</span>
+      <span class="ptag ptag-pat">Builder Pattern</span>
+    </div>
+    <div class="problem-desc">Manage books, members, borrowing, reservations, and fine calculation. Good practice for entity relationships, the Builder pattern for complex search queries, and fine calculation logic.</div>
+  </div>
+</div>
+
+<h2>🗄️ DB Schema</h2>
+<div class="schema-grid">
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">books</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">isbn</span><span class="schema-col-type">VARCHAR</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">title</span><span class="schema-col-type">VARCHAR</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">author</span><span class="schema-col-type">VARCHAR</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">total_copies</span><span class="schema-col-type">INT</span></div>
+      <div class="schema-col"><span class="schema-col-name">available_copies</span><span class="schema-col-type">INT</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">loans</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">loan_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">member_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">isbn</span><span class="schema-col-type">VARCHAR</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">borrowed_date</span><span class="schema-col-type">DATE</span></div>
+      <div class="schema-col"><span class="schema-col-name">due_date</span><span class="schema-col-type">DATE</span></div>
+      <div class="schema-col"><span class="schema-col-name">returned_date</span><span class="schema-col-type">DATE</span></div>
+      <div class="schema-col"><span class="schema-col-name">fine_paid</span><span class="schema-col-type">DECIMAL(8,2)</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">reservations</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">reservation_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">member_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">isbn</span><span class="schema-col-type">VARCHAR</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">reserved_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+      <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">ENUM(WAITING,READY,EXPIRED)</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── Book Search Builder ────────────────────────</span>
+<span class="kw">class</span> <span class="cl">BookSearchCriteria</span> {
+    <span class="kw">private</span> <span class="cl">String</span> title;
+    <span class="kw">private</span> <span class="cl">String</span> author;
+    <span class="kw">private</span> <span class="cl">String</span> genre;
+    <span class="kw">private</span> <span class="ty">boolean</span> availableOnly;
+
+    <span class="kw">public static class</span> <span class="cl">Builder</span> {
+        <span class="kw">private final</span> <span class="cl">BookSearchCriteria</span> criteria = <span class="kw">new</span> <span class="cl">BookSearchCriteria</span>();
+        <span class="kw">public</span> <span class="cl">Builder</span> <span class="fn">title</span>(<span class="cl">String</span> t)         { criteria.title = t;         <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="cl">Builder</span> <span class="fn">author</span>(<span class="cl">String</span> a)        { criteria.author = a;        <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="cl">Builder</span> <span class="fn">genre</span>(<span class="cl">String</span> g)         { criteria.genre = g;         <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="cl">Builder</span> <span class="fn">availableOnly</span>()          { criteria.availableOnly = <span class="kw">true</span>; <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="cl">BookSearchCriteria</span> <span class="fn">build</span>()      { <span class="kw">return</span> criteria; }
+    }
+}
+
+<span class="cm">// ── Library Service ─────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">LibraryService</span> {
+    <span class="kw">private static final</span> <span class="ty">double</span> FINE_PER_DAY = <span class="num">0.50</span>;
+    <span class="kw">private static final</span> <span class="ty">int</span> LOAN_DURATION_DAYS = <span class="num">14</span>;
+    <span class="kw">private static final</span> <span class="ty">int</span> MAX_LOANS_PER_MEMBER = <span class="num">5</span>;
+
+    <span class="kw">public</span> <span class="cl">Loan</span> <span class="fn">borrowBook</span>(<span class="cl">String</span> memberId, <span class="cl">String</span> isbn) {
+        <span class="cm">// Check active loan count</span>
+        <span class="ty">int</span> activeLoans = loanRepo.countActiveLoans(memberId);
+        <span class="kw">if</span> (activeLoans >= MAX_LOANS_PER_MEMBER)
+            <span class="kw">throw new</span> <span class="cl">MaxLoansExceededException</span>(<span class="str">"Member has "</span> + activeLoans + <span class="str">" loans"</span>);
+
+        <span class="cm">// Check member has no outstanding fines</span>
+        <span class="ty">double</span> unpaidFines = fineRepo.getTotalUnpaidFines(memberId);
+        <span class="kw">if</span> (unpaidFines > <span class="num">0</span>) <span class="kw">throw new</span> <span class="cl">UnpaidFinesException</span>(unpaidFines);
+
+        <span class="cm">// Atomic decrement — SQL: UPDATE books SET available_copies = available_copies - 1</span>
+        <span class="cm">//                         WHERE isbn=? AND available_copies > 0</span>
+        <span class="ty">int</span> rows = bookRepo.decrementAvailable(isbn);
+        <span class="kw">if</span> (rows == <span class="num">0</span>) {
+            <span class="cm">// Book unavailable — check for reservations</span>
+            reservationRepo.createReservation(memberId, isbn);
+            <span class="kw">throw new</span> <span class="cl">BookNotAvailableException</span>(<span class="str">"Added to reservation queue"</span>);
+        }
+
+        <span class="kw">return</span> loanRepo.create(memberId, isbn,
+            <span class="cl">LocalDate</span>.now(), <span class="cl">LocalDate</span>.now().plusDays(LOAN_DURATION_DAYS));
+    }
+
+    <span class="kw">public</span> <span class="ty">double</span> <span class="fn">returnBook</span>(<span class="cl">String</span> loanId) {
+        <span class="cl">Loan</span> loan = loanRepo.findById(loanId).orElseThrow();
+        <span class="kw">if</span> (loan.getReturnedDate() != <span class="kw">null</span>) <span class="kw">throw new</span> <span class="cl">AlreadyReturnedException</span>();
+
+        <span class="ty">double</span> fine = <span class="fn">calculateFine</span>(loan);
+        loanRepo.markReturned(loanId, <span class="cl">LocalDate</span>.now(), fine);
+        bookRepo.incrementAvailable(loan.getIsbn());
+
+        <span class="cm">// Notify first member in reservation queue</span>
+        reservationRepo.findFirstWaiting(loan.getIsbn()).ifPresent(reservation -> {
+            notificationService.notifyBookAvailable(reservation.getMemberId(), loan.getIsbn());
+            reservationRepo.markReady(reservation.getId());
+        });
+
+        <span class="kw">return</span> fine;
+    }
+
+    <span class="kw">private double</span> <span class="fn">calculateFine</span>(<span class="cl">Loan</span> loan) {
+        <span class="ty">long</span> daysLate = <span class="cl">ChronoUnit</span>.DAYS.between(loan.getDueDate(), <span class="cl">LocalDate</span>.now());
+        <span class="kw">return</span> daysLate > <span class="num">0</span> ? daysLate * FINE_PER_DAY : <span class="num">0.0</span>;
+    }
+
+    <span class="cm">// Book search using criteria builder</span>
+    <span class="kw">public</span> <span class="cl">List</span>&lt;<span class="cl">Book</span>&gt; <span class="fn">searchBooks</span>(<span class="cl">BookSearchCriteria</span> criteria) {
+        <span class="kw">return</span> bookRepo.findByCriteria(criteria);  <span class="cm">// dynamic query building</span>
+    }
+}
+</pre>
+</div>
+
+<hr class="prob-divider"/>
+
+<!-- ═══════════════════════════════════════════════════
+  PROBLEM 15: FOOD DELIVERY SYSTEM
+═══════════════════════════════════════════════════ -->
+<div class="problem" id="p15">
+<div class="problem-header">
+  <div class="problem-num">15</div>
+  <div class="problem-meta">
+    <div class="problem-title">Food Delivery System (Zomato / Swiggy)</div>
+    <div class="problem-tags">
+      <span class="ptag ptag-hard">Hard</span>
+      <span class="ptag ptag-pat">State Machine</span>
+      <span class="ptag ptag-pat">Observer</span>
+      <span class="ptag ptag-cyan">Order Lifecycle</span>
+    </div>
+    <div class="problem-desc">Full food delivery system with order lifecycle management, real-time status updates, delivery agent assignment, and payment handling. Ties together many patterns from previous problems.</div>
+  </div>
+</div>
+
+<h2>🗄️ DB Schema</h2>
+<div class="schema-grid">
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">orders</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">order_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">customer_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">restaurant_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">delivery_agent_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">ENUM(PLACED,CONFIRMED,PREPARING,READY,PICKED_UP,DELIVERED,CANCELLED)</span></div>
+      <div class="schema-col"><span class="schema-col-name">total_amount</span><span class="schema-col-type">DECIMAL(8,2)</span></div>
+      <div class="schema-col"><span class="schema-col-name">delivery_address</span><span class="schema-col-type">JSONB</span></div>
+      <div class="schema-col"><span class="schema-col-name">placed_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">order_items</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">item_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">order_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span><span class="schema-col-idx">IDX</span></div>
+      <div class="schema-col"><span class="schema-col-name">menu_item_id</span><span class="schema-col-type">UUID</span><span class="schema-col-fk">FK</span></div>
+      <div class="schema-col"><span class="schema-col-name">quantity</span><span class="schema-col-type">INT</span></div>
+      <div class="schema-col"><span class="schema-col-name">unit_price</span><span class="schema-col-type">DECIMAL(8,2)</span></div>
+    </div>
+  </div>
+  <div class="schema-table">
+    <div class="schema-thead"><div class="schema-tname">delivery_agents</div></div>
+    <div class="schema-tbody">
+      <div class="schema-col"><span class="schema-col-name">agent_id</span><span class="schema-col-type">UUID</span><span class="schema-col-pk">PK</span></div>
+      <div class="schema-col"><span class="schema-col-name">name</span><span class="schema-col-type">VARCHAR</span></div>
+      <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">ENUM(AVAILABLE,ON_DELIVERY,OFFLINE)</span></div>
+      <div class="schema-col"><span class="schema-col-name">current_lat</span><span class="schema-col-type">DECIMAL(10,7)</span></div>
+      <div class="schema-col"><span class="schema-col-name">current_lng</span><span class="schema-col-type">DECIMAL(10,7)</span></div>
+      <div class="schema-col"><span class="schema-col-name">rating</span><span class="schema-col-type">DECIMAL(3,2)</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>💻 Code Implementation</h2>
+<span class="lang-tag">Java</span>
+<pre>
+<span class="cm">// ── Order Status State Machine ────────────────</span>
+<span class="kw">enum</span> <span class="cl">OrderStatus</span> {
+    PLACED, CONFIRMED, PREPARING, READY_FOR_PICKUP, PICKED_UP, DELIVERED, CANCELLED;
+
+    <span class="kw">private static final</span> <span class="cl">Map</span>&lt;<span class="cl">OrderStatus</span>, <span class="cl">Set</span>&lt;<span class="cl">OrderStatus</span>&gt;&gt; TRANSITIONS = <span class="cl">Map</span>.of(
+        PLACED,            <span class="cl">Set</span>.of(CONFIRMED, CANCELLED),
+        CONFIRMED,         <span class="cl">Set</span>.of(PREPARING, CANCELLED),
+        PREPARING,         <span class="cl">Set</span>.of(READY_FOR_PICKUP),
+        READY_FOR_PICKUP,  <span class="cl">Set</span>.of(PICKED_UP),
+        PICKED_UP,         <span class="cl">Set</span>.of(DELIVERED),
+        DELIVERED,         <span class="cl">Set</span>.of(),
+        CANCELLED,         <span class="cl">Set</span>.of()
+    );
+
+    <span class="kw">public boolean</span> <span class="fn">canTransitionTo</span>(<span class="cl">OrderStatus</span> next) {
+        <span class="kw">return</span> TRANSITIONS.getOrDefault(<span class="kw">this</span>, <span class="cl">Set</span>.of()).contains(next);
+    }
+}
+
+<span class="cm">// ── Order Service ─────────────────────────────</span>
+<span class="kw">class</span> <span class="cl">OrderService</span> {
+    <span class="kw">private final</span> <span class="cl">OrderRepository</span> orderRepo;
+    <span class="kw">private final</span> <span class="cl">DeliveryAgentService</span> agentService;
+    <span class="kw">private final</span> <span class="cl">NotificationService</span> notificationService;
+    <span class="kw">private final</span> <span class="cl">PaymentService</span> paymentService;
+
+    <span class="kw">public</span> <span class="cl">Order</span> <span class="fn">placeOrder</span>(<span class="cl">String</span> customerId, <span class="cl">String</span> restaurantId,
+                            <span class="cl">List</span>&lt;<span class="cl">OrderItem</span>&gt; items, <span class="cl">Address</span> deliveryAddress) {
+        <span class="cm">// Validate menu items still available and prices match</span>
+        <span class="ty">double</span> total = <span class="fn">validateAndCalculateTotal</span>(restaurantId, items);
+
+        <span class="cm">// Create order in PLACED state</span>
+        <span class="cl">Order</span> order = orderRepo.create(customerId, restaurantId, items, deliveryAddress, total);
+
+        <span class="cm">// Notify restaurant</span>
+        notificationService.notifyRestaurant(restaurantId, order.getOrderId());
+
+        <span class="kw">return</span> order;
+    }
+
+    <span class="cm">// Generic status transition with validation</span>
+    <span class="kw">public void</span> <span class="fn">updateStatus</span>(<span class="cl">String</span> orderId, <span class="cl">OrderStatus</span> newStatus) {
+        <span class="cl">Order</span> order = orderRepo.findById(orderId).orElseThrow();
+        <span class="kw">if</span> (!order.getStatus().canTransitionTo(newStatus)) {
+            <span class="kw">throw new</span> <span class="cl">InvalidStatusTransitionException</span>(
+                order.getStatus() + <span class="str">" → "</span> + newStatus + <span class="str">" is not allowed"</span>
+            );
+        }
+        orderRepo.updateStatus(orderId, newStatus);
+        <span class="fn">onStatusChange</span>(order, newStatus);
+    }
+
+    <span class="kw">private void</span> <span class="fn">onStatusChange</span>(<span class="cl">Order</span> order, <span class="cl">OrderStatus</span> newStatus) {
+        <span class="kw">switch</span> (newStatus) {
+            <span class="kw">case</span> CONFIRMED -> {
+                <span class="cm">// Assign nearest available delivery agent</span>
+                <span class="cl">DeliveryAgent</span> agent = agentService.findNearest(order.getRestaurantLocation());
+                <span class="kw">if</span> (agent != <span class="kw">null</span>) {
+                    orderRepo.assignAgent(order.getOrderId(), agent.getId());
+                    notificationService.notifyAgent(agent.getId(), order);
+                }
+                notificationService.notifyCustomer(order.getCustomerId(), <span class="str">"Order confirmed!"</span>);
+            }
+            <span class="kw">case</span> READY_FOR_PICKUP -> notificationService.notifyAgent(
+                order.getDeliveryAgentId(), <span class="str">"Order ready for pickup"</span>);
+
+            <span class="kw">case</span> PICKED_UP -> notificationService.notifyCustomer(
+                order.getCustomerId(), <span class="str">"Order is on the way!"</span>);
+
+            <span class="kw">case</span> DELIVERED -> {
+                notificationService.notifyCustomer(order.getCustomerId(), <span class="str">"Order delivered!"</span>);
+                agentService.markAvailable(order.getDeliveryAgentId());
+                paymentService.releaseFundsToRestaurant(order);
+            }
+            <span class="kw">case</span> CANCELLED -> {
+                <span class="kw">if</span> (order.getDeliveryAgentId() != <span class="kw">null</span>)
+                    agentService.markAvailable(order.getDeliveryAgentId());
+                paymentService.refund(order.getCustomerId(), order.getTotalAmount());
+            }
+        }
+    }
+
+    <span class="cm">// Cancel order — only allowed in early states</span>
+    <span class="kw">public void</span> <span class="fn">cancelOrder</span>(<span class="cl">String</span> orderId, <span class="cl">String</span> requestedBy) {
+        <span class="cl">Order</span> order = orderRepo.findById(orderId).orElseThrow();
+        <span class="kw">if</span> (order.getStatus() == <span class="cl">OrderStatus</span>.PICKED_UP || order.getStatus() == <span class="cl">OrderStatus</span>.DELIVERED)
+            <span class="kw">throw new</span> <span class="cl">CannotCancelException</span>(<span class="str">"Order already "</span> + order.getStatus());
+        <span class="fn">updateStatus</span>(orderId, <span class="cl">OrderStatus</span>.CANCELLED);
+    }
+}
+
+<span class="cm">// ── Delivery Agent Service ─────────────────────</span>
+<span class="kw">class</span> <span class="cl">DeliveryAgentService</span> {
+    <span class="kw">private final</span> <span class="cl">AgentRepository</span> agentRepo;
+
+    <span class="cm">// Find nearest available agent using Haversine distance</span>
+    <span class="kw">public</span> <span class="cl">DeliveryAgent</span> <span class="fn">findNearest</span>(<span class="cl">GeoLocation</span> restaurantLocation) {
+        <span class="kw">return</span> agentRepo.findAvailable().stream()
+            .min(<span class="cl">Comparator</span>.comparingDouble(agent ->
+                <span class="fn">haversineDistance</span>(restaurantLocation, agent.getLocation())))
+            .orElse(<span class="kw">null</span>);
+    }
+
+    <span class="kw">private double</span> <span class="fn">haversineDistance</span>(<span class="cl">GeoLocation</span> a, <span class="cl">GeoLocation</span> b) {
+        <span class="ty">double</span> R = <span class="num">6371</span>;  <span class="cm">// Earth radius km</span>
+        <span class="ty">double</span> dLat = Math.toRadians(b.getLat() - a.getLat());
+        <span class="ty">double</span> dLng = Math.toRadians(b.getLng() - a.getLng());
+        <span class="ty">double</span> sinLat = Math.sin(dLat/<span class="num">2</span>);
+        <span class="ty">double</span> sinLng = Math.sin(dLng/<span class="num">2</span>);
+        <span class="ty">double</span> c = sinLat*sinLat + Math.cos(Math.toRadians(a.getLat()))
+            * Math.cos(Math.toRadians(b.getLat())) * sinLng * sinLng;
+        <span class="kw">return</span> <span class="num">2</span> * R * Math.atan2(Math.sqrt(c), Math.sqrt(<span class="num">1</span>-c));
+    }
+}
+</pre>
+
+<div class="box box-green">
+  <strong>State Machine as a Map:</strong> Encoding valid transitions in a <code>Map&lt;OrderStatus, Set&lt;OrderStatus&gt;&gt;</code> is cleaner than a switch/if-else. Adding a new state requires only updating the map — zero changes to existing transition code. The <code>canTransitionTo()</code> method is a single-line check.
+</div>
+
+<div class="dd-head"><div class="dd-n">🔍</div><div class="dd-t">Common Interview Follow-ups Across All 15 Problems</div></div>
+<div class="steps">
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">How do you test concurrent code?</div><div class="step-d">Use <code>CountDownLatch</code> to synchronize thread start (all threads wait at a barrier, then release simultaneously). Use <code>CyclicBarrier</code> for phases. Run with <code>ExecutorService</code>. Check results with <code>AtomicInteger</code> counters. For race conditions specifically, add <code>Thread.sleep()</code> at the critical section to widen the window artificially.</div></div></li>
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">When to use synchronized vs ReentrantLock?</div><div class="step-d"><code>synchronized</code> is simpler and sufficient for basic mutual exclusion. <code>ReentrantLock</code> when you need: tryLock with timeout, multiple condition variables, fairness guarantees, or ability to interrupt waiting threads. In most LLD problems, <code>synchronized</code> is fine unless you specifically need multiple conditions (like BoundedBlockingQueue).</div></div></li>
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">How do you handle the Singleton pattern safely?</div><div class="step-d">Best: use an enum Singleton (<code>enum MySingleton { INSTANCE; }</code>) — guaranteed thread-safe by JVM, handles serialization. Second best: double-checked locking with <code>volatile</code>. Never use lazy initialization without synchronization in a multithreaded context.</div></div></li>
+  <li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">Explain the SOLID principles with your design.</div><div class="step-d">Point to: S — ParkingSlot only manages slot state, PricingStrategy only calculates fees. O — new FeeStrategy without modifying ParkingLot. L — all Piece subclasses are substitutable. I — FeeStrategy is a tiny focused interface. D — ParkingLot depends on FeeStrategy interface, not HourlyFeeStrategy.</div></div></li>
+</div>
+
+</div><!-- end problem 15 -->
+
+<div style="text-align:center;padding:60px 0 20px;color:var(--dim);font-size:13px">
+  <div style="font-size:28px;margin-bottom:12px">🚀</div>
+  <div style="color:var(--text);font-size:18px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px">You've got this. Go crush that interview.</div>
+  <div>All 15 problems covered. Focus on state machines, concurrency, and design patterns.</div>
+</div>
+
+</main><!-- end main -->
+</div><!-- end layout -->
+
+<script>
+// Sidebar active state on scroll
+const problems = document.querySelectorAll('.problem');
+const sbItems  = document.querySelectorAll('.sb-item');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      sbItems.forEach(i => i.classList.remove('active'));
+      const id = entry.target.id;
+      const active = document.querySelector(`.sb-item[href="#${id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+problems.forEach(p => obs.observe(p));
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>LLD Interview Mastery — 20 Problems (HelloInterview Format)</title>
+<title>LLD Interview Mastery — 20 Problems (Interview Format)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -155,12 +155,157 @@ td strong{color:var(--text);font-weight:500}
 .cd-grid{display:flex;flex-wrap:wrap;gap:4px}
 .cd-arrow{color:var(--dim);padding:8px;font-size:13px;align-self:center}
 
-/* ── CODE BLOCKS ── */
-pre{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:20px;overflow-x:auto;margin:14px 0;line-height:1.6;white-space:pre-wrap;word-break:break-word}
-code,pre{font-family:'JetBrains Mono',monospace;font-size:12.5px}
-code{background:var(--s3);padding:1px 5px;border-radius:3px;font-size:12px}
-pre code{background:none;padding:0}
-.lang-tag{display:inline-block;padding:2px 8px;background:var(--s3);border:1px solid var(--border);border-radius:4px;font-size:10px;font-weight:600;color:var(--muted);margin-bottom:8px;font-family:'JetBrains Mono',monospace}
+/* ════════════════════════════════════════
+   IDE-STYLE JAVA CODE BLOCKS
+   ════════════════════════════════════════ */
+
+/* Outer wrapper — gives the card shadow + rounded corners */
+.code-wrapper {
+  position: relative;
+  margin: 16px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.3);
+}
+body.light-theme .code-wrapper {
+  box-shadow: 0 4px 24px rgba(0,0,0,.12), 0 1px 4px rgba(0,0,0,.08);
+}
+
+/* Fake title bar — macOS window chrome */
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #181926;
+  border-bottom: 1px solid #24253a;
+  user-select: none;
+}
+body.light-theme .code-header {
+  background: #dfe1ec;
+  border-bottom: 1px solid #c8cad9;
+}
+
+.code-dots { display: flex; gap: 7px; align-items: center; }
+.code-dot {
+  width: 13px; height: 13px; border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.2);
+}
+.code-dot-r { background: #ff5f57; }
+.code-dot-y { background: #febc2e; }
+.code-dot-g { background: #28c840; }
+
+.code-lang-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #585b70;
+}
+body.light-theme .code-lang-badge { color: #6272a4; }
+
+.copy-btn {
+  font-family: 'Sora', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: #585b70;
+  background: transparent;
+  border: 1px solid #313244;
+  border-radius: 5px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.copy-btn:hover { color: #cdd6f4; border-color: #7f849c; background: rgba(205,214,244,.07); }
+body.light-theme .copy-btn { color: #6272a4; border-color: #b0b2c3; }
+body.light-theme .copy-btn:hover { color: #282a36; border-color: #6272a4; background: rgba(98,114,164,.08); }
+
+/* The <pre> block itself */
+.java-code {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: #1e1e2e;   /* Catppuccin Mocha base */
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.72;
+}
+body.light-theme .java-code {
+  background: #f8f8f2;   /* Dracula light / GitHub Light */
+}
+
+/* Inner <code> — reset browser defaults */
+.java-code code {
+  display: block;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre;
+}
+
+/* Each line row */
+.code-line {
+  display: flex;
+  min-height: 1.72em;
+}
+.code-line:hover { background: rgba(205,214,244,.04); }
+body.light-theme .code-line:hover { background: rgba(40,42,54,.04); }
+
+/* Gutter / line numbers */
+.line-num {
+  min-width: 52px;
+  padding: 0 14px 0 18px;
+  text-align: right;
+  color: #45475a;
+  border-right: 1px solid #313244;
+  margin-right: 18px;
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.72;
+  user-select: none;
+}
+body.light-theme .line-num {
+  color: #b0b2c3;
+  border-right-color: #dce0f0;
+}
+
+/* Line text */
+.line-content {
+  flex: 1;
+  white-space: pre;
+  padding-right: 24px;
+  color: #cdd6f4;          /* default text */
+}
+body.light-theme .line-content { color: #282a36; }
+
+/* ── TOKEN COLORS — DARK (Catppuccin Mocha) ── */
+.jk  { color: #cba6f7; }                        /* keyword    — mauve/purple  */
+.jt  { color: #89dceb; }                        /* type/class — sky           */
+.js  { color: #a6e3a1; }                        /* string     — green         */
+.jc  { color: #6c7086; font-style: italic; }    /* comment    — overlay       */
+.jn  { color: #fab387; }                        /* number     — peach         */
+.ja  { color: #f38ba8; }                        /* annotation — red           */
+.jm  { color: #89b4fa; }                        /* method     — blue          */
+.jo  { color: #94e2d5; }                        /* operator   — teal          */
+.jb  { color: #f9e2af; }                        /* built-in   — yellow        */
+
+/* ── TOKEN COLORS — LIGHT (GitHub Light inspired) ── */
+body.light-theme .jk  { color: #cf222e; }       /* keyword    — red           */
+body.light-theme .jt  { color: #0550ae; }       /* type/class — blue          */
+body.light-theme .js  { color: #0a3069; }       /* string     — dark blue     */
+body.light-theme .jc  { color: #6e7781; font-style: italic; } /* comment   */
+body.light-theme .jn  { color: #0550ae; }       /* number     — blue          */
+body.light-theme .ja  { color: #953800; }       /* annotation — orange        */
+body.light-theme .jm  { color: #6639ba; }       /* method     — purple        */
+body.light-theme .jo  { color: #0550ae; }       /* operator                   */
+body.light-theme .jb  { color: #116329; }       /* built-in   — green         */
 
 /* ── DB SCHEMA ── */
 .schema-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:14px 0}
@@ -250,7 +395,7 @@ pre code{background:none;padding:0}
 <!-- HERO -->
 <div class="hero">
   <div class="hero-badge">📚 LLD Interview Mastery — 2026 Edition</div>
-  <div class="hero-title">Ace <span>20 LLD Problems</span><br/>HelloInterview Format</div>
+  <div class="hero-title">Ace <span>20 LLD Problems</span><br/>Interview Format</div>
   <div class="hero-sub">Every problem: Understanding → Clarifying Qs → Requirements (FR/NFR + scope) → Termination Points → Entity Rationale → Class Design (MVC) → DB Schema → Full Java Code (flow + edge cases) → Concurrency → Patterns → Interviewer Deep Dives.</div>
   <div class="hero-pills">
     <span class="hp g">✓ SOLID</span><span class="hp p">✓ Patterns</span><span class="hp a">✓ Concurrency</span>
@@ -268,7 +413,7 @@ pre code{background:none;padding:0}
 
 <script>
 // ═══════════════════════════════════════════════════
-// PROBLEM MANIFEST — edit this to add/reorder/rename
+// PROBLEM MANIFEST
 // ═══════════════════════════════════════════════════
 const MANIFEST = [
   {file:"p01_parking_lot.json",       group:"State Machine / Creational"},
@@ -306,24 +451,215 @@ if(window.matchMedia('(prefers-color-scheme:light)').matches) {
 }
 
 // ═══════════════════════════════════════════════════
-// RENDERING HELPERS
+// HELPERS
 // ═══════════════════════════════════════════════════
 function esc(s){ return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function md(s){
-  // minimal inline markdown: `code`, **bold**, *italic*
   return String(s||'')
     .replace(/`([^`]+)`/g,'<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g,'<em>$1</em>');
 }
 
+// ═══════════════════════════════════════════════════
+// PROPER TOKEN-BASED JAVA HIGHLIGHTER
+// ═══════════════════════════════════════════════════
+function highlightJava(rawCode) {
+  if (!rawCode) return '';
+
+  const KEYWORDS = new Set([
+    'abstract','assert','boolean','break','byte','case','catch','char','class',
+    'const','continue','default','do','double','else','enum','extends','final',
+    'finally','float','for','goto','if','implements','import','instanceof','int',
+    'interface','long','native','new','package','private','protected','public',
+    'return','short','static','strictfp','super','switch','synchronized','this',
+    'throw','throws','transient','try','void','volatile','while',
+    'null','true','false','var','record','sealed','permits','yield'
+  ]);
+
+  const TYPES = new Set([
+    'String','Integer','Boolean','Long','Double','Float','Character','Byte','Short',
+    'Object','Number','Math','System','Thread','Runnable','Callable','Iterable',
+    'Comparable','AutoCloseable','Exception','RuntimeException','Error','Throwable',
+    'List','Set','Map','Queue','Deque','Collection','Optional','Stream','Iterator',
+    'ArrayList','LinkedList','HashSet','TreeSet','LinkedHashSet',
+    'HashMap','TreeMap','LinkedHashMap','ConcurrentHashMap','CopyOnWriteArrayList',
+    'AtomicInteger','AtomicLong','AtomicBoolean','AtomicReference',
+    'ReentrantLock','ReadWriteLock','ReentrantReadWriteLock','Semaphore',
+    'CountDownLatch','CyclicBarrier','BlockingQueue','ArrayBlockingQueue',
+    'LinkedBlockingQueue','PriorityQueue','PriorityBlockingQueue',
+    'ExecutorService','Executor','ThreadPoolExecutor','ScheduledExecutorService',
+    'Executors','Future','CompletableFuture',
+    'UUID','LocalDate','LocalTime','LocalDateTime','ZonedDateTime','Instant',
+    'Duration','ChronoUnit','DateTimeFormatter',
+    'StringBuilder','StringBuffer','Scanner','Random',
+    'Collections','Arrays','Objects','Comparator',
+    'Supplier','Consumer','Function','Predicate','BiFunction','BiConsumer',
+    'UnaryOperator','BinaryOperator','Enum','Override','SuppressWarnings',
+    'FunctionalInterface','Deprecated','SafeVarargs'
+  ]);
+
+  function e(s) {
+    return String(s)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+  function span(cls, text) {
+    return `<span class="${cls}">${e(text)}</span>`;
+  }
+
+  function tokenize(code) {
+    let out = '';
+    let i = 0;
+    const len = code.length;
+
+    while (i < len) {
+      // ── Single-line comment
+      if (code[i]==='/' && code[i+1]==='/') {
+        let j = i+2;
+        while (j < len && code[j] !== '\n') j++;
+        out += span('jc', code.slice(i, j));
+        i = j;
+        continue;
+      }
+      // ── Block comment
+      if (code[i]==='/' && code[i+1]==='*') {
+        let j = i+2;
+        while (j < len-1 && !(code[j]==='*' && code[j+1]==='/')) j++;
+        j += 2;
+        out += span('jc', code.slice(i, j));
+        i = j;
+        continue;
+      }
+      // ── String literal (including text blocks """)
+      if (code[i]==='"') {
+        // Text block?
+        if (code[i+1]==='"' && code[i+2]==='"') {
+          let j = i+3;
+          while (j < len-2 && !(code[j]==='"' && code[j+1]==='"' && code[j+2]==='"')) j++;
+          j += 3;
+          out += span('js', code.slice(i, j));
+          i = j;
+          continue;
+        }
+        let j = i+1;
+        while (j < len && code[j] !== '"' && code[j] !== '\n') {
+          if (code[j]==='\\') j++;
+          j++;
+        }
+        j++;
+        out += span('js', code.slice(i, j));
+        i = j;
+        continue;
+      }
+      // ── Char literal
+      if (code[i]==="'") {
+        let j = i+1;
+        while (j < len && code[j] !== "'" && code[j] !== '\n') {
+          if (code[j]==='\\') j++;
+          j++;
+        }
+        j++;
+        out += span('js', code.slice(i, j));
+        i = j;
+        continue;
+      }
+      // ── Annotation
+      if (code[i]==='@') {
+        let j = i+1;
+        while (j < len && /\w/.test(code[j])) j++;
+        out += span('ja', code.slice(i, j));
+        i = j;
+        continue;
+      }
+      // ── Number literal
+      if (/[0-9]/.test(code[i]) || (code[i]==='.' && /[0-9]/.test(code[i+1]||''))) {
+        let j = i;
+        // Hex
+        if (code[i]==='0' && (code[i+1]==='x'||code[i+1]==='X')) {
+          j += 2;
+          while (j < len && /[0-9a-fA-F_]/.test(code[j])) j++;
+        } else {
+          while (j < len && /[0-9_\.]/.test(code[j])) j++;
+          if (j < len && (code[j]==='e'||code[j]==='E')) {
+            j++;
+            if (code[j]==='+'||code[j]==='-') j++;
+            while (j < len && /[0-9]/.test(code[j])) j++;
+          }
+          if (j < len && /[lLfFdD]/.test(code[j])) j++;
+        }
+        out += span('jn', code.slice(i, j));
+        i = j;
+        continue;
+      }
+      // ── Identifier / keyword / type
+      if (/[a-zA-Z_$]/.test(code[i])) {
+        let j = i;
+        while (j < len && /[\w$]/.test(code[j])) j++;
+        const word = code.slice(i, j);
+        // Look ahead past whitespace for '('
+        let k = j;
+        while (k < len && (code[k]===' '||code[k]==='\t')) k++;
+        const nextIsCall = code[k]==='(';
+
+        if (KEYWORDS.has(word)) {
+          out += span('jk', word);
+        } else if (nextIsCall && !KEYWORDS.has(word)) {
+          // Constructor or method call
+          if (/^[A-Z]/.test(word)) {
+            out += span('jt', word); // new ClassName(
+          } else {
+            out += span('jm', word);
+          }
+        } else if (TYPES.has(word)) {
+          out += span('jt', word);
+        } else if (/^[A-Z][A-Z0-9_]*$/.test(word)) {
+          // ALL_CAPS constant
+          out += span('jb', word);
+        } else if (/^[A-Z]/.test(word)) {
+          // PascalCase → likely a type/class reference
+          out += span('jt', word);
+        } else {
+          out += e(word);
+        }
+        i = j;
+        continue;
+      }
+      // ── Operators and punctuation — pass through (escaped)
+      out += e(code[i]);
+      i++;
+    }
+    return out;
+  }
+
+  // Split into lines and wrap with gutter
+  const tokenized = tokenize(rawCode);
+  const lines = tokenized.split('\n');
+  // Remove trailing empty line if present
+  if (lines[lines.length-1].trim() === '') lines.pop();
+
+  let result = '<code>';
+  lines.forEach((line, idx) => {
+    result += `<span class="code-line">` +
+      `<span class="line-num">${idx+1}</span>` +
+      `<span class="line-content">${line}</span>` +
+      `</span>`;
+  });
+  result += '</code>';
+  return result;
+}
+
 const DIFF_MAP = {hard:'ptag-hard',medium:'ptag-med',easy:'ptag-easy',pattern:'ptag-pat',concept:'ptag-cyan'};
 
+// ═══════════════════════════════════════════════════
+// RENDER PROBLEM
+// ═══════════════════════════════════════════════════
 function renderProblem(p, idx) {
   const num = String(idx+1).padStart(2,'0');
   let h = '';
 
-  // ── HEADER ──
   h += `<div class="problem" id="p${idx+1}">`;
   h += `<div class="problem-header"><div class="problem-num">${num}</div><div class="problem-meta">`;
   h += `<div class="problem-title">${esc(p.title)}</div><div class="problem-tags">`;
@@ -333,14 +669,12 @@ function renderProblem(p, idx) {
   });
   h += `</div><div class="problem-desc">${md(p.description)}</div></div></div>`;
 
-  // ── UNDERSTANDING ──
   if(p.prompt){
     h += `<div class="sh">🎯 Understanding the Problem</div>`;
     h += `<div class="prompt-box">"${esc(p.prompt)}"</div>`;
     if(p.prompt_note) h += `<p class="desc-text">${md(p.prompt_note)}</p>`;
   }
 
-  // ── CLARIFYING Qs ──
   if(p.clarifying_questions?.length){
     h += `<h3>Clarifying Questions</h3><div class="clarify">`;
     p.clarifying_questions.forEach(q => {
@@ -352,7 +686,6 @@ function renderProblem(p, idx) {
     h += `</div>`;
   }
 
-  // ── REQUIREMENTS ──
   if(p.functional_requirements){
     h += `<div class="sh">📋 Requirements</div>`;
     h += renderReqBox('📋 Functional Requirements', p.functional_requirements);
@@ -361,7 +694,6 @@ function renderProblem(p, idx) {
     h += renderReqBox('⚙️ Non-Functional Requirements', p.non_functional_requirements);
   }
 
-  // ── SCOPE ──
   if(p.primary_scope || p.termination_points){
     h += `<div class="sh">🔬 Primary Scope & Termination Points</div>`;
     h += `<div class="scope-wrap">`;
@@ -378,7 +710,6 @@ function renderProblem(p, idx) {
     h += `</div>`;
   }
 
-  // ── ENTITIES ──
   if(p.entities?.length){
     h += `<div class="sh">🧩 Entities & Relationships</div>`;
     if(p.entity_intro) h += `<p class="desc-text">${md(p.entity_intro)}</p>`;
@@ -392,7 +723,6 @@ function renderProblem(p, idx) {
     h += `</div>`;
   }
 
-  // ── RELATIONSHIP TABLE ──
   if(p.relationships?.length){
     h += `<div class="tw"><table><tr><th>Entity</th><th>Owns</th><th>Relationship</th></tr>`;
     p.relationships.forEach(r => {
@@ -401,7 +731,6 @@ function renderProblem(p, idx) {
     h += `</table></div>`;
   }
 
-  // ── CLASS DESIGN ──
   if(p.classes?.length){
     h += `<div class="sh">🏗️ Class Design</div>`;
     if(p.mvc_note) h += `<div class="mvc-box">${md(p.mvc_note)}</div>`;
@@ -427,7 +756,6 @@ function renderProblem(p, idx) {
     h += `</div></div>`;
   }
 
-  // ── DB SCHEMA ──
   if(p.db_schema?.length){
     h += `<div class="sh">🗄️ Database Schema</div>`;
     h += `<div class="schema-grid">`;
@@ -446,7 +774,6 @@ function renderProblem(p, idx) {
     if(p.schema_note) h += `<div class="box box-acc">${md(p.schema_note)}</div>`;
   }
 
-  // ── CODE ──
   if(p.code_sections?.length){
     h += `<div class="sh">💻 Code Implementation</div>`;
     if(p.code_lang) h += `<span class="lang-tag">${esc(p.code_lang)}</span>`;
@@ -454,11 +781,27 @@ function renderProblem(p, idx) {
       if(cs.label) h += `<h4>${esc(cs.label)}</h4>`;
       if(cs.flow) h += `<div class="box box-green"><strong>Flow:</strong> ${md(cs.flow)}</div>`;
       if(cs.edge_cases) h += `<div class="box box-red"><strong>Edge Cases:</strong> ${md(cs.edge_cases)}</div>`;
-      h += `<pre><code>${esc(cs.code)}</code></pre>`;
+
+      if(p.code_lang === 'Java') {
+        // IDE-style code block with macOS chrome + line numbers
+        h += `<div class="code-wrapper">`;
+        h += `<div class="code-header">`;
+        h += `<div class="code-dots">`;
+        h += `<span class="code-dot code-dot-r"></span>`;
+        h += `<span class="code-dot code-dot-y"></span>`;
+        h += `<span class="code-dot code-dot-g"></span>`;
+        h += `</div>`;
+        h += `<span class="code-lang-badge">Java</span>`;
+        h += `<button class="copy-btn" onclick="copyCode(this)">Copy</button>`;
+        h += `</div>`;
+        h += `<pre class="java-code">${highlightJava(cs.code)}</pre>`;
+        h += `</div>`;
+      } else {
+        h += `<pre><code>${esc(cs.code)}</code></pre>`;
+      }
     });
   }
 
-  // ── PATTERNS ──
   if(p.patterns?.length){
     h += `<div class="sh">🧬 Design Patterns Used</div>`;
     p.patterns.forEach(pt => {
@@ -469,7 +812,6 @@ function renderProblem(p, idx) {
     });
   }
 
-  // ── CONCURRENCY ──
   if(p.concurrency?.length){
     h += `<div class="dd-head"><div class="dd-n">⚡</div><div class="dd-t">Concurrency Deep Dive</div></div>`;
     h += `<div class="conc-box"><div class="conc-title">⚠️ Race Conditions & Fixes</div><div class="conc-items">`;
@@ -479,7 +821,6 @@ function renderProblem(p, idx) {
     h += `</div></div>`;
   }
 
-  // ── DEEP DIVES ──
   if(p.deep_dives?.length){
     h += `<div class="dd-head"><div class="dd-n">🔍</div><div class="dd-t">Deep Dive — Interviewer Follow-ups</div></div>`;
     h += `<div class="steps">`;
@@ -489,7 +830,7 @@ function renderProblem(p, idx) {
     h += `</div>`;
   }
 
-  h += `</div>`; // close .problem
+  h += `</div>`;
   return h;
 }
 
@@ -531,7 +872,34 @@ function renderSidebar(problems){
 }
 
 // ═══════════════════════════════════════════════════
-// LOADER — loads JSONs, renders problems
+// COPY BUTTON
+// ═══════════════════════════════════════════════════
+function copyCode(btn) {
+  const pre = btn.closest('.code-wrapper').querySelector('pre');
+  if (!pre) return;
+  // Extract plain text from line-content spans
+  const spans = pre.querySelectorAll('.line-content');
+  const text = Array.from(spans).map(s => s.innerText).join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.color = '#a6e3a1';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1800);
+  }).catch(() => {
+    // Fallback for browsers without clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// LOADER
 // ═══════════════════════════════════════════════════
 async function loadAll() {
   const container = document.getElementById('problems-container');
@@ -543,14 +911,17 @@ async function loadAll() {
       if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
       results.push(await resp.json());
     } catch(e) {
-      results.push({title: MANIFEST[i].file.replace(/\.json$/,'').replace(/^p\d+_/,'').replace(/_/g,' '), description: `⚠️ Problem file not yet created (${MANIFEST[i].file}). Continue the conversation to generate it.`, tags:[], _missing:true});
+      results.push({
+        title: MANIFEST[i].file.replace(/\.json$/,'').replace(/^p\d+_/,'').replace(/_/g,' '),
+        description: `⚠️ Problem file not yet created (${MANIFEST[i].file}). Continue the conversation to generate it.`,
+        tags:[],
+        _missing:true
+      });
     }
   }
 
-  // Render sidebar
   renderSidebar(results);
 
-  // Render problems
   let html = '';
   results.forEach((p,i) => {
     if(i > 0) html += `<hr class="prob-divider"/>`;

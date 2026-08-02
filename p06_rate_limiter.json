@@ -1,0 +1,282 @@
+{
+  "title": "Rate Limiter",
+  "description": "Design an in-process rate limiter that throttles requests per client. Supports multiple algorithms (Token Bucket, Sliding Window Log, Fixed Window). The most concurrency-intensive LLD problem — every nanosecond of lock contention matters.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "pattern", "label": "Token Bucket"},
+    {"type": "concept", "label": "Concurrency"},
+    {"type": "concept", "label": "Sliding Window"}
+  ],
+  "prompt": "Design a rate limiter that restricts how many requests a client can make within a time window.",
+  "prompt_note": "Rate limiters sit on the **hot path** — every single request passes through them. This makes concurrency the dominant design concern. The algorithm choice (Token Bucket vs Sliding Window) is secondary to getting the locking right. Ask early whether this is in-process (single JVM) or distributed (Redis-backed).",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Is this an in-process rate limiter (single JVM) or distributed (shared across servers)?\"",
+      "answer": "Interviewer: \"In-process. Single JVM.\"",
+      "why": "**Critical distinction.** In-process = `ConcurrentHashMap` + atomic ops. Distributed = Redis + Lua scripts. Completely different designs. Always ask."
+    },
+    {
+      "question": "You: \"Per-client limiting? How is the client identified — by API key, IP, user ID?\"",
+      "answer": "Interviewer: \"Per client ID (string). The caller provides it.\"",
+      "why": "We need a `Map<clientId, RateLimiterBucket>`. Each client gets their own bucket."
+    },
+    {
+      "question": "You: \"What algorithm? Fixed window, sliding window, token bucket, leaky bucket?\"",
+      "answer": "Interviewer: \"Start with Token Bucket. Be ready to discuss alternatives.\"",
+      "why": "Token Bucket is the most common production choice (Stripe, AWS). Sliding Window Log is more accurate but memory-heavy. We'll implement both behind a Strategy interface."
+    },
+    {
+      "question": "You: \"What happens when rate-limited? Reject immediately, or queue and wait?\"",
+      "answer": "Interviewer: \"Reject immediately. Return true/false from `allowRequest()`.\"",
+      "why": "No queueing complexity. Simple boolean gate."
+    },
+    {
+      "question": "You: \"Should different clients have different rate limits?\"",
+      "answer": "Interviewer: \"Yes — configurable per client. Some clients get 100 req/s, others 1000.\"",
+      "why": "Need a `RateLimitConfig` per client, not a global setting."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "`allowRequest(clientId)` → returns `true` if under limit, `false` if throttled.",
+      "**Token Bucket algorithm:** each client has a bucket with max capacity and refill rate. Tokens refill at a steady rate. Each request consumes one token.",
+      "**Per-client configuration:** different clients can have different capacity and refill rates.",
+      "**Sliding Window Log (alternative):** track exact timestamps of requests. Count requests in the last N seconds.",
+      "Configurable algorithm per client (Token Bucket vs Sliding Window)."
+    ],
+    "out_of_scope": [
+      "Distributed rate limiting (Redis), request queueing/retry, HTTP response headers (X-RateLimit-Remaining), IP-based detection."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Ultra-low latency:** `allowRequest()` must be O(1) or amortized O(1). This is on the hot path.",
+      "**Thread-safe:** thousands of concurrent requests per client. Lock contention must be minimal.",
+      "**Memory-efficient:** don't leak memory for inactive clients. Consider TTL-based eviction.",
+      "**Accurate:** Token Bucket should not allow bursts beyond capacity. Sliding Window should not count stale requests."
+    ],
+    "out_of_scope": [
+      "Persistence, distributed coordination, analytics/reporting."
+    ]
+  },
+
+  "primary_scope": [
+    "`allowRequest(clientId)` → lookup/create bucket → try consume token → return boolean",
+    "Token Bucket: lazy refill on each `allowRequest()` call (no background thread needed)",
+    "Sliding Window Log: append timestamp → evict stale entries → check count vs limit",
+    "Client registration with custom config (capacity, refill rate, algorithm)"
+  ],
+  "termination_points": [
+    "Returns `false` — request throttled (not an exception, it's normal flow)",
+    "`IllegalArgumentException` — null/empty clientId",
+    "Client not registered → auto-create with default config, or reject (design choice)"
+  ],
+
+  "entity_intro": "The key design insight: separate the **routing** (which client → which bucket) from the **algorithm** (how the bucket decides allow/deny). Strategy Pattern is the natural fit.",
+  "entities": [
+    {
+      "name": "RateLimiter",
+      "role": "**Controller.** Entry point. Maps clientId → RateLimiterAlgorithm instance. Creates buckets on first request (lazy initialization). Provides `allowRequest(clientId)` public API.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    },
+    {
+      "name": "RateLimiterAlgorithm (interface)",
+      "role": "**Strategy interface.** Single method: `tryConsume()` → boolean. Each implementation is a different algorithm. Swappable per client.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Strategy interface"
+    },
+    {
+      "name": "TokenBucket",
+      "role": "**Strategy implementation.** Tracks: currentTokens, maxCapacity, refillRate (tokens/sec), lastRefillTimestamp. On `tryConsume()`: calculate elapsed time → add refilled tokens (capped at max) → attempt to consume 1 → return success/failure. **Lazy refill** — no background thread.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — core algorithm"
+    },
+    {
+      "name": "SlidingWindowLog",
+      "role": "**Strategy implementation.** Tracks: `Deque<Long>` of request timestamps. On `tryConsume()`: evict timestamps older than window → check size < limit → add current timestamp → return. **Memory trade-off:** stores every request timestamp.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — alternative algorithm"
+    },
+    {
+      "name": "RateLimitConfig",
+      "role": "**Model.** Holds per-client config: algorithm type, capacity/limit, refill rate or window duration. Immutable value object.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — configuration"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "RateLimiter", "owns": "`ConcurrentHashMap<clientId, RateLimiterAlgorithm>`, `Map<clientId, RateLimitConfig>`", "rel": "1→N algorithm instances (one per client)"},
+    {"entity": "RateLimiterAlgorithm", "owns": "Internal state (tokens, timestamps)", "rel": "Standalone — no outward refs"},
+    {"entity": "RateLimitConfig", "owns": "algorithm type, capacity, rate, window", "rel": "1→1 with each client"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = RateLimitConfig. **Service** = TokenBucket, SlidingWindowLog (algorithm implementations). **Controller** = RateLimiter (routing, lazy init, public API).",
+
+  "classes": [
+    {
+      "name": "RateLimiterAlgorithm", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "tryConsume()", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "TokenBucket", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "maxTokens", "type": "int"},
+        {"name": "currentTokens", "type": "double"},
+        {"name": "refillRate", "type": "double (tokens/sec)"},
+        {"name": "lastRefillTime", "type": "long (nanos)"}
+      ],
+      "methods": [
+        {"name": "tryConsume()", "returns": "boolean (synchronized)"},
+        {"name": "refill()", "returns": "void (private)"}
+      ]
+    },
+    {
+      "name": "SlidingWindowLog", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "windowMillis", "type": "long"},
+        {"name": "maxRequests", "type": "int"},
+        {"name": "timestamps", "type": "Deque<Long>"}
+      ],
+      "methods": [
+        {"name": "tryConsume()", "returns": "boolean (synchronized)"},
+        {"name": "evictStale()", "returns": "void (private)"}
+      ]
+    },
+    {
+      "name": "RateLimitConfig", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "algorithm", "type": "enum (TOKEN_BUCKET, SLIDING_WINDOW)"},
+        {"name": "capacity", "type": "int"},
+        {"name": "refillRate", "type": "double"},
+        {"name": "windowSeconds", "type": "int"}
+      ],
+      "methods": []
+    },
+    {
+      "name": "RateLimiter", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "buckets", "type": "ConcurrentHashMap<String, RateLimiterAlgorithm>"},
+        {"name": "configs", "type": "Map<String, RateLimitConfig>"},
+        {"name": "defaultConfig", "type": "RateLimitConfig"}
+      ],
+      "methods": [
+        {"name": "allowRequest(clientId)", "returns": "boolean"},
+        {"name": "registerClient(clientId, config)", "returns": "void"},
+        {"name": "removeClient(clientId)", "returns": "void"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "rate_limit_configs",
+      "columns": [
+        {"name": "client_id", "type": "VARCHAR", "pk": true},
+        {"name": "algorithm", "type": "ENUM(TOKEN_BUCKET, SLIDING_WINDOW)"},
+        {"name": "capacity", "type": "INT"},
+        {"name": "refill_rate", "type": "DOUBLE"},
+        {"name": "window_seconds", "type": "INT"}
+      ]
+    },
+    {
+      "table": "rate_limit_events (optional audit)",
+      "columns": [
+        {"name": "event_id", "type": "BIGSERIAL", "pk": true},
+        {"name": "client_id", "type": "VARCHAR", "idx": true},
+        {"name": "allowed", "type": "BOOLEAN"},
+        {"name": "timestamp", "type": "TIMESTAMP", "idx": true}
+      ]
+    }
+  ],
+  "schema_note": "Rate limiter state is **entirely in-memory** at runtime — DB stores configs only. The events table is optional for analytics (throttle rate per client). Don't persist bucket state — it's ephemeral.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Strategy Interface + TokenBucket Implementation",
+      "flow": "**Token Bucket — `tryConsume()`:** calculate elapsed time since last refill → add `elapsed * refillRate` tokens (capped at max) → if currentTokens ≥ 1 → consume and return true → else return false. **Lazy refill:** no background thread — refill is calculated on every call using time delta.",
+      "edge_cases": "First call ever: `lastRefillTime = now`, bucket starts full. Clock going backward (NTP adjustment): clamp elapsed to 0. `refillRate = 0`: bucket never refills (fixed quota). Very long idle period: tokens cap at maxTokens (no unbounded accumulation).",
+      "code": "interface RateLimiterAlgorithm {\n    boolean tryConsume();\n}\n\nclass TokenBucket implements RateLimiterAlgorithm {\n    private final int maxTokens;\n    private final double refillRate;    // tokens per second\n    private double currentTokens;\n    private long lastRefillNanos;\n\n    public TokenBucket(int maxTokens, double refillRate) {\n        this.maxTokens = maxTokens;\n        this.refillRate = refillRate;\n        this.currentTokens = maxTokens; // start full\n        this.lastRefillNanos = System.nanoTime();\n    }\n\n    @Override\n    public synchronized boolean tryConsume() {\n        refill();\n        if (currentTokens >= 1.0) {\n            currentTokens -= 1.0;\n            return true;\n        }\n        return false;\n    }\n\n    private void refill() {\n        long now = System.nanoTime();\n        long elapsedNanos = now - lastRefillNanos;\n        if (elapsedNanos <= 0) return; // clock safety\n\n        double elapsedSeconds = elapsedNanos / 1_000_000_000.0;\n        double tokensToAdd = elapsedSeconds * refillRate;\n        currentTokens = Math.min(maxTokens, currentTokens + tokensToAdd);\n        lastRefillNanos = now;\n    }\n}"
+    },
+    {
+      "label": "SlidingWindowLog Implementation",
+      "flow": "`tryConsume()`: evict all timestamps older than `now - windowMillis` → check if `timestamps.size() < maxRequests` → if yes, add `now` and return true → else return false.",
+      "edge_cases": "Deque grows unbounded under burst → eviction on every call keeps it bounded to `maxRequests`. Empty deque → always allows. Window = 0 → effectively no limit (everything evicts).",
+      "code": "class SlidingWindowLog implements RateLimiterAlgorithm {\n    private final long windowMillis;\n    private final int maxRequests;\n    private final Deque<Long> timestamps = new ArrayDeque<>();\n\n    public SlidingWindowLog(int maxRequests, long windowSeconds) {\n        this.maxRequests = maxRequests;\n        this.windowMillis = windowSeconds * 1000;\n    }\n\n    @Override\n    public synchronized boolean tryConsume() {\n        long now = System.currentTimeMillis();\n        long cutoff = now - windowMillis;\n\n        // Evict stale entries from the front\n        while (!timestamps.isEmpty() && timestamps.peekFirst() <= cutoff) {\n            timestamps.pollFirst();\n        }\n\n        if (timestamps.size() < maxRequests) {\n            timestamps.addLast(now);\n            return true;\n        }\n        return false;\n    }\n}"
+    },
+    {
+      "label": "Controller — RateLimiter (Routing + Lazy Init)",
+      "flow": "`allowRequest(clientId)`: lookup in ConcurrentHashMap → if missing, create from config (computeIfAbsent) → call `tryConsume()`. `computeIfAbsent` is atomic — no double-creation race.",
+      "edge_cases": "Unknown clientId with no config → use defaultConfig. Null clientId → `IllegalArgumentException`. `removeClient()` during active requests → ConcurrentHashMap handles this safely (in-flight calls on the old bucket complete normally).",
+      "code": "class RateLimiter {\n    private final ConcurrentHashMap<String, RateLimiterAlgorithm> buckets\n        = new ConcurrentHashMap<>();\n    private final Map<String, RateLimitConfig> configs\n        = new ConcurrentHashMap<>();\n    private final RateLimitConfig defaultConfig;\n\n    public RateLimiter(RateLimitConfig defaultConfig) {\n        this.defaultConfig = defaultConfig;\n    }\n\n    public boolean allowRequest(String clientId) {\n        if (clientId == null || clientId.isBlank())\n            throw new IllegalArgumentException(\"clientId required\");\n\n        RateLimiterAlgorithm algo = buckets.computeIfAbsent(\n            clientId, id -> createAlgorithm(\n                configs.getOrDefault(id, defaultConfig)));\n        return algo.tryConsume();\n    }\n\n    public void registerClient(String clientId, RateLimitConfig config) {\n        configs.put(clientId, config);\n        buckets.remove(clientId); // force re-creation with new config\n    }\n\n    public void removeClient(String clientId) {\n        configs.remove(clientId);\n        buckets.remove(clientId);\n    }\n\n    private RateLimiterAlgorithm createAlgorithm(RateLimitConfig config) {\n        return switch (config.algorithm()) {\n            case TOKEN_BUCKET -> new TokenBucket(\n                config.capacity(), config.refillRate());\n            case SLIDING_WINDOW -> new SlidingWindowLog(\n                config.capacity(), config.windowSeconds());\n        };\n    }\n\n    // Optional: evict inactive clients to prevent memory leak\n    public void evictInactive(Duration maxIdle) {\n        // In production: track lastAccessed per bucket,\n        // remove entries idle beyond maxIdle.\n        // Or use Caffeine cache with expireAfterAccess.\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Strategy Pattern → RateLimiterAlgorithm",
+      "why": "Different clients may need different algorithms. TokenBucket allows bursts up to capacity; SlidingWindowLog enforces strict per-window limits. The RateLimiter controller doesn't know which algorithm a client uses — it just calls `tryConsume()`. **Adding Fixed Window Counter** = one new class, zero changes elsewhere.",
+      "where": "`RateLimiterAlgorithm` interface + `TokenBucket`, `SlidingWindowLog`"
+    },
+    {
+      "name": "Factory Method → createAlgorithm()",
+      "why": "Creates the right algorithm instance based on `RateLimitConfig.algorithm` enum. Centralizes construction logic. If algorithms gain constructor dependencies (e.g., a Clock for testing), the factory handles it.",
+      "where": "`RateLimiter.createAlgorithm()` — switch on config.algorithm()"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two threads call allowRequest() for the same client simultaneously → double token consumption or race on token count",
+      "fix": "Each `TokenBucket.tryConsume()` is `synchronized` on the bucket instance. Two threads for the **same client** serialize on the bucket lock. Two threads for **different clients** don't contend at all — this is the key insight: per-client locking, not global locking."
+    },
+    {
+      "issue": "Lazy bucket creation race — two threads create a bucket for a new client simultaneously",
+      "fix": "`ConcurrentHashMap.computeIfAbsent()` is atomic. If two threads call it for the same key, only one executes the creation function. The other gets the already-created value. No double-creation possible."
+    },
+    {
+      "issue": "registerClient() called while allowRequest() is in-flight for that client",
+      "fix": "`registerClient()` calls `buckets.remove(clientId)` — the in-flight request already has a reference to the old bucket and completes normally. The next `allowRequest()` triggers `computeIfAbsent()` which creates a new bucket with the updated config. No interruption, no race."
+    },
+    {
+      "issue": "Memory leak — buckets accumulate for clients that stop making requests",
+      "fix": "Option 1: Use `Caffeine` cache with `expireAfterAccess(duration)` instead of plain ConcurrentHashMap — auto-evicts idle entries. Option 2: background job that scans for stale buckets. Option 3: wrap bucket in a timestamped holder, evict periodically."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Token Bucket vs Sliding Window Log — when to use which?",
+      "answer": "**Token Bucket:** allows short bursts up to capacity (great for APIs where occasional bursts are fine). O(1) per request. Constant memory per client. Production default at Stripe, AWS, Cloudflare. **Sliding Window Log:** strict — exactly N requests per window, no bursts. O(N) memory per window (stores every timestamp). Use when strictness matters (financial APIs, auth endpoints). **Fixed Window Counter:** simplest, but has boundary problem (2x burst at window edges)."
+    },
+    {
+      "question": "How would you make this distributed (multi-server)?",
+      "answer": "Replace in-memory state with **Redis**. Token Bucket: `GET/SET` with Redis + Lua script for atomic refill+consume. Sliding Window: Redis sorted set with timestamps, `ZRANGEBYSCORE` for eviction. Use Lua scripts for atomicity (Redis is single-threaded). Key = `ratelimit:{clientId}`. This is an HLD concern — mention the approach, don't implement in LLD."
+    },
+    {
+      "question": "Why synchronized instead of AtomicLong/CAS?",
+      "answer": "Token Bucket needs to atomically: (1) read elapsed time, (2) compute refill, (3) check tokens, (4) consume. That's 4 dependent operations — can't be done with a single CAS. You'd need a CAS loop that retries on contention: `do { oldTokens = get(); newTokens = compute(); } while (!CAS(old, new))`. Works but adds complexity. `synchronized` is simpler and fast enough for per-client locks (no global contention)."
+    },
+    {
+      "question": "What about the Fixed Window Counter boundary problem?",
+      "answer": "Fixed Window: 100 req/min with window at :00–:59. Client sends 100 requests at :59, then 100 more at :00 of the next window. Result: 200 requests in 2 seconds. **Sliding Window Counter** (hybrid) fixes this: weighted average of current and previous window counts. `count = prev_count * (1 - elapsed/window) + current_count`. O(1) memory, no boundary problem."
+    },
+    {
+      "question": "How do you test a rate limiter?",
+      "answer": "Inject a `Clock` interface instead of using `System.nanoTime()` directly. In tests, use a `FakeClock` that you advance manually: `clock.advance(1, SECONDS)`. Test: (1) consume all tokens → next request denied. (2) advance clock by 1/refillRate → one request allowed. (3) burst: consume capacity at once → all succeed. (4) concurrent: spawn N threads, verify total allowed ≤ capacity."
+    },
+    {
+      "question": "What's the real-world performance of synchronized per-bucket?",
+      "answer": "Per-bucket `synchronized` means contention only among threads hitting the **same client**. For N clients, max contention = max concurrent requests per client. A typical API client sends 10–100 concurrent requests. `synchronized` on an uncontended lock is ~25ns (biased locking). Even contended, it's ~100ns. For comparison, a network RTT is 1–10ms. The lock is **never the bottleneck** in practice."
+    }
+  ]
+}

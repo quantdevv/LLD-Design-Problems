@@ -1,0 +1,256 @@
+{
+  "title": "Amazon Locker System",
+  "description": "Self-service package pickup system. Delivery drivers deposit packages; customers retrieve with a time-limited access code. Focus on token expiry, size matching, and concurrent compartment access.",
+  "tags": [
+    {"type": "medium", "label": "Medium"},
+    {"type": "pattern", "label": "Factory Pattern"},
+    {"type": "pattern", "label": "Token TTL"},
+    {"type": "concept", "label": "Concurrency"}
+  ],
+  "prompt": "Design an Amazon Locker system where delivery drivers can deposit packages and customers can pick them up using a code.",
+  "prompt_note": "Two distinct actors (driver, customer) with asymmetric operations (deposit vs pickup). The code/token lifecycle with TTL expiry is the design crux — not the locker hardware.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Are there different compartment sizes? Does the system auto-assign based on package size?\"",
+      "answer": "Interviewer: \"Yes — SMALL, MEDIUM, LARGE. Auto-assign the smallest compartment that fits.\"",
+      "why": "Best-fit allocation: don't waste a LARGE compartment on a SMALL package. Iterate sizes upward as fallback."
+    },
+    {
+      "question": "You: \"How does the pickup code work? Is it time-limited?\"",
+      "answer": "Interviewer: \"Generate a 6-digit code with a 3-day TTL. Expired codes should free the compartment and trigger rerouting.\"",
+      "why": "TTL management is a key design point — we need a cleanup mechanism (background job or lazy check)."
+    },
+    {
+      "question": "You: \"What if all compartments of the required size are full?\"",
+      "answer": "Interviewer: \"Try the next larger size. If all sizes exhausted, return an error — driver takes it to next location.\"",
+      "why": "Confirms fallback allocation: SMALL→MEDIUM→LARGE before giving up."
+    },
+    {
+      "question": "You: \"Invalid code, expired code, already-picked-up code — different errors?\"",
+      "answer": "Interviewer: \"Yes, distinct error types for each.\"",
+      "why": "Three different exception paths in pickup flow."
+    },
+    {
+      "question": "You: \"Multiple locker locations or single location?\"",
+      "answer": "Interviewer: \"Single location for now. Each location is an independent LockerSystem instance.\"",
+      "why": "Keeps scope tight. Multi-location would add a LockerLocationService layer."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Deposit:** driver submits package size → system assigns smallest fitting compartment → generates 6-digit pickup code → returns code.",
+      "**Pickup:** customer enters code → system validates code + checks TTL → opens compartment → marks free.",
+      "**Fallback allocation:** if SMALL full, try MEDIUM, then LARGE before failing.",
+      "**TTL expiry:** codes expire after 3 days → background cleanup frees compartment, reroutes package.",
+      "**Multiple compartment sizes:** SMALL, MEDIUM, LARGE with configurable counts."
+    ],
+    "out_of_scope": [
+      "Package tracking/routing, delivery driver management, payment, user auth, multi-location coordination."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Thread-safe:** concurrent deposits must not assign the same compartment twice.",
+      "**Unique codes:** 6-digit codes must be unique within active (non-expired) codes. Collision handling required.",
+      "**TTL cleanup:** background job or lazy expiry — don't block deposit/pickup on cleanup."
+    ],
+    "out_of_scope": [
+      "Distributed locking, persistence, high-availability, notification delivery guarantees."
+    ]
+  },
+
+  "primary_scope": [
+    "Deposit package → find smallest fitting compartment (with fallback) → generate code → return",
+    "Pickup with code → validate → check TTL → release compartment → remove code",
+    "TTL cleanup → scan expired codes → release compartments → return reroute list",
+    "Query available compartments by size"
+  ],
+  "termination_points": [
+    "`NoCompartmentAvailableException` — all compartments (including larger fallbacks) are occupied",
+    "`InvalidCodeException` — code not found in system",
+    "`CodeExpiredException` — code exists but TTL exceeded",
+    "`CodeAlreadyUsedException` — code was already consumed (double-pickup attempt)"
+  ],
+
+  "entity_intro": "Two actors (driver, customer) but neither is an entity in our system — they're external. The entities are the things the system *owns*.",
+  "entities": [
+    {
+      "name": "LockerSystem",
+      "role": "**Orchestrator/Controller.** Receives deposit/pickup requests. Manages compartment pools by size. Owns the code→compartment mapping. Schedules TTL cleanup.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    },
+    {
+      "name": "Compartment",
+      "role": "**Model.** Individual locker unit with size (S/M/L) and status (AVAILABLE/OCCUPIED). State machine: AVAILABLE→OCCUPIED (on deposit), OCCUPIED→AVAILABLE (on pickup or TTL expiry). `tryOccupy()` is `synchronized` to prevent double-assign.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — state machine"
+    },
+    {
+      "name": "AccessToken",
+      "role": "**Model.** Links a 6-digit code → compartmentId + createdAt + TTL. `isExpired()` check. Wrapping in a class is cleaner than a raw Map entry because TTL logic lives here.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — encapsulates TTL logic"
+    },
+    {
+      "name": "Package",
+      "role": "External to the locker system — belongs to Amazon's fulfillment domain. The locker only cares about *package size* (an input parameter). Don't model what you don't own.",
+      "verdict": "no",
+      "verdict_label": "✗ External — just a size enum input"
+    },
+    {
+      "name": "Driver / Customer",
+      "role": "External actors. They call `deposit()` and `pickup()` — they're not entities in our system. Don't create User classes for callers.",
+      "verdict": "no",
+      "verdict_label": "✗ External actors — not entities"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "LockerSystem", "owns": "`Map<Size, List<Compartment>>`, `ConcurrentHashMap<code, AccessToken>`", "rel": "1 → N Compartments (grouped by size), 1 → N AccessTokens"},
+    {"entity": "AccessToken", "owns": "code, compartmentId, createdAt, ttlDuration", "rel": "1 → 1 Compartment (by ID reference)"},
+    {"entity": "Compartment", "owns": "id, size, status", "rel": "Standalone — no outward references"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Compartment, AccessToken, PackageSize enum, CompartmentStatus enum. **Service** = LockerSystem (allocation + TTL management). **Controller** = public `deposit()`, `pickup()`, `cleanupExpired()` methods on LockerSystem.",
+
+  "classes": [
+    {
+      "name": "LockerSystem", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "compartments", "type": "Map<PackageSize, List<Compartment>>"},
+        {"name": "tokenMap", "type": "ConcurrentHashMap<String, AccessToken>"},
+        {"name": "depositLock", "type": "ReentrantLock"},
+        {"name": "scheduler", "type": "ScheduledExecutorService"}
+      ],
+      "methods": [
+        {"name": "deposit(size)", "returns": "String (code)"},
+        {"name": "pickup(code)", "returns": "void"},
+        {"name": "cleanupExpired()", "returns": "List<String> (reroute IDs)"},
+        {"name": "getAvailable(size)", "returns": "int"}
+      ]
+    },
+    {
+      "name": "Compartment", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "id", "type": "String"},
+        {"name": "size", "type": "PackageSize"},
+        {"name": "status", "type": "CompartmentStatus (volatile)"}
+      ],
+      "methods": [
+        {"name": "tryOccupy()", "returns": "boolean (synchronized)"},
+        {"name": "release()", "returns": "void (synchronized)"},
+        {"name": "isFree()", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "AccessToken", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "code", "type": "String (6-digit)"},
+        {"name": "compartmentId", "type": "String"},
+        {"name": "createdAt", "type": "Instant"},
+        {"name": "ttl", "type": "Duration"}
+      ],
+      "methods": [
+        {"name": "isExpired()", "returns": "boolean"},
+        {"name": "getCode()", "returns": "String"},
+        {"name": "getCompartmentId()", "returns": "String"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "compartments",
+      "columns": [
+        {"name": "compartment_id", "type": "UUID", "pk": true},
+        {"name": "locker_location_id", "type": "UUID", "fk": true},
+        {"name": "size", "type": "ENUM(S,M,L)", "idx": true},
+        {"name": "status", "type": "ENUM(AVAIL,OCC)", "idx": true}
+      ]
+    },
+    {
+      "table": "access_tokens",
+      "columns": [
+        {"name": "code", "type": "CHAR(6)", "pk": true},
+        {"name": "compartment_id", "type": "UUID", "fk": true},
+        {"name": "created_at", "type": "TIMESTAMP"},
+        {"name": "expires_at", "type": "TIMESTAMP", "idx": true},
+        {"name": "picked_up_at", "type": "TIMESTAMP"}
+      ]
+    }
+  ],
+  "schema_note": "**Index on `expires_at`** enables efficient cleanup query: `SELECT * FROM access_tokens WHERE expires_at < NOW() AND picked_up_at IS NULL`. Composite index `(size, status)` on compartments for fast allocation.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Enums + Compartment + AccessToken",
+      "code": "enum PackageSize       { SMALL, MEDIUM, LARGE }\nenum CompartmentStatus { AVAILABLE, OCCUPIED }\n\nclass Compartment {\n    private final String id;\n    private final PackageSize size;\n    private volatile CompartmentStatus status = CompartmentStatus.AVAILABLE;\n\n    public Compartment(String id, PackageSize size) {\n        this.id = id;\n        this.size = size;\n    }\n\n    // Atomic occupy — returns false if already taken\n    public synchronized boolean tryOccupy() {\n        if (status == CompartmentStatus.AVAILABLE) {\n            status = CompartmentStatus.OCCUPIED;\n            return true;\n        }\n        return false;\n    }\n\n    public synchronized void release() {\n        status = CompartmentStatus.AVAILABLE;\n    }\n\n    public boolean isFree() { return status == CompartmentStatus.AVAILABLE; }\n    public String getId()   { return id; }\n    public PackageSize getSize() { return size; }\n}\n\nclass AccessToken {\n    private final String code;\n    private final String compartmentId;\n    private final Instant createdAt;\n    private final Duration ttl;\n\n    public AccessToken(String compartmentId, Duration ttl) {\n        this.code = generateSecureCode();\n        this.compartmentId = compartmentId;\n        this.createdAt = Instant.now();\n        this.ttl = ttl;\n    }\n\n    public boolean isExpired() {\n        return Instant.now().isAfter(createdAt.plus(ttl));\n    }\n\n    // 6-digit cryptographically random code\n    private String generateSecureCode() {\n        return String.format(\"%06d\", new SecureRandom().nextInt(1_000_000));\n    }\n\n    public String getCode()           { return code; }\n    public String getCompartmentId()  { return compartmentId; }\n}"
+    },
+    {
+      "label": "Controller — LockerSystem (Deposit + Pickup + Cleanup)",
+      "flow": "`deposit(size)`: lock → try size, then MEDIUM, then LARGE (fallback) → find free compartment → `tryOccupy()` → generate token → store in map → unlock → return code.\n`pickup(code)`: lookup token → check expired → find compartment → release → remove token.\n`cleanupExpired()`: scan tokenMap → filter expired → release each → collect reroute list.",
+      "edge_cases": "`deposit()`: all sizes full → `NoCompartmentAvailableException`. Code collision → retry loop (max 5 attempts). `pickup()`: null/blank code → `IllegalArgumentException`. Token not found → `InvalidCodeException`. Token expired → `CodeExpiredException` + release compartment. `cleanupExpired()`: concurrent modification → `ConcurrentHashMap.entrySet()` is safe for iteration.",
+      "code": "class LockerSystem {\n    private final Map<PackageSize, List<Compartment>> compartments;\n    private final ConcurrentHashMap<String, AccessToken> tokenMap = new ConcurrentHashMap<>();\n    private final ReentrantLock depositLock = new ReentrantLock();\n    private final Duration defaultTTL = Duration.ofDays(3);\n\n    // Fallback order: try exact size, then larger\n    private static final Map<PackageSize, List<PackageSize>> FALLBACK = Map.of(\n        PackageSize.SMALL,  List.of(PackageSize.SMALL, PackageSize.MEDIUM, PackageSize.LARGE),\n        PackageSize.MEDIUM, List.of(PackageSize.MEDIUM, PackageSize.LARGE),\n        PackageSize.LARGE,  List.of(PackageSize.LARGE)\n    );\n\n    public LockerSystem(Map<PackageSize, List<Compartment>> compartments) {\n        this.compartments = compartments;\n        // Schedule cleanup every hour\n        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();\n        scheduler.scheduleAtFixedRate(this::cleanupExpired, 1, 1, TimeUnit.HOURS);\n    }\n\n    // ── deposit ─────────────────────────────\n    public String deposit(PackageSize size) {\n        depositLock.lock();\n        try {\n            // Try each fallback size\n            for (PackageSize trySize : FALLBACK.get(size)) {\n                List<Compartment> pool = compartments.getOrDefault(trySize, List.of());\n                for (Compartment c : pool) {\n                    if (c.tryOccupy()) {\n                        AccessToken token = generateUniqueToken(c.getId());\n                        tokenMap.put(token.getCode(), token);\n                        return token.getCode();\n                    }\n                }\n            }\n            throw new NoCompartmentAvailableException(\n                \"No compartment available for size: \" + size);\n        } finally {\n            depositLock.unlock();\n        }\n    }\n\n    // ── pickup ──────────────────────────────\n    public void pickup(String code) {\n        if (code == null || code.isBlank())\n            throw new IllegalArgumentException(\"Code required\");\n\n        AccessToken token = tokenMap.get(code);\n        if (token == null)\n            throw new InvalidCodeException(\"Code not found: \" + code);\n\n        if (token.isExpired()) {\n            // Expired — release compartment, remove token, inform caller\n            findCompartment(token.getCompartmentId()).release();\n            tokenMap.remove(code);\n            throw new CodeExpiredException(\"Code expired: \" + code);\n        }\n\n        // Valid pickup\n        findCompartment(token.getCompartmentId()).release();\n        tokenMap.remove(code);\n    }\n\n    // ── cleanupExpired (background job) ─────\n    public List<String> cleanupExpired() {\n        List<String> rerouted = new ArrayList<>();\n        tokenMap.forEach((code, token) -> {\n            if (token.isExpired()) {\n                findCompartment(token.getCompartmentId()).release();\n                tokenMap.remove(code);\n                rerouted.add(token.getCompartmentId());\n            }\n        });\n        return rerouted; // these packages need rerouting\n    }\n\n    // ── Code collision handling ─────────────\n    private AccessToken generateUniqueToken(String compartmentId) {\n        for (int attempt = 0; attempt < 5; attempt++) {\n            AccessToken token = new AccessToken(compartmentId, defaultTTL);\n            if (!tokenMap.containsKey(token.getCode()))\n                return token;\n        }\n        throw new RuntimeException(\"Failed to generate unique code after 5 attempts\");\n    }\n\n    private Compartment findCompartment(String id) {\n        return compartments.values().stream()\n            .flatMap(List::stream)\n            .filter(c -> c.getId().equals(id))\n            .findFirst()\n            .orElseThrow(() -> new IllegalStateException(\"Compartment not found: \" + id));\n    }\n\n    public int getAvailable(PackageSize size) {\n        return (int) compartments.getOrDefault(size, List.of()).stream()\n            .filter(Compartment::isFree).count();\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Factory Method → AccessToken.generateSecureCode()",
+      "why": "Encapsulates code generation logic. Could swap to UUID-based, alphanumeric, or QR-code-backed tokens without changing LockerSystem. The token creates itself — `new AccessToken(compartmentId, ttl)` handles code generation internally.",
+      "where": "`AccessToken` constructor calls private `generateSecureCode()`"
+    },
+    {
+      "name": "Strategy (implicit) → Fallback Allocation",
+      "why": "The `FALLBACK` map defines allocation strategy per size. Could be extracted to a `CompartmentAllocationStrategy` interface if allocation logic varies (e.g., never use LARGE for SMALL packages in premium lockers). Currently a simple map — KISS over pattern.",
+      "where": "`FALLBACK` map in deposit() — `SMALL→[S,M,L]`, `MEDIUM→[M,L]`, `LARGE→[L]`"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two drivers deposit simultaneously → same compartment assigned",
+      "fix": "`ReentrantLock depositLock` wraps the entire find-and-occupy sequence. Additionally, `Compartment.tryOccupy()` is `synchronized` and returns `boolean` — even without the outer lock, only one thread wins the CAS-like operation. The lock prevents wasteful scanning."
+    },
+    {
+      "issue": "Pickup during cleanup race",
+      "fix": "Both `pickup()` and `cleanupExpired()` call `release()` on a compartment. Since `release()` is `synchronized` and idempotent (sets AVAILABLE regardless), double-release is safe. `tokenMap.remove()` is atomic on `ConcurrentHashMap` — only one caller succeeds."
+    },
+    {
+      "issue": "Code collision on generation",
+      "fix": "With 1M possible 6-digit codes and ~100 active tokens, collision probability is ~0.01%. Retry loop (max 5 attempts) handles it. For higher throughput, use alphanumeric codes (36^6 = 2.1B combinations) or UUIDs."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why is Package not an entity in your design?",
+      "answer": "Package belongs to Amazon's fulfillment domain, not the locker domain. The locker only needs the *size* of the package — a single enum value. Creating a Package class would leak another bounded context into our system. The locker doesn't track packageId, contents, sender, or delivery status. **Don't model what you don't own.**"
+    },
+    {
+      "question": "How would you handle notification when a code is generated?",
+      "answer": "Add a `NotificationService` interface with `notify(recipientId, code)`. Inject it into LockerSystem. After generating the token in `deposit()`, call `notificationService.notify()`. The notification channel (SMS, email, push) is an implementation detail behind the interface — **Observer Pattern** or fire-and-forget async call."
+    },
+    {
+      "question": "What if you need to support returning packages (customer puts something back)?",
+      "answer": "Add a `returns` compartment pool or reuse existing compartments with a `RETURN` status. Create a new `initiateReturn(orderId)` → assigns compartment → generates return code. The flow mirrors deposit but the actor is the customer, not the driver. The `AccessToken` model stays identical."
+    },
+    {
+      "question": "How would you scale to multiple locker locations?",
+      "answer": "Each location is an independent `LockerSystem` instance. Add a `LockerLocationService` that maps locationId → LockerSystem. The deposit API becomes `deposit(locationId, packageSize)`. For inter-location rerouting (when one location is full), the LocationService tries nearby locations — this is an HLD concern, not LLD."
+    },
+    {
+      "question": "Why `ReentrantLock` instead of `synchronized` on LockerSystem?",
+      "answer": "`ReentrantLock` gives us: (1) `tryLock(timeout)` — don't block forever if deposit is slow. (2) Fairness option — `new ReentrantLock(true)` ensures FIFO ordering for waiting drivers. (3) Explicit lock/unlock in finally block — harder to forget than implicit synchronized scope. For this problem, `synchronized` would also work fine — but `ReentrantLock` signals senior awareness."
+    },
+    {
+      "question": "Lazy expiry vs background cleanup — tradeoffs?",
+      "answer": "**Lazy:** check `isExpired()` only when someone calls `pickup()`. Pro: no background thread. Con: expired compartments stay occupied until someone tries the code — wastes capacity. **Background:** `ScheduledExecutorService` runs `cleanupExpired()` periodically. Pro: compartments freed proactively. Con: extra thread, slight delay (up to 1 cleanup interval). **Our design uses both:** background cleanup every hour + lazy check in `pickup()` as a safety net."
+    }
+  ]
+}

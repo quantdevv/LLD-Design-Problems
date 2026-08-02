@@ -1,0 +1,308 @@
+{
+  "title": "Vending Machine",
+  "description": "Design a vending machine that accepts coins, lets users select products, dispenses items, and returns change. The quintessential State Pattern problem — the machine's behavior changes entirely based on its current state.",
+  "tags": [
+    {"type": "medium", "label": "Medium"},
+    {"type": "pattern", "label": "State Pattern"},
+    {"type": "pattern", "label": "Singleton"},
+    {"type": "concept", "label": "State Machine"}
+  ],
+  "prompt": "Design a vending machine that dispenses products and handles coin-based payments.",
+  "prompt_note": "This is the textbook State Pattern problem. The machine has distinct states (IDLE, COIN_INSERTED, PRODUCT_SELECTED, DISPENSING) and each state handles the same inputs (insertCoin, selectProduct, dispense, cancel) differently. If you see an object whose behavior varies by state and has clear state transitions — reach for the State Pattern.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"What payment methods? Just coins, or also bills/cards?\"",
+      "answer": "Interviewer: \"Coins only — 1¢, 5¢, 10¢, 25¢. Keep it simple.\"",
+      "why": "Bounds the payment system. Coin denominations affect the change-making algorithm."
+    },
+    {
+      "question": "You: \"Can the user insert multiple coins before selecting? Can they cancel and get a refund?\"",
+      "answer": "Interviewer: \"Yes to both. Accumulate coins, cancel returns everything inserted.\"",
+      "why": "Confirms we need a running balance and a refund/cancel flow."
+    },
+    {
+      "question": "You: \"How does inventory work? Fixed product slots with quantities?\"",
+      "answer": "Interviewer: \"Yes — each slot has a product type, price, and quantity. Out-of-stock should be handled.\"",
+      "why": "Inventory is per-slot, not global. Need a Slot/ProductSlot entity."
+    },
+    {
+      "question": "You: \"What if the machine can't make exact change?\"",
+      "answer": "Interviewer: \"Cancel the transaction and return all inserted coins.\"",
+      "why": "Change-making failure is a termination point, not a silent error."
+    },
+    {
+      "question": "You: \"Should the machine track its own coin inventory for making change?\"",
+      "answer": "Interviewer: \"Yes — the machine has a coin bank. Change is made from this bank.\"",
+      "why": "Adds a CoinBank entity that tracks available coins for change-making."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "Insert coins (1¢, 5¢, 10¢, 25¢) — accumulates a running balance.",
+      "Select a product by slot code — validates sufficient balance and stock.",
+      "Dispense product — decrements inventory, deducts price from balance.",
+      "Return change — calculates optimal change using available coins in the bank. Greedy algorithm (largest coins first).",
+      "Cancel — returns all inserted coins, resets to IDLE.",
+      "Admin: restock products, refill coin bank."
+    ],
+    "out_of_scope": [
+      "Bill/card payments, remote monitoring, multi-machine networking, product temperature control."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Thread-safe:** only one transaction at a time (physical machine constraint — one user at a time).",
+      "**Atomicity:** dispense + deduct balance + update inventory must happen together or not at all.",
+      "**Change accuracy:** never dispense wrong change — fail the transaction instead."
+    ],
+    "out_of_scope": [
+      "Distributed deployment, persistence, real-time analytics."
+    ]
+  },
+
+  "primary_scope": [
+    "Insert coin → add to balance → transition to COIN_INSERTED state",
+    "Select product → check balance ≥ price AND stock > 0 → transition to DISPENSING",
+    "Dispense → decrement stock → calculate change → dispense product + change → back to IDLE",
+    "Cancel → return all inserted amount → back to IDLE",
+    "Admin restock / coin refill"
+  ],
+  "termination_points": [
+    "`InsufficientBalanceException` — balance < product price",
+    "`OutOfStockException` — selected slot has quantity 0",
+    "`InvalidSlotException` — slot code doesn't exist",
+    "`CannotMakeChangeException` — coin bank can't produce exact change → cancel transaction, return all coins",
+    "`InvalidStateException` — calling dispense without selecting product, or selecting without inserting coins"
+  ],
+
+  "entity_intro": "The machine has clearly distinct behavioral states — this is a textbook State Pattern. Each state handles inputs differently (insertCoin in IDLE starts a transaction, in DISPENSING it's invalid).",
+  "entities": [
+    {
+      "name": "VendingMachine",
+      "role": "**Context class (State Pattern).** Holds current state, delegates all user actions to the current state object. Also owns inventory (slots) and coin bank. Singleton — one physical machine.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Context (State Pattern)"
+    },
+    {
+      "name": "VendingState (interface)",
+      "role": "**State interface.** Defines all user actions: `insertCoin()`, `selectProduct()`, `dispense()`, `cancel()`. Each concrete state implements these differently. Invalid actions in a state throw `InvalidStateException`.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — State Pattern interface"
+    },
+    {
+      "name": "ProductSlot",
+      "role": "**Model.** A slot in the machine with: slotCode (e.g., \"A1\"), productName, price, quantity. Decrement quantity on dispense. Check stock via `isAvailable()`.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — owns inventory state"
+    },
+    {
+      "name": "CoinBank",
+      "role": "**Service.** Tracks available coins by denomination for making change. `makeChange(amount)` uses greedy algorithm. `addCoins()` when user inserts coins. `refill()` for admin.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — owns coin inventory + change algorithm"
+    },
+    {
+      "name": "Coin",
+      "role": "Just an enum with values (1, 5, 10, 25). No behavior beyond its face value.",
+      "verdict": "no",
+      "verdict_label": "✗ Just an enum — Coin(value)"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "VendingMachine", "owns": "VendingState (current), `Map<slotCode, ProductSlot>`, CoinBank, currentBalance", "rel": "1→1 State, 1→N ProductSlots, 1→1 CoinBank"},
+    {"entity": "VendingState", "owns": "Reference back to VendingMachine (to trigger state transitions)", "rel": "N implementations → 1 Context"},
+    {"entity": "CoinBank", "owns": "`Map<Coin, Integer>` (denomination → count)", "rel": "Standalone service"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Coin enum, ProductSlot, CoinBank. **Service** = VendingState implementations (each state encapsulates behavior for that phase). **Controller** = VendingMachine (delegates to current state, manages transitions).",
+
+  "classes": [
+    {
+      "name": "VendingState", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "insertCoin(coin)", "returns": "void"},
+        {"name": "selectProduct(slotCode)", "returns": "void"},
+        {"name": "dispense()", "returns": "void"},
+        {"name": "cancel()", "returns": "Map<Coin,Integer>"}
+      ]
+    },
+    {
+      "name": "IdleState", "type": "class", "layer": "Service",
+      "fields": [{"name": "machine", "type": "VendingMachine"}],
+      "methods": [
+        {"name": "insertCoin(coin)", "returns": "void → transitions to COIN_INSERTED"},
+        {"name": "selectProduct()", "returns": "throws InvalidStateException"},
+        {"name": "dispense()", "returns": "throws InvalidStateException"},
+        {"name": "cancel()", "returns": "no-op (nothing to return)"}
+      ]
+    },
+    {
+      "name": "CoinInsertedState", "type": "class", "layer": "Service",
+      "fields": [{"name": "machine", "type": "VendingMachine"}],
+      "methods": [
+        {"name": "insertCoin(coin)", "returns": "void → adds to balance"},
+        {"name": "selectProduct(code)", "returns": "void → validates → DISPENSING"},
+        {"name": "dispense()", "returns": "throws InvalidStateException"},
+        {"name": "cancel()", "returns": "Map<Coin,Int> → refund → IDLE"}
+      ]
+    },
+    {
+      "name": "DispensingState", "type": "class", "layer": "Service",
+      "fields": [{"name": "machine", "type": "VendingMachine"}],
+      "methods": [
+        {"name": "insertCoin()", "returns": "throws InvalidStateException"},
+        {"name": "selectProduct()", "returns": "throws InvalidStateException"},
+        {"name": "dispense()", "returns": "void → dispense + change → IDLE"},
+        {"name": "cancel()", "returns": "throws InvalidStateException"}
+      ]
+    },
+    {
+      "name": "VendingMachine", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "currentState", "type": "VendingState"},
+        {"name": "slots", "type": "Map<String, ProductSlot>"},
+        {"name": "coinBank", "type": "CoinBank"},
+        {"name": "currentBalance", "type": "int (cents)"},
+        {"name": "selectedSlot", "type": "ProductSlot"}
+      ],
+      "methods": [
+        {"name": "insertCoin(coin)", "returns": "void (delegates)"},
+        {"name": "selectProduct(code)", "returns": "void (delegates)"},
+        {"name": "dispense()", "returns": "void (delegates)"},
+        {"name": "cancel()", "returns": "Map<Coin,Int> (delegates)"},
+        {"name": "setState(state)", "returns": "void"},
+        {"name": "restock(code, qty)", "returns": "void (admin)"}
+      ]
+    },
+    {
+      "name": "ProductSlot", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "slotCode", "type": "String"},
+        {"name": "productName", "type": "String"},
+        {"name": "price", "type": "int (cents)"},
+        {"name": "quantity", "type": "int"}
+      ],
+      "methods": [
+        {"name": "isAvailable()", "returns": "boolean"},
+        {"name": "dispense()", "returns": "void (qty--)"},
+        {"name": "restock(qty)", "returns": "void"}
+      ]
+    },
+    {
+      "name": "CoinBank", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "coins", "type": "Map<Coin, Integer>"}
+      ],
+      "methods": [
+        {"name": "addCoin(coin)", "returns": "void"},
+        {"name": "makeChange(amount)", "returns": "Map<Coin,Int>"},
+        {"name": "refill(coin, qty)", "returns": "void"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "product_slots",
+      "columns": [
+        {"name": "slot_code", "type": "VARCHAR(4)", "pk": true},
+        {"name": "machine_id", "type": "UUID", "fk": true},
+        {"name": "product_name", "type": "VARCHAR"},
+        {"name": "price_cents", "type": "INT"},
+        {"name": "quantity", "type": "INT"}
+      ]
+    },
+    {
+      "table": "transactions",
+      "columns": [
+        {"name": "txn_id", "type": "UUID", "pk": true},
+        {"name": "machine_id", "type": "UUID", "fk": true},
+        {"name": "slot_code", "type": "VARCHAR(4)", "fk": true},
+        {"name": "amount_paid", "type": "INT"},
+        {"name": "change_given", "type": "INT"},
+        {"name": "status", "type": "ENUM(OK,CANCELLED,CHANGE_FAIL)"},
+        {"name": "created_at", "type": "TIMESTAMP", "idx": true}
+      ]
+    }
+  ],
+  "schema_note": "Runtime state is in-memory. DB is for **audit log** (transaction history for reconciliation). Index `machine_id + created_at` for daily sales reporting.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Coin Enum + ProductSlot + CoinBank",
+      "code": "enum Coin {\n    PENNY(1), NICKEL(5), DIME(10), QUARTER(25);\n    final int value;\n    Coin(int v) { this.value = v; }\n}\n\nclass ProductSlot {\n    private final String slotCode;\n    private final String productName;\n    private final int price; // cents\n    private int quantity;\n\n    public boolean isAvailable() { return quantity > 0; }\n\n    public void dispense() {\n        if (quantity <= 0)\n            throw new OutOfStockException(slotCode);\n        quantity--;\n    }\n\n    public void restock(int qty) { this.quantity += qty; }\n    // getters...\n}\n\nclass CoinBank {\n    private final Map<Coin, Integer> coins = new EnumMap<>(Coin.class);\n\n    public CoinBank() {\n        for (Coin c : Coin.values()) coins.put(c, 0);\n    }\n\n    public void addCoin(Coin c) {\n        coins.merge(c, 1, Integer::sum);\n    }\n\n    // Greedy change-making: largest coins first\n    // Returns coins to dispense, or throws if impossible\n    public Map<Coin, Integer> makeChange(int amount) {\n        Map<Coin, Integer> change = new EnumMap<>(Coin.class);\n        // Sort denominations descending\n        Coin[] sorted = {Coin.QUARTER, Coin.DIME, Coin.NICKEL, Coin.PENNY};\n\n        for (Coin c : sorted) {\n            int available = coins.getOrDefault(c, 0);\n            int needed = amount / c.value;\n            int use = Math.min(needed, available);\n            if (use > 0) {\n                change.put(c, use);\n                amount -= use * c.value;\n            }\n        }\n\n        if (amount > 0)\n            throw new CannotMakeChangeException(\"Short by \" + amount + \" cents\");\n\n        // Commit: deduct from bank\n        change.forEach((c, qty) -> coins.merge(c, -qty, Integer::sum));\n        return change;\n    }\n\n    public void refill(Coin c, int qty) {\n        coins.merge(c, qty, Integer::sum);\n    }\n}"
+    },
+    {
+      "label": "State Pattern — VendingState Interface + Implementations",
+      "flow": "**State transitions:** IDLE →(insertCoin)→ COIN_INSERTED →(selectProduct)→ DISPENSING →(dispense)→ IDLE. Cancel from COIN_INSERTED → IDLE. Each invalid action per state throws `InvalidStateException`.",
+      "edge_cases": "`selectProduct` in IDLE → error (no coins). `dispense` before `selectProduct` → error. Double `cancel` → no-op in IDLE. Insert coin in DISPENSING → error (machine busy).",
+      "code": "interface VendingState {\n    void insertCoin(Coin coin);\n    void selectProduct(String slotCode);\n    void dispense();\n    Map<Coin, Integer> cancel();\n}\n\nclass IdleState implements VendingState {\n    private final VendingMachine machine;\n\n    public IdleState(VendingMachine m) { this.machine = m; }\n\n    @Override\n    public void insertCoin(Coin coin) {\n        machine.addToBalance(coin.value);\n        machine.getCoinBank().addCoin(coin);\n        machine.setState(new CoinInsertedState(machine));\n    }\n\n    @Override\n    public void selectProduct(String code) {\n        throw new InvalidStateException(\"Insert coins first\");\n    }\n\n    @Override\n    public void dispense() {\n        throw new InvalidStateException(\"No transaction in progress\");\n    }\n\n    @Override\n    public Map<Coin, Integer> cancel() {\n        return Map.of(); // nothing to return\n    }\n}\n\nclass CoinInsertedState implements VendingState {\n    private final VendingMachine machine;\n\n    public CoinInsertedState(VendingMachine m) { this.machine = m; }\n\n    @Override\n    public void insertCoin(Coin coin) {\n        machine.addToBalance(coin.value);\n        machine.getCoinBank().addCoin(coin);\n        // Stay in COIN_INSERTED\n    }\n\n    @Override\n    public void selectProduct(String slotCode) {\n        ProductSlot slot = machine.getSlot(slotCode); // throws InvalidSlotException\n        if (!slot.isAvailable())\n            throw new OutOfStockException(slotCode);\n        if (machine.getCurrentBalance() < slot.getPrice())\n            throw new InsufficientBalanceException(\n                \"Need \" + slot.getPrice() + \", have \" + machine.getCurrentBalance());\n\n        machine.setSelectedSlot(slot);\n        machine.setState(new DispensingState(machine));\n    }\n\n    @Override\n    public void dispense() {\n        throw new InvalidStateException(\"Select a product first\");\n    }\n\n    @Override\n    public Map<Coin, Integer> cancel() {\n        int refund = machine.getCurrentBalance();\n        Map<Coin, Integer> change = machine.getCoinBank().makeChange(refund);\n        machine.resetBalance();\n        machine.setState(new IdleState(machine));\n        return change;\n    }\n}\n\nclass DispensingState implements VendingState {\n    private final VendingMachine machine;\n\n    public DispensingState(VendingMachine m) { this.machine = m; }\n\n    @Override\n    public void insertCoin(Coin coin) {\n        throw new InvalidStateException(\"Dispensing in progress\");\n    }\n\n    @Override\n    public void selectProduct(String code) {\n        throw new InvalidStateException(\"Dispensing in progress\");\n    }\n\n    @Override\n    public void dispense() {\n        ProductSlot slot = machine.getSelectedSlot();\n        int changeAmount = machine.getCurrentBalance() - slot.getPrice();\n\n        // Try to make change BEFORE dispensing (atomic check)\n        Map<Coin, Integer> change;\n        try {\n            change = (changeAmount > 0)\n                ? machine.getCoinBank().makeChange(changeAmount)\n                : Map.of();\n        } catch (CannotMakeChangeException e) {\n            // Rollback: return all inserted coins, cancel transaction\n            Map<Coin, Integer> refund = machine.getCoinBank()\n                .makeChange(machine.getCurrentBalance());\n            machine.resetBalance();\n            machine.setSelectedSlot(null);\n            machine.setState(new IdleState(machine));\n            throw new CannotMakeChangeException(\n                \"Cannot make change. Transaction cancelled. Refund: \" + refund);\n        }\n\n        // All good — dispense\n        slot.dispense(); // qty--\n        machine.resetBalance();\n        machine.setSelectedSlot(null);\n        machine.setState(new IdleState(machine));\n        // change is returned to caller\n    }\n\n    @Override\n    public Map<Coin, Integer> cancel() {\n        throw new InvalidStateException(\"Cannot cancel during dispensing\");\n    }\n}"
+    },
+    {
+      "label": "Controller — VendingMachine (Context)",
+      "flow": "All public methods delegate to `currentState`. Machine holds shared state (balance, slots, coinBank) that states read/write. `setState()` is called by state objects to trigger transitions.",
+      "code": "class VendingMachine {\n    private VendingState currentState;\n    private final Map<String, ProductSlot> slots;\n    private final CoinBank coinBank;\n    private int currentBalance = 0; // cents\n    private ProductSlot selectedSlot;\n\n    public VendingMachine(Map<String, ProductSlot> slots) {\n        this.slots = slots;\n        this.coinBank = new CoinBank();\n        this.currentState = new IdleState(this);\n    }\n\n    // ── Public API (delegates to state) ─────\n    public void insertCoin(Coin coin)          { currentState.insertCoin(coin); }\n    public void selectProduct(String slotCode) { currentState.selectProduct(slotCode); }\n    public void dispense()                     { currentState.dispense(); }\n    public Map<Coin, Integer> cancel()         { return currentState.cancel(); }\n\n    // ── State management ────────────────────\n    void setState(VendingState state)     { this.currentState = state; }\n    void addToBalance(int cents)          { this.currentBalance += cents; }\n    void resetBalance()                   { this.currentBalance = 0; }\n    int getCurrentBalance()               { return currentBalance; }\n    void setSelectedSlot(ProductSlot s)   { this.selectedSlot = s; }\n    ProductSlot getSelectedSlot()         { return selectedSlot; }\n    CoinBank getCoinBank()                { return coinBank; }\n\n    ProductSlot getSlot(String code) {\n        ProductSlot slot = slots.get(code);\n        if (slot == null)\n            throw new InvalidSlotException(\"Unknown slot: \" + code);\n        return slot;\n    }\n\n    // ── Admin ───────────────────────────────\n    public void restock(String slotCode, int qty) {\n        getSlot(slotCode).restock(qty);\n    }\n\n    public void refillCoins(Coin coin, int qty) {\n        coinBank.refill(coin, qty);\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "State Pattern → VendingState",
+      "why": "The machine behaves completely differently depending on its state. `insertCoin()` in IDLE starts a transaction; in DISPENSING it's an error. Instead of giant if-else chains checking `currentState == ...`, each state is a separate class with its own logic. **Adding a new state** (e.g., MAINTENANCE) means adding one class — zero changes to existing states.",
+      "where": "`VendingState` interface + `IdleState`, `CoinInsertedState`, `DispensingState`"
+    },
+    {
+      "name": "Singleton (optional) → VendingMachine",
+      "why": "One physical machine. In an interview, mention it but don't over-invest — the State Pattern is the star here.",
+      "where": "Could wrap VendingMachine in a Singleton; or just pass it as a dependency."
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two users operating the machine simultaneously",
+      "fix": "Physical constraint: only one user at a time. The State Pattern inherently serializes operations — each method is short and transitions atomically. If needed, add `synchronized` on VendingMachine's public methods. No need for `ReentrantLock` since operations are sequential by design."
+    },
+    {
+      "issue": "Dispense + change calculation must be atomic",
+      "fix": "In `DispensingState.dispense()`, we calculate change **before** calling `slot.dispense()`. If `makeChange()` throws, we roll back the entire transaction (refund + return to IDLE). The product is never decremented if change fails — **all-or-nothing semantics**."
+    },
+    {
+      "issue": "Admin restock during active transaction",
+      "fix": "Restock modifies `ProductSlot.quantity` which isn't read until `selectProduct()`. If a restock happens between `selectProduct()` and `dispense()`, the slot already passed the availability check — we proceed. If the slot was restocked mid-cancel, no issue. For safety, `synchronized` on ProductSlot methods."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why State Pattern instead of a simple enum + switch?",
+      "answer": "With 4 states × 4 actions = 16 combinations. A switch statement becomes a 16-case monster that grows quadratically with new states/actions. State Pattern: each state is a class, each action is a method. Adding a MAINTENANCE state = one new class, zero changes elsewhere. **Open/Closed Principle** in action."
+    },
+    {
+      "question": "What if the greedy change algorithm fails but a non-greedy solution exists?",
+      "answer": "Greedy works for standard US denominations (1,5,10,25) because they form a canonical system. For non-canonical denominations (e.g., 1,3,4), greedy can fail. Use **dynamic programming** (coin change problem): `dp[amount] = min coins`. In practice, US denominations → greedy is correct and O(1). Mention DP awareness to impress."
+    },
+    {
+      "question": "How would you add card payment support?",
+      "answer": "Extract a `PaymentStrategy` interface with `pay(amount)` and `refund(amount)`. `CoinPayment` wraps the existing coin logic. `CardPayment` calls an external payment gateway. VendingMachine takes a `PaymentStrategy` — **Strategy Pattern** layered on top of State Pattern. The state machine stays identical."
+    },
+    {
+      "question": "How do state objects trigger transitions?",
+      "answer": "Each state holds a reference to the VendingMachine (context). After completing an action, the state calls `machine.setState(new NextState(machine))`. The context doesn't decide transitions — the **states decide their own successors**. This is a key State Pattern principle: transition logic lives in the state, not the context."
+    },
+    {
+      "question": "What if you need to add a MAINTENANCE state where all operations are blocked?",
+      "answer": "Create `MaintenanceState implements VendingState` where every method throws `MachineUnderMaintenanceException`. Add an admin method: `machine.enterMaintenance()` sets state to MaintenanceState. `machine.exitMaintenance()` returns to IdleState. **Zero changes to existing states** — this is exactly why State Pattern exists."
+    },
+    {
+      "question": "How do you handle the case where coins inserted are lost due to a power failure?",
+      "answer": "Real machines have a non-volatile coin counter (EEPROM). In our LLD, we'd persist transaction state: on every `insertCoin()`, write `{txnId, balance, timestamp}` to a journal. On boot, check for an in-progress transaction and either resume or refund. This is a **Write-Ahead Log** pattern — acknowledge to the interviewer but out of scope for 35 minutes."
+    }
+  ]
+}
