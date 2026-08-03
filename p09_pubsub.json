@@ -1,0 +1,279 @@
+{
+  "title": "In-Memory Pub/Sub System",
+  "description": "Design a publish-subscribe system where publishers post messages to topics and subscribers receive messages for topics they've subscribed to. Observer Pattern at scale with async delivery.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Observer Pattern"},
+    {"type": "pattern", "label": "Producer-Consumer"},
+    {"type": "concept", "label": "Async Delivery"},
+    {"type": "concept", "label": "Concurrency"}
+  ],
+  "prompt": "Design an in-memory publish-subscribe system where publishers post to topics and subscribers receive messages for topics they care about.",
+  "prompt_note": "Pub/Sub is the architectural backbone of event-driven systems (Kafka, Redis Pub/Sub, RabbitMQ). In-process version is still non-trivial: concurrent subscribe/unsubscribe while messages flow, slow subscribers not blocking publishers, ordering guarantees per topic, and delivery semantics (at-most-once vs at-least-once).",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"In-process or distributed?\"",
+      "answer": "Interviewer: \"In-process. Single JVM, like Guava EventBus.\"",
+      "why": "Distributed pub/sub is Kafka territory. In-process is a concurrency + Observer Pattern exercise."
+    },
+    {
+      "question": "You: \"Delivery semantics — at-most-once, at-least-once, exactly-once?\"",
+      "answer": "Interviewer: \"At-least-once. If a subscriber throws, retry a few times, then drop.\"",
+      "why": "We need a retry loop per subscriber. Exactly-once is notoriously hard — good to avoid in LLD."
+    },
+    {
+      "question": "You: \"Should a slow subscriber block the publisher or other subscribers?\"",
+      "answer": "Interviewer: \"No — asynchronous delivery. Each subscriber has its own queue. Publishers don't wait.\"",
+      "why": "This is the critical design decision. **Per-subscriber queue + worker thread** — slow subscriber only slows itself."
+    },
+    {
+      "question": "You: \"Ordering — do messages on the same topic arrive in order to each subscriber?\"",
+      "answer": "Interviewer: \"Yes, strict ordering per topic per subscriber.\"",
+      "why": "Each subscriber's queue must be FIFO. Single worker per subscriber (not a pool) to preserve order."
+    },
+    {
+      "question": "You: \"Bounded subscriber queues? What happens if a subscriber can't keep up?\"",
+      "answer": "Interviewer: \"Bounded queue. If full, drop the oldest message and log a warning.\"",
+      "why": "Backpressure strategy. `drop-oldest` preserves recency; alternatives are `drop-newest` or `block-publisher`."
+    },
+    {
+      "question": "You: \"Wildcard subscriptions? Pattern matching like `orders.*`?\"",
+      "answer": "Interviewer: \"Keep it simple — exact topic match only.\"",
+      "why": "Avoid tangent on regex/trie matching. Plain string topics are fine."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "`publish(topic, message)` — send a message to all current subscribers of that topic. Non-blocking.",
+      "`subscribe(topic, subscriber)` — register a subscriber for a topic. Returns a subscription handle for later unsubscribe.",
+      "`unsubscribe(handle)` — stop receiving messages.",
+      "**Async delivery:** each subscriber has its own bounded queue + worker thread. Publishers enqueue and return.",
+      "**Strict ordering per topic per subscriber.** Single worker per subscriber preserves FIFO.",
+      "**At-least-once delivery with retry:** subscriber throws → retry up to 3 times → then drop + log.",
+      "**Backpressure:** subscriber queue full → drop oldest message, increment drop counter."
+    ],
+    "out_of_scope": [
+      "Distributed pub/sub, message persistence, wildcard/pattern topics, exactly-once semantics, message TTL, dead-letter queues."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Non-blocking publish:** publisher latency = O(subscriber count × enqueue time). Never waits on subscriber processing.",
+      "**Slow subscriber isolation:** one slow subscriber must not affect others.",
+      "**Concurrent subscribe/publish safety:** a subscribe during an active publish must not cause ConcurrentModificationException.",
+      "**Graceful shutdown:** drain in-flight messages, stop worker threads cleanly."
+    ],
+    "out_of_scope": [
+      "Cross-JVM coordination, persistence on restart, exactly-once idempotency tokens."
+    ]
+  },
+
+  "primary_scope": [
+    "`subscribe(topic, handler)` → create Subscription → spawn worker thread → store in topicMap → return handle",
+    "`publish(topic, msg)` → iterate subscribers → enqueue to each subscriber's queue (non-blocking)",
+    "Worker loop per subscriber: `queue.take()` → invoke handler → retry on failure → continue",
+    "`unsubscribe(handle)` → remove from topicMap → stop worker → drain queue"
+  ],
+  "termination_points": [
+    "`IllegalArgumentException` — null topic or null subscriber",
+    "`TopicNotFoundException` — publish/subscribe to null topic (we auto-create by convention though)",
+    "Subscriber exceeds retry budget → drop message, log, increment `dropped` counter",
+    "Subscriber queue full → drop oldest, log backpressure event"
+  ],
+
+  "entity_intro": "The key insight: a subscriber isn't just a callback — it's a callback + its own queue + its own worker thread. Modeling the subscription as a stateful entity lets us isolate slow consumers.",
+  "entities": [
+    {
+      "name": "PubSubBroker",
+      "role": "**Controller.** Public API: `publish`, `subscribe`, `unsubscribe`, `shutdown`. Holds `Map<topic, List<Subscription>>`. Routes publish calls to all matching subscriptions.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    },
+    {
+      "name": "Subscription",
+      "role": "**Model + Service.** Represents a single subscriber's active registration. Owns its bounded queue, worker thread, handler callback, drop counter, and retry state. This is the isolation boundary.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — isolation unit per subscriber"
+    },
+    {
+      "name": "Subscriber (interface)",
+      "role": "**Interface.** The user-provided callback: `onMessage(topic, message)`. Can throw — the Subscription wraps it with retry logic.",
+      "verdict": "yes",
+      "verdict_label": "✓ Interface — user code contract"
+    },
+    {
+      "name": "Message",
+      "role": "Just `{topic, payload, timestamp}`. A simple record. Don't add headers/metadata unless the problem demands it.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — value object (record)"
+    },
+    {
+      "name": "Topic",
+      "role": "Just a String. No state, no behavior. Don't create a Topic class — it's premature abstraction.",
+      "verdict": "no",
+      "verdict_label": "✗ Just a String — not an entity"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "PubSubBroker", "owns": "`ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>>`, shared `ExecutorService` (or per-subscription threads)", "rel": "1→N topics, N→M subscriptions"},
+    {"entity": "Subscription", "owns": "subscriptionId, topic, Subscriber callback, `BlockingQueue<Message>`, worker Thread, `AtomicLong dropped`", "rel": "1→1 Subscriber, 1→1 queue, 1→1 worker"},
+    {"entity": "Message", "owns": "topic, payload, timestamp", "rel": "Immutable value object"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Message record, Subscriber interface. **Service** = Subscription (owns queue + worker + retry logic — the interesting concurrency lives here). **Controller** = PubSubBroker (routing, registration, public API).",
+
+  "classes": [
+    {
+      "name": "Subscriber", "type": "interface", "layer": "Model",
+      "fields": [],
+      "methods": [
+        {"name": "onMessage(topic, payload)", "returns": "void (may throw)"}
+      ]
+    },
+    {
+      "name": "Message", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "topic", "type": "String"},
+        {"name": "payload", "type": "Object"},
+        {"name": "timestamp", "type": "long"}
+      ],
+      "methods": [
+        {"name": "(record — auto accessors)", "returns": ""}
+      ]
+    },
+    {
+      "name": "Subscription", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "subscriptionId", "type": "String"},
+        {"name": "topic", "type": "String"},
+        {"name": "subscriber", "type": "Subscriber"},
+        {"name": "queue", "type": "BlockingQueue<Message> (bounded)"},
+        {"name": "worker", "type": "Thread"},
+        {"name": "dropped", "type": "AtomicLong"},
+        {"name": "running", "type": "volatile boolean"}
+      ],
+      "methods": [
+        {"name": "enqueue(message)", "returns": "void (non-blocking, may drop)"},
+        {"name": "run()", "returns": "void (worker loop)"},
+        {"name": "stop()", "returns": "void"}
+      ]
+    },
+    {
+      "name": "PubSubBroker", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "topicSubscriptions", "type": "ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>>"},
+        {"name": "allSubscriptions", "type": "ConcurrentHashMap<String, Subscription>"},
+        {"name": "queueCapacity", "type": "int"},
+        {"name": "running", "type": "volatile boolean"}
+      ],
+      "methods": [
+        {"name": "publish(topic, payload)", "returns": "void"},
+        {"name": "subscribe(topic, subscriber)", "returns": "String (handle)"},
+        {"name": "unsubscribe(handle)", "returns": "void"},
+        {"name": "shutdown()", "returns": "void"}
+      ]
+    }
+  ],
+
+  "db_schema": [],
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Subscriber interface + Message record",
+      "code": "@FunctionalInterface\ninterface Subscriber {\n    void onMessage(String topic, Object payload) throws Exception;\n}\n\n// Immutable value object — Java record\nrecord Message(String topic, Object payload, long timestamp) {\n    public static Message of(String topic, Object payload) {\n        return new Message(topic, payload, System.currentTimeMillis());\n    }\n}"
+    },
+    {
+      "label": "Service — Subscription (Isolation Unit per Subscriber)",
+      "flow": "Each subscription has its own queue + worker thread. **`enqueue(msg)` is non-blocking** — uses `offer()`. If full, drop oldest and try again. **`run()` loops:** `take()` → invoke handler → retry on failure → continue. **Single worker per subscription preserves FIFO ordering.**",
+      "edge_cases": "Handler throws → retry up to 3 times → drop + increment counter. Worker interrupted (via `stop()`) → drain remaining queue or exit. Queue full + drop-oldest → `poll()` then `offer()` — the tiny race where the removed item is taken by no one is acceptable (we're dropping anyway).",
+      "code": "class Subscription {\n    private static final int MAX_RETRIES = 3;\n\n    private final String subscriptionId;\n    private final String topic;\n    private final Subscriber subscriber;\n    private final BlockingQueue<Message> queue;\n    private final Thread worker;\n    private final AtomicLong dropped = new AtomicLong();\n    private volatile boolean running = true;\n\n    public Subscription(String topic, Subscriber sub, int capacity) {\n        this.subscriptionId = UUID.randomUUID().toString();\n        this.topic = topic;\n        this.subscriber = sub;\n        this.queue = new ArrayBlockingQueue<>(capacity);\n        this.worker = new Thread(this::run,\n            \"pubsub-worker-\" + subscriptionId.substring(0, 8));\n        this.worker.setDaemon(true);\n        this.worker.start();\n    }\n\n    // ── enqueue (called by publisher, non-blocking) ──\n    public void enqueue(Message msg) {\n        if (!running) return;\n\n        // Try to add — if full, drop oldest and retry once\n        if (!queue.offer(msg)) {\n            queue.poll();                   // drop oldest\n            dropped.incrementAndGet();\n            queue.offer(msg);               // best-effort — may race but ok\n        }\n    }\n\n    // ── Worker loop ──────────────────────\n    private void run() {\n        while (running) {\n            try {\n                Message msg = queue.take();  // blocks until message or interrupt\n                deliverWithRetry(msg);\n            } catch (InterruptedException e) {\n                if (!running) break;\n                Thread.currentThread().interrupt();\n            }\n        }\n    }\n\n    // ── At-least-once delivery with retry ──\n    private void deliverWithRetry(Message msg) {\n        for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {\n            try {\n                subscriber.onMessage(msg.topic(), msg.payload());\n                return;  // success\n            } catch (Exception e) {\n                if (attempt == MAX_RETRIES - 1) {\n                    dropped.incrementAndGet();\n                    // log: \"Subscriber \" + subscriptionId + \" dropped after \" + MAX_RETRIES + \" retries\"\n                }\n                // Backoff could be added here\n            }\n        }\n    }\n\n    public void stop() {\n        running = false;\n        worker.interrupt();\n        // Optional: drain remaining messages before exit\n    }\n\n    public String getSubscriptionId() { return subscriptionId; }\n    public String getTopic() { return topic; }\n    public long getDroppedCount() { return dropped.get(); }\n}"
+    },
+    {
+      "label": "Controller — PubSubBroker",
+      "flow": "**`publish()`:** get subscriber list for topic → iterate → `sub.enqueue(msg)` for each. O(N) where N is subscriber count on that topic. Non-blocking.\n**`subscribe()`:** create Subscription (starts its worker) → add to topicSubscriptions → return handle. Uses `CopyOnWriteArrayList` so iteration during publish is safe.\n**`unsubscribe()`:** remove from map → stop worker → drain queue.",
+      "edge_cases": "Publish to topic with no subscribers → no-op (don't error). Subscribe during active publish → CopyOnWriteArrayList handles this: the publishing iteration uses the snapshot before the add, the new subscriber sees future messages. Unsubscribe the same handle twice → second call is no-op.",
+      "code": "class PubSubBroker {\n    private final ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>>\n        topicSubscriptions = new ConcurrentHashMap<>();\n    private final ConcurrentHashMap<String, Subscription>\n        allSubscriptions = new ConcurrentHashMap<>();\n    private final int queueCapacity;\n    private volatile boolean running = true;\n\n    public PubSubBroker(int queueCapacity) {\n        this.queueCapacity = queueCapacity;\n    }\n\n    // ── publish (non-blocking, O(subscribers)) ──\n    public void publish(String topic, Object payload) {\n        if (topic == null) throw new IllegalArgumentException(\"topic required\");\n        if (!running) throw new IllegalStateException(\"Broker stopped\");\n\n        List<Subscription> subs = topicSubscriptions.get(topic);\n        if (subs == null || subs.isEmpty()) return;  // no subscribers, drop\n\n        Message msg = Message.of(topic, payload);\n        // CopyOnWriteArrayList allows concurrent iteration during add/remove\n        for (Subscription sub : subs) {\n            sub.enqueue(msg);  // non-blocking, may drop internally\n        }\n    }\n\n    // ── subscribe ────────────────────────\n    public String subscribe(String topic, Subscriber subscriber) {\n        if (topic == null || subscriber == null)\n            throw new IllegalArgumentException();\n        if (!running) throw new IllegalStateException(\"Broker stopped\");\n\n        Subscription sub = new Subscription(topic, subscriber, queueCapacity);\n\n        topicSubscriptions\n            .computeIfAbsent(topic, k -> new CopyOnWriteArrayList<>())\n            .add(sub);\n        allSubscriptions.put(sub.getSubscriptionId(), sub);\n\n        return sub.getSubscriptionId();\n    }\n\n    // ── unsubscribe ──────────────────────\n    public void unsubscribe(String handle) {\n        Subscription sub = allSubscriptions.remove(handle);\n        if (sub == null) return;  // already removed or unknown\n\n        List<Subscription> list = topicSubscriptions.get(sub.getTopic());\n        if (list != null) list.remove(sub);\n\n        sub.stop();\n    }\n\n    // ── Graceful shutdown ────────────────\n    public void shutdown() {\n        running = false;\n        allSubscriptions.values().forEach(Subscription::stop);\n        allSubscriptions.clear();\n        topicSubscriptions.clear();\n    }\n}"
+    },
+    {
+      "label": "Usage Example",
+      "code": "PubSubBroker broker = new PubSubBroker(1000);\n\n// Subscriber 1 — fast consumer\nString h1 = broker.subscribe(\"orders\", (topic, payload) -> {\n    System.out.println(\"Fast: \" + payload);\n});\n\n// Subscriber 2 — slow consumer (won't block fast one)\nString h2 = broker.subscribe(\"orders\", (topic, payload) -> {\n    Thread.sleep(100);  // simulated slow processing\n    System.out.println(\"Slow: \" + payload);\n});\n\n// Publish 1000 messages — returns immediately\nfor (int i = 0; i < 1000; i++) {\n    broker.publish(\"orders\", \"order-\" + i);\n}\n\n// Fast subscriber processes all 1000 quickly\n// Slow subscriber processes at 10/sec, may drop messages if queue fills\n\nbroker.unsubscribe(h2);\nbroker.shutdown();"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Observer Pattern → Topic Subscription",
+      "why": "The classical Observer: subject (topic) maintains a list of observers (subscribers), notifies all on state change (publish). Our twist is **async notification**: publishers don't directly call subscribers — they enqueue a message, and each subscriber's worker thread delivers it later. This decoupling is what separates production pub/sub from naive Observer.",
+      "where": "`PubSubBroker.topicSubscriptions` map + `publish()` iteration"
+    },
+    {
+      "name": "Producer-Consumer (per subscription)",
+      "why": "Each Subscription is a producer-consumer pair: PubSubBroker.publish() is the producer, the Subscription's worker thread is the consumer, and the bounded queue is the buffer. Having **one queue per subscriber** (not a single shared queue) is what isolates slow consumers.",
+      "where": "`Subscription.queue` + `Subscription.run()` worker"
+    },
+    {
+      "name": "Bulkhead Pattern (isolation)",
+      "why": "Each subscriber has its own queue + thread. A slow or crashing subscriber can only affect itself — blast radius is one subscription. This is the **Bulkhead** resilience pattern from Release It! — compartmentalize failure domains.",
+      "where": "One Subscription per subscriber, each with dedicated queue + worker"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Subscribe during active publish → ConcurrentModificationException",
+      "fix": "Use **`CopyOnWriteArrayList`** for the subscriber list per topic. Writes (add/remove) create a new array; iterators see a consistent snapshot. Reads are lock-free. Trade-off: O(N) copy on every subscribe, but pub/sub is read-heavy (many publishes per subscribe)."
+    },
+    {
+      "issue": "Slow subscriber blocking the publisher",
+      "fix": "**Per-subscriber bounded queue + worker thread.** Publisher's `enqueue()` is non-blocking (`offer()` + drop-oldest fallback). Publisher never waits on subscriber processing. This is the whole point of async delivery."
+    },
+    {
+      "issue": "Ordering guarantee violated by thread pool delivery",
+      "fix": "Use **one worker thread per subscription**, not a shared pool. If you used a shared pool, two messages for the same subscriber could be processed in parallel → ordering broken. One thread per subscriber guarantees sequential per-subscriber processing = FIFO per topic."
+    },
+    {
+      "issue": "Subscriber handler throws repeatedly, blocking the worker",
+      "fix": "Retry budget (max 3) in `deliverWithRetry()`. After budget exhausted, drop the message, increment counter, continue to next message. The worker never blocks forever on a poison-pill message. For persistent failures, a dead-letter queue is the production extension."
+    },
+    {
+      "issue": "Lost messages during `unsubscribe()` — in-flight messages in the queue",
+      "fix": "`stop()` sets `running = false` and interrupts the worker. Remaining queue messages are lost by default. If drain-on-stop is required, drain inside `stop()` before returning: `while(!queue.isEmpty()) deliverWithRetry(queue.poll())` with a timeout to prevent hanging."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why one worker thread per subscription instead of a shared thread pool?",
+      "answer": "**Ordering.** A shared pool could process two messages for the same subscriber concurrently on different threads → reordering. One thread per subscription serializes delivery for that subscription. **Cost:** N subscriber threads (virtual threads / Loom make this cheap). **Alternative:** a shared pool with per-subscription executor (`Executors.newSingleThreadExecutor` per sub) — same effect, slightly more overhead. For tens of thousands of subscribers, use virtual threads."
+    },
+    {
+      "question": "Why `CopyOnWriteArrayList` instead of synchronized List or `ConcurrentHashMap<topic, Set<Sub>>`?",
+      "answer": "**Reads vs writes ratio.** Pub/Sub is read-heavy — many publishes per subscribe/unsubscribe. `CopyOnWriteArrayList` makes reads **lock-free** (iterators see immutable snapshots). Writes are expensive (full copy), but rare. `synchronized` would block publishers on every subscribe. `ConcurrentHashMap.values()` iteration is weakly consistent but doesn't guarantee no `CME` on CHM's internal entries. COW is the right primitive for this read/write pattern."
+    },
+    {
+      "question": "How would you add wildcard subscriptions like `orders.*`?",
+      "answer": "Replace `Map<String, List<Sub>>` with a **trie** keyed by topic segments. `orders.new.usa` matches subscribers of `orders.*`, `orders.new.*`, `#` (all). On publish, traverse the trie collecting all matching subscription lists. Publish cost goes from O(1) map lookup to O(topic depth) trie walk — still fast for typical topic depths (3–5 levels)."
+    },
+    {
+      "question": "Can you implement exactly-once delivery?",
+      "answer": "**Not without external coordination.** Exactly-once requires: (1) idempotency tokens on messages, (2) consumer-side deduplication storage, (3) transactional ack between delivery and state update. Even Kafka's 'exactly-once semantics' requires transactional producers + idempotent consumers + transactional consumers. In LLD scope, declare at-least-once and explain the requirements for exactly-once — don't try to implement it."
+    },
+    {
+      "question": "What's the difference between this and Kafka?",
+      "answer": "**In-process pub/sub** (ours): messages in RAM, no persistence, subscribers must be online to receive. **Kafka:** distributed log, messages persisted to disk (7-day default retention), subscribers can replay from any offset, partitioned for scale, at-least-once with exactly-once mode. Ours is the **Guava EventBus** / **Spring ApplicationEventPublisher** category — single-JVM events. Mention both; know when to use which."
+    },
+    {
+      "question": "How would you measure slow subscribers in production?",
+      "answer": "Expose metrics per subscription: (1) `queue.size()` — current backlog, (2) `dropped` counter, (3) p50/p99 processing time (histogram of time from `take()` to handler return), (4) retry count. Alert when backlog exceeds 80% of capacity or drop rate > threshold. This is why **each Subscription is an entity** — it's the unit of observability."
+    },
+    {
+      "question": "What if a subscriber needs to filter messages (e.g., only orders > $100)?",
+      "answer": "Two approaches: (1) **Filter in the subscriber callback** — simplest, but the filtered messages still consumed queue space and CPU. (2) **Filter at subscribe time** via a `Predicate<Message>` — `broker.subscribe(topic, predicate, handler)`. The Subscription checks the predicate in `deliverWithRetry()` before invoking the handler. Not filtered = no CPU spent. This is how Kafka's consumer filtering works (via deserializers + predicates)."
+    }
+  ]
+}

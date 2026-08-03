@@ -1,0 +1,267 @@
+{
+  "title": "Chess (Board Game Framework)",
+  "description": "Design a chess game with full rule enforcement. Tests polymorphism (each piece type), game state management (turns, check, checkmate), and extensibility (could later support variants or other board games).",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "pattern", "label": "Template Method"},
+    {"type": "concept", "label": "Polymorphism"},
+    {"type": "concept", "label": "State Machine"}
+  ],
+  "prompt": "Design a chess game that enforces all the rules: legal moves for each piece, check, checkmate, stalemate, and turn alternation.",
+  "prompt_note": "Chess is the classical **polymorphism interview problem**. Six piece types, each with distinct movement rules. The instinct is to use inheritance (abstract Piece with subclasses). That's correct — but the *details* matter: how does Pawn know about en passant? How does King check for check? The board needs to know about pieces, and pieces need to know about the board. Keep the coupling clean.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Full chess rules — castling, en passant, promotion?\"",
+      "answer": "Interviewer: \"Yes to all. Standard chess.\"",
+      "why": "These are the tricky edge cases. En passant requires tracking the last move. Castling requires tracking whether King/Rook have moved. Promotion needs a dialog for piece choice."
+    },
+    {
+      "question": "You: \"Should the game detect checkmate and stalemate automatically?\"",
+      "answer": "Interviewer: \"Yes — after each move, check if the opponent is in check, checkmate, or stalemate.\"",
+      "why": "Post-move analysis. Checkmate = in check + no legal moves. Stalemate = not in check + no legal moves."
+    },
+    {
+      "question": "You: \"Two-player only, or should it support AI / network opponents?\"",
+      "answer": "Interviewer: \"Two players, local. Don't build AI or networking.\"",
+      "why": "Keeps scope manageable. Player is just an enum (WHITE/BLACK) — not a rich entity."
+    },
+    {
+      "question": "You: \"Move input format — coordinates like `(e2, e4)`, or algebraic notation like `e4`?\"",
+      "answer": "Interviewer: \"Coordinates. Don't parse algebraic notation.\"",
+      "why": "Parser is a separate concern. Focus on rule enforcement, not input parsing."
+    },
+    {
+      "question": "You: \"Do we need move history? Undo?\"",
+      "answer": "Interviewer: \"History yes, for en passant detection. Undo is optional.\"",
+      "why": "Move history is needed for en passant (check the last move was a 2-square pawn advance). Undo would be a nice extension via Memento Pattern — mention it."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**8x8 board** with standard starting position.",
+      "**Six piece types:** King, Queen, Rook, Bishop, Knight, Pawn. Each with its own movement rules.",
+      "**Turn alternation:** White moves first, then alternating.",
+      "**Move validation:** piece-specific legal moves + not leaving own king in check.",
+      "**Special moves:** castling (king-side + queen-side), en passant, pawn promotion.",
+      "**Game end detection:** checkmate, stalemate, (optional) draw by insufficient material / 50-move rule.",
+      "**Move history:** list of moves made (for en passant detection and audit)."
+    ],
+    "out_of_scope": [
+      "AI opponent, network play, algebraic notation parsing, draw by repetition, clock/time controls, GUI."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Extensibility:** adding a new piece type (e.g., chess variants) should require one new class — no changes to Board or Game.",
+      "**Correctness:** all special rules enforced (castling prereqs, en passant timing, promotion)."
+    ],
+    "out_of_scope": [
+      "Performance (we're not building a chess engine), concurrency (single-player local game)."
+    ]
+  },
+
+  "primary_scope": [
+    "`makeMove(from, to)` → validate → execute → check game state → return result",
+    "Piece-specific `getValidMoves(board, position)` — polymorphism per piece type",
+    "Post-move: detect check, checkmate, stalemate on opponent",
+    "Special moves: castling, en passant, promotion — handled in specific piece classes"
+  ],
+  "termination_points": [
+    "`InvalidMoveException` — piece can't move to target square per its rules",
+    "`WrongTurnException` — moving opponent's piece or moving out of turn",
+    "`KingInCheckException` — move would leave own king in check (illegal)",
+    "Game end: `CHECKMATE`, `STALEMATE`, `DRAW`"
+  ],
+
+  "entity_intro": "This is a polymorphism problem. Six piece types → abstract `Piece` with six subclasses. Each overrides `getValidMoves(board, position)`. The Board holds a grid; the Game orchestrates turns.",
+  "entities": [
+    {
+      "name": "Game",
+      "role": "**Controller.** Orchestrates turns, tracks current player, delegates move validation to pieces, detects game end. Owns the board + move history. The public API (`makeMove`, `getState`) lives here.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    },
+    {
+      "name": "Board",
+      "role": "**Service/Model.** 8x8 grid holding pieces. Provides `getPiece(pos)`, `setPiece(pos, piece)`, `movePiece(from, to)`. Also: `isUnderAttack(pos, byColor)` — essential for check detection. No rule logic beyond basic bounds checks.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Spatial state"
+    },
+    {
+      "name": "Piece (abstract)",
+      "role": "**Abstract base.** Holds color, position (optional — could be board-derived), hasMoved flag. Abstract method `getValidMoves(Board, Position)` — each subclass implements movement rules.",
+      "verdict": "yes",
+      "verdict_label": "✓ Abstract base — Template for pieces"
+    },
+    {
+      "name": "King, Queen, Rook, Bishop, Knight, Pawn",
+      "role": "**Concrete piece implementations.** Each implements `getValidMoves()` for its movement pattern. King/Rook track `hasMoved` for castling. Pawn knows about en passant and promotion.",
+      "verdict": "yes",
+      "verdict_label": "✓ Concrete subclasses — 6 of them"
+    },
+    {
+      "name": "Position",
+      "role": "**Value object.** `(row, col)` pair with equals/hashCode. Used everywhere. Small record.",
+      "verdict": "yes",
+      "verdict_label": "✓ Value object — Position(row, col)"
+    },
+    {
+      "name": "Move",
+      "role": "**Value object.** `{from, to, piece, captured, type}`. Stored in history. Used for en passant detection. Type enum: NORMAL, CASTLE, EN_PASSANT, PROMOTION.",
+      "verdict": "yes",
+      "verdict_label": "✓ Value object — captures move metadata"
+    },
+    {
+      "name": "Player",
+      "role": "Just an enum: WHITE / BLACK. No need for a Player class — a color enum is enough.",
+      "verdict": "no",
+      "verdict_label": "✗ Just a Color enum"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "Game", "owns": "Board, currentTurn Color, `List<Move>` history, GameState", "rel": "1→1 Board, 1→N Moves"},
+    {"entity": "Board", "owns": "`Piece[8][8]` grid", "rel": "1→N Pieces (up to 32)"},
+    {"entity": "Piece (abstract)", "owns": "color, hasMoved flag", "rel": "Belongs to 1 Board, referenced by its Position"},
+    {"entity": "Move", "owns": "from, to, piece ref, capturedPiece, moveType", "rel": "Immutable record"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Board, Piece hierarchy, Move, Position. **Service** = Move validation logic (mostly inside Piece subclasses). **Controller** = Game (public API, turn management, game state detection). The Piece hierarchy is where **Strategy Pattern via inheritance** lives — each piece encapsulates its own movement strategy.",
+
+  "classes": [
+    {
+      "name": "Piece (abstract)", "type": "abstract", "layer": "Model",
+      "fields": [
+        {"name": "color", "type": "Color"},
+        {"name": "hasMoved", "type": "boolean"}
+      ],
+      "methods": [
+        {"name": "getValidMoves(board, from)", "returns": "List<Position> (abstract)"},
+        {"name": "getColor()", "returns": "Color"}
+      ]
+    },
+    {
+      "name": "King / Queen / Rook / Bishop / Knight / Pawn", "type": "class", "layer": "Model",
+      "fields": [],
+      "methods": [
+        {"name": "getValidMoves(board, from)", "returns": "List<Position> (piece-specific rules)"}
+      ]
+    },
+    {
+      "name": "Board", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "grid", "type": "Piece[8][8]"}
+      ],
+      "methods": [
+        {"name": "getPiece(pos)", "returns": "Piece"},
+        {"name": "setPiece(pos, piece)", "returns": "void"},
+        {"name": "movePiece(from, to)", "returns": "Piece (captured)"},
+        {"name": "isUnderAttack(pos, byColor)", "returns": "boolean"},
+        {"name": "findKing(color)", "returns": "Position"}
+      ]
+    },
+    {
+      "name": "Game", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "board", "type": "Board"},
+        {"name": "currentTurn", "type": "Color"},
+        {"name": "history", "type": "List<Move>"},
+        {"name": "state", "type": "GameState"}
+      ],
+      "methods": [
+        {"name": "makeMove(from, to)", "returns": "MoveResult"},
+        {"name": "isInCheck(color)", "returns": "boolean"},
+        {"name": "isCheckmate(color)", "returns": "boolean"},
+        {"name": "isStalemate(color)", "returns": "boolean"},
+        {"name": "getState()", "returns": "GameState"}
+      ]
+    }
+  ],
+
+  "db_schema": [],
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Position, Color, Move, Enums",
+      "code": "enum Color { WHITE, BLACK; public Color opposite() { return this == WHITE ? BLACK : WHITE; } }\nenum GameState { IN_PROGRESS, CHECK, CHECKMATE, STALEMATE, DRAW }\nenum MoveType { NORMAL, CASTLE_KINGSIDE, CASTLE_QUEENSIDE, EN_PASSANT, PROMOTION }\n\nrecord Position(int row, int col) {\n    public boolean isValid() {\n        return row >= 0 && row < 8 && col >= 0 && col < 8;\n    }\n}\n\nrecord Move(Position from, Position to, Piece piece,\n            Piece captured, MoveType type) {}"
+    },
+    {
+      "label": "Abstract Piece + Concrete Subclasses",
+      "flow": "Each piece's `getValidMoves(board, from)` returns squares this piece could legally move to (ignoring whether it puts own king in check — that's checked at the Game level). Sliding pieces (Rook, Bishop, Queen) walk in directions until they hit a piece or the edge. Knight jumps. King moves one square. Pawn is the most complex (forward + diagonal capture + en passant + promotion).",
+      "edge_cases": "Sliding pieces stop on hitting own piece (can't capture own). Capture opponent = add target + stop. Pawn: first move can be 2 squares. Pawn capture only diagonally. En passant: check last move was opponent 2-square pawn advance adjacent.",
+      "code": "abstract class Piece {\n    protected final Color color;\n    protected boolean hasMoved = false;\n\n    protected Piece(Color color) { this.color = color; }\n\n    public abstract List<Position> getValidMoves(Board board, Position from);\n\n    public Color getColor() { return color; }\n    public boolean hasMoved() { return hasMoved; }\n    public void setMoved() { this.hasMoved = true; }\n\n    // Helper for sliding pieces (Rook, Bishop, Queen)\n    protected List<Position> slidingMoves(Board board, Position from, int[][] dirs) {\n        List<Position> moves = new ArrayList<>();\n        for (int[] d : dirs) {\n            int r = from.row() + d[0], c = from.col() + d[1];\n            while (r >= 0 && r < 8 && c >= 0 && c < 8) {\n                Position p = new Position(r, c);\n                Piece target = board.getPiece(p);\n                if (target == null) {\n                    moves.add(p);\n                } else {\n                    if (target.color != this.color) moves.add(p);  // capture\n                    break;  // blocked\n                }\n                r += d[0]; c += d[1];\n            }\n        }\n        return moves;\n    }\n}\n\nclass Rook extends Piece {\n    private static final int[][] DIRS = {{-1,0},{1,0},{0,-1},{0,1}};\n    public Rook(Color c) { super(c); }\n    @Override\n    public List<Position> getValidMoves(Board board, Position from) {\n        return slidingMoves(board, from, DIRS);\n    }\n}\n\nclass Bishop extends Piece {\n    private static final int[][] DIRS = {{-1,-1},{-1,1},{1,-1},{1,1}};\n    public Bishop(Color c) { super(c); }\n    @Override\n    public List<Position> getValidMoves(Board board, Position from) {\n        return slidingMoves(board, from, DIRS);\n    }\n}\n\nclass Queen extends Piece {\n    private static final int[][] DIRS = {\n        {-1,0},{1,0},{0,-1},{0,1},{-1,-1},{-1,1},{1,-1},{1,1}\n    };\n    public Queen(Color c) { super(c); }\n    @Override\n    public List<Position> getValidMoves(Board board, Position from) {\n        return slidingMoves(board, from, DIRS);\n    }\n}\n\nclass Knight extends Piece {\n    private static final int[][] OFFSETS = {\n        {-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{1,2},{2,-1},{2,1}\n    };\n    public Knight(Color c) { super(c); }\n    @Override\n    public List<Position> getValidMoves(Board board, Position from) {\n        List<Position> moves = new ArrayList<>();\n        for (int[] o : OFFSETS) {\n            Position p = new Position(from.row() + o[0], from.col() + o[1]);\n            if (!p.isValid()) continue;\n            Piece target = board.getPiece(p);\n            if (target == null || target.color != this.color) moves.add(p);\n        }\n        return moves;\n    }\n}\n\nclass King extends Piece {\n    public King(Color c) { super(c); }\n    @Override\n    public List<Position> getValidMoves(Board board, Position from) {\n        List<Position> moves = new ArrayList<>();\n        for (int dr = -1; dr <= 1; dr++) {\n            for (int dc = -1; dc <= 1; dc++) {\n                if (dr == 0 && dc == 0) continue;\n                Position p = new Position(from.row() + dr, from.col() + dc);\n                if (!p.isValid()) continue;\n                Piece target = board.getPiece(p);\n                if (target == null || target.color != this.color) moves.add(p);\n            }\n        }\n        // Castling moves added here (check hasMoved + rook present + path clear + not in check)\n        return moves;\n    }\n}\n\nclass Pawn extends Piece {\n    public Pawn(Color c) { super(c); }\n    @Override\n    public List<Position> getValidMoves(Board board, Position from) {\n        List<Position> moves = new ArrayList<>();\n        int dir = (color == Color.WHITE) ? -1 : 1;  // white moves up the board\n\n        // Forward one\n        Position oneForward = new Position(from.row() + dir, from.col());\n        if (oneForward.isValid() && board.getPiece(oneForward) == null) {\n            moves.add(oneForward);\n            // Forward two from starting row\n            if (!hasMoved) {\n                Position twoForward = new Position(from.row() + 2 * dir, from.col());\n                if (board.getPiece(twoForward) == null) moves.add(twoForward);\n            }\n        }\n\n        // Diagonal captures\n        for (int dc : new int[]{-1, 1}) {\n            Position diag = new Position(from.row() + dir, from.col() + dc);\n            if (!diag.isValid()) continue;\n            Piece target = board.getPiece(diag);\n            if (target != null && target.color != this.color) moves.add(diag);\n            // En passant: check last move was opponent pawn 2-square advance adjacent to us\n            // (uses board.getLastMove() — added for this rule)\n        }\n        return moves;\n    }\n}"
+    },
+    {
+      "label": "Service — Board (Grid + Attack Detection)",
+      "flow": "`movePiece(from, to)` physically moves the piece (no validation — Game does that). `isUnderAttack(pos, byColor)` iterates all pieces of `byColor` and checks if any has `pos` in its valid moves. Critical for check detection.",
+      "code": "class Board {\n    private final Piece[][] grid = new Piece[8][8];\n\n    public Piece getPiece(Position p) {\n        if (!p.isValid()) return null;\n        return grid[p.row()][p.col()];\n    }\n\n    public void setPiece(Position p, Piece piece) {\n        grid[p.row()][p.col()] = piece;\n    }\n\n    public Piece movePiece(Position from, Position to) {\n        Piece captured = getPiece(to);\n        Piece moving = getPiece(from);\n        setPiece(to, moving);\n        setPiece(from, null);\n        if (moving != null) moving.setMoved();\n        return captured;\n    }\n\n    // Is `pos` attacked by any piece of `byColor`?\n    public boolean isUnderAttack(Position pos, Color byColor) {\n        for (int r = 0; r < 8; r++) {\n            for (int c = 0; c < 8; c++) {\n                Piece p = grid[r][c];\n                if (p != null && p.getColor() == byColor) {\n                    if (p.getValidMoves(this, new Position(r, c)).contains(pos))\n                        return true;\n                }\n            }\n        }\n        return false;\n    }\n\n    public Position findKing(Color color) {\n        for (int r = 0; r < 8; r++) {\n            for (int c = 0; c < 8; c++) {\n                Piece p = grid[r][c];\n                if (p instanceof King && p.getColor() == color)\n                    return new Position(r, c);\n            }\n        }\n        throw new IllegalStateException(\"No \" + color + \" king on board\");\n    }\n\n    public void setupStartingPosition() {\n        // Rank 0 (black back rank), rank 1 (black pawns),\n        // rank 6 (white pawns), rank 7 (white back rank)\n        // ... standard chess setup\n    }\n}"
+    },
+    {
+      "label": "Controller — Game (Orchestration + Game State Detection)",
+      "flow": "**`makeMove(from, to)`:** (1) check turn, (2) get piece, (3) validate move is in `getValidMoves()`, (4) simulate move + check if own king would be in check → reject if so, (5) execute move, (6) switch turns, (7) detect check/checkmate/stalemate on new current player.",
+      "edge_cases": "Move piece you don't own → `WrongTurnException`. Move that exposes king → reject (illegal even if piece-legal). Castling while in check → reject. Pawn reaches last rank → promotion (ask user for choice, default Queen).",
+      "code": "class Game {\n    private final Board board = new Board();\n    private Color currentTurn = Color.WHITE;\n    private final List<Move> history = new ArrayList<>();\n    private GameState state = GameState.IN_PROGRESS;\n\n    public Game() {\n        board.setupStartingPosition();\n    }\n\n    // ── makeMove ─────────────────────────\n    public MoveResult makeMove(Position from, Position to) {\n        if (state != GameState.IN_PROGRESS && state != GameState.CHECK)\n            throw new IllegalStateException(\"Game is over\");\n\n        Piece piece = board.getPiece(from);\n        if (piece == null)\n            throw new InvalidMoveException(\"No piece at \" + from);\n        if (piece.getColor() != currentTurn)\n            throw new WrongTurnException(\"It's \" + currentTurn + \"'s turn\");\n\n        // Validate: is `to` in the piece's legal moves?\n        List<Position> valid = piece.getValidMoves(board, from);\n        if (!valid.contains(to))\n            throw new InvalidMoveException(piece + \" cannot move from \" + from + \" to \" + to);\n\n        // Simulate move: would it leave own king in check?\n        Piece captured = board.getPiece(to);\n        board.movePiece(from, to);\n\n        if (isInCheck(currentTurn)) {\n            // Rollback — illegal move\n            board.setPiece(from, piece);\n            board.setPiece(to, captured);\n            piece.hasMoved = false;  // reset (simplification)\n            throw new KingInCheckException(\"Move would leave own king in check\");\n        }\n\n        // Commit — record history, switch turns, check game state\n        history.add(new Move(from, to, piece, captured, MoveType.NORMAL));\n        currentTurn = currentTurn.opposite();\n\n        // Detect opponent's game state after this move\n        if (isCheckmate(currentTurn)) {\n            state = GameState.CHECKMATE;\n        } else if (isStalemate(currentTurn)) {\n            state = GameState.STALEMATE;\n        } else if (isInCheck(currentTurn)) {\n            state = GameState.CHECK;\n        } else {\n            state = GameState.IN_PROGRESS;\n        }\n\n        return new MoveResult(state, captured);\n    }\n\n    // ── Check detection ─────────────────\n    public boolean isInCheck(Color color) {\n        Position kingPos = board.findKing(color);\n        return board.isUnderAttack(kingPos, color.opposite());\n    }\n\n    // ── Checkmate = in check + no legal move saves the king ──\n    public boolean isCheckmate(Color color) {\n        if (!isInCheck(color)) return false;\n        return !hasAnyLegalMove(color);\n    }\n\n    // ── Stalemate = not in check + no legal moves ──\n    public boolean isStalemate(Color color) {\n        if (isInCheck(color)) return false;\n        return !hasAnyLegalMove(color);\n    }\n\n    // Iterate all pieces, try all their moves, simulate — any that escape check?\n    private boolean hasAnyLegalMove(Color color) {\n        for (int r = 0; r < 8; r++) {\n            for (int c = 0; c < 8; c++) {\n                Piece p = board.getPiece(new Position(r, c));\n                if (p == null || p.getColor() != color) continue;\n                Position from = new Position(r, c);\n                for (Position to : p.getValidMoves(board, from)) {\n                    // Simulate\n                    Piece captured = board.getPiece(to);\n                    board.movePiece(from, to);\n                    boolean stillInCheck = isInCheck(color);\n                    // Rollback\n                    board.setPiece(from, p);\n                    board.setPiece(to, captured);\n                    if (!stillInCheck) return true;\n                }\n            }\n        }\n        return false;\n    }\n\n    public GameState getState() { return state; }\n    public Color getCurrentTurn() { return currentTurn; }\n    public List<Move> getHistory() { return Collections.unmodifiableList(history); }\n}\n\nrecord MoveResult(GameState state, Piece captured) {}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Strategy Pattern (via Inheritance) → Piece.getValidMoves()",
+      "why": "Each piece has its own movement strategy. Instead of a giant `switch(pieceType)` in the Game class, each piece encapsulates its own rules. **Adding a new piece variant** (e.g., Fairy Chess's Archbishop) = one new subclass. Zero changes to Game or Board. This is Strategy Pattern realized through polymorphism — common in old OOP code.",
+      "where": "`Piece` abstract class + 6 concrete subclasses, each overriding `getValidMoves()`"
+    },
+    {
+      "name": "Template Method → Sliding Pieces",
+      "why": "Rook, Bishop, Queen all use the same algorithm: walk in directions until blocked. We extract this into `Piece.slidingMoves(board, from, dirs)` — subclasses just provide the direction array. This is Template Method: the algorithm skeleton lives in the base class, subclasses provide the variable parts.",
+      "where": "`Piece.slidingMoves()` helper + Rook/Bishop/Queen provide `DIRS` array"
+    },
+    {
+      "name": "Memento Pattern (mentioned for undo)",
+      "why": "For undo support, save the board state before each move (a Memento) and restore on undo. The `history` list could store full snapshots or just reversible moves. Not implemented here but acknowledged as a natural extension.",
+      "where": "Would extend `Game.history` to store rollback info or full board states"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Not applicable — single-player local game",
+      "fix": "Chess is turn-based, single-threaded by nature. No concurrency concerns in the basic design. If you added network play, you'd synchronize `makeMove()` on the Game instance."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why is check detection computationally expensive, and how do you handle it?",
+      "answer": "For each candidate move, we simulate it, check if own king is in check, then roll back. `isInCheck()` iterates all opponent pieces and calls `getValidMoves()` on each. That's O(pieces × moves per piece) = O(32 × ~10) = ~300 operations per `isInCheck`. And we call it inside `hasAnyLegalMove` which itself iterates all our pieces × their moves. Final complexity: O(32 × 10 × 300) ≈ 100K operations per checkmate detection — fine for interactive play, not for a chess engine. Real engines use bitboards and incremental updates."
+    },
+    {
+      "question": "How would you add castling?",
+      "answer": "In `King.getValidMoves()`, after the normal king moves, check: (1) King hasn't moved, (2) Corresponding Rook hasn't moved, (3) Squares between them are empty, (4) King is not currently in check, (5) King doesn't pass through or land on an attacked square. If all pass, add `(row, 6)` or `(row, 2)` as a castling target. In `Game.makeMove()`, detect castling by move distance and update both King and Rook positions together."
+    },
+    {
+      "question": "How would you implement en passant?",
+      "answer": "Store `lastMove` on the board (or check `Game.history`). In `Pawn.getValidMoves()`, for each diagonal capture square: if it's empty, check if the last move was an opponent pawn's 2-square advance to the square directly next to this pawn. If yes, add the diagonal capture as an en passant move. In `makeMove`, detect en passant by type and remove the captured pawn from the square it landed on (not the square our pawn is moving to)."
+    },
+    {
+      "question": "How would you implement pawn promotion?",
+      "answer": "After `board.movePiece()`, check if a pawn reached its last rank (row 0 for white, row 7 for black). If so, prompt the user for the promotion piece (Queen by default). Replace the pawn on the target square with a new Queen/Rook/Bishop/Knight of the same color. The piece choice is passed as a parameter to `makeMove` or via a follow-up method call."
+    },
+    {
+      "question": "How would you extend this to support other board games (checkers, Go)?",
+      "answer": "Extract an abstract `BoardGame` with template methods: `initialize()`, `isValidMove()`, `executeMove()`, `getGameState()`. Chess implements these using the piece hierarchy. Checkers implements them with its own simpler piece rules. Go implements them with territory detection. This is the **Template Method Pattern applied to entire game flows**. The `Game` class we built is already ~80% of the way there."
+    },
+    {
+      "question": "How would you add an AI opponent?",
+      "answer": "Implement minimax with alpha-beta pruning. Each position is evaluated (material count + positional bonuses). Minimax explores the game tree to depth N. The AI calls `getValidMoves` for each piece and picks the move that maximizes its expected outcome. Our current design already exposes everything the AI needs: `makeMove`, `getValidMoves`, `getState`. The AI is a separate class that calls `game.makeMove()` for its chosen move. **Decoupled cleanly** — that's the test of good design."
+    },
+    {
+      "question": "Why not make Position mutable and reuse it to save allocations?",
+      "answer": "Premature optimization. Position is a value object — immutability makes equals/hashCode trivial, it's safe to use as map keys, and thread-safe by default. Allocation of a small record is ~5ns — negligible compared to the logic. **Correctness first, performance when measured.** Record types in modern Java (14+) make this essentially free syntactically."
+    }
+  ]
+}

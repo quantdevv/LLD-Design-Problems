@@ -1,0 +1,258 @@
+{
+  "title": "Database Connection Pool",
+  "description": "Design a database connection pool that maintains a fixed set of reusable connections. Clients borrow connections, use them, and return them. Handles concurrent borrowing, timeouts, health checks, and graceful shutdown.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Object Pool"},
+    {"type": "pattern", "label": "Proxy Pattern"},
+    {"type": "concept", "label": "Resource Management"},
+    {"type": "concept", "label": "Concurrency"}
+  ],
+  "prompt": "Design a thread-safe database connection pool that manages a fixed number of reusable connections, with borrow timeouts and health validation.",
+  "prompt_note": "Connection pools are the canonical **Object Pool Pattern** — reuse expensive-to-create resources. Real production pools (HikariCP, Apache DBCP, c3p0) solve subtle problems: validation, leaks from forgotten returns, idle connection expiry, and startup vs steady-state sizing. Don't replicate all of that — focus on the borrowing semantics and one or two production concerns.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Fixed pool size, or elastic (min/max with growth)?\"",
+      "answer": "Interviewer: \"Fixed size — say 10 connections. Keep it simple.\"",
+      "why": "Elastic sizing adds complexity (grow/shrink policies, idle timeouts). Fixed is a good starting point."
+    },
+    {
+      "question": "You: \"What happens when all connections are borrowed and a new request comes in? Block or fail?\"",
+      "answer": "Interviewer: \"Block with a timeout. If timeout expires, throw.\"",
+      "why": "Classic borrowing semantics. `Semaphore.tryAcquire(timeout)` or `BlockingQueue.poll(timeout)`."
+    },
+    {
+      "question": "You: \"Should the pool validate connections before handing them out (health check)?\"",
+      "answer": "Interviewer: \"Yes — run a quick `isValid()` check on borrow. If invalid, discard and create a new one.\"",
+      "why": "Real connections can become stale (DB restart, network blip). Validation prevents handing out dead connections."
+    },
+    {
+      "question": "You: \"How do clients return connections? Explicit `returnConnection()`, or auto via try-with-resources?\"",
+      "answer": "Interviewer: \"Try-with-resources. Returning should be automatic.\"",
+      "why": "This means we need a **Proxy** — we can't return the raw `Connection` (calling `close()` would close it for real). Wrap it in a proxy where `close()` returns to pool."
+    },
+    {
+      "question": "You: \"Should we handle connection leaks — clients that borrow but never return?\"",
+      "answer": "Interviewer: \"Mention it, but don't implement. Leak detection is a production concern.\"",
+      "why": "HikariCP uses a leak detection threshold + logging. Acknowledge it exists; don't spend interview time on it."
+    },
+    {
+      "question": "You: \"Graceful shutdown — what happens to borrowed connections when we close the pool?\"",
+      "answer": "Interviewer: \"Reject new borrows. Wait for returns with a timeout. Force-close after.\"",
+      "why": "Standard lifecycle — `shutdown()` + `awaitTermination()`."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "`borrowConnection(timeout)` → returns a pooled connection within timeout or throws.",
+      "`returnConnection(conn)` → returns connection to pool (called automatically via proxy's `close()`).",
+      "**Health validation:** on borrow, call `isValid()`. If invalid, discard and create a new connection.",
+      "**Auto-return via Proxy:** clients use try-with-resources. The proxy's `close()` returns to pool instead of closing underlying connection.",
+      "**Fixed pool size:** configured at startup. Pool pre-creates all connections eagerly.",
+      "**Graceful shutdown:** reject new borrows, drain in-flight, close all connections."
+    ],
+    "out_of_scope": [
+      "Elastic sizing (min/max with dynamic growth), idle connection expiry, leak detection, statement caching, JDBC-specific features (transaction isolation, savepoints)."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Thread-safe borrow/return** — hundreds of concurrent borrows must serialize correctly.",
+      "**No deadlock** — borrowing with timeout prevents indefinite waits.",
+      "**No connection leaks** — every borrow must be returnable, even on exceptions (try-with-resources handles this).",
+      "**Fast path:** borrowing an available connection should be O(1) — no full-pool scan."
+    ],
+    "out_of_scope": [
+      "Distributed pooling across JVMs, read/write splitting, connection affinity."
+    ]
+  },
+
+  "primary_scope": [
+    "`borrowConnection(timeout)` → poll available queue with timeout → validate → wrap in proxy → return",
+    "`proxy.close()` → return underlying connection to available queue → notify waiters",
+    "`shutdown()` → set `closed` flag → reject new borrows → close all connections",
+    "Pool pre-creates all connections at startup"
+  ],
+  "termination_points": [
+    "`PoolExhaustedException` — timeout expired without acquiring a connection",
+    "`PoolClosedException` — borrow attempted after `shutdown()`",
+    "`ConnectionValidationException` — all connections in pool are invalid and can't be replaced",
+    "`SQLException` — wrapped underlying DB errors"
+  ],
+
+  "entity_intro": "The key insight: we need a **Proxy** so that calling `close()` doesn't actually close the connection — it returns it to the pool. This is the Object Pool Pattern with an auto-return twist via Proxy.",
+  "entities": [
+    {
+      "name": "ConnectionPool",
+      "role": "**Controller.** Public API: `borrowConnection`, `shutdown`, `getActive`, `getIdle`. Owns the available queue, the factory, and the lifecycle. One pool instance per DB.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    },
+    {
+      "name": "PooledConnection (proxy)",
+      "role": "**Proxy wrapper.** Implements `Connection` interface. Delegates all methods to the underlying connection — **except `close()`**, which returns to the pool instead of closing for real. The key trick that makes try-with-resources work.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Proxy Pattern"
+    },
+    {
+      "name": "ConnectionFactory",
+      "role": "**Service.** Knows how to create fresh connections (DB URL, credentials, config). Injected into the pool. Could be swapped for tests (H2 in-memory) without changing the pool.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Factory Pattern"
+    },
+    {
+      "name": "Connection (JDBC interface)",
+      "role": "Standard `java.sql.Connection`. Not something we design — it's the thing we wrap and pool.",
+      "verdict": "no",
+      "verdict_label": "✗ Standard JDBC — not our entity"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "ConnectionPool", "owns": "`BlockingQueue<Connection>` available, `ConnectionFactory`, `Set<Connection>` allCreated, closed flag, pool size", "rel": "1→N Connections (all owned), 1→1 Factory"},
+    {"entity": "PooledConnection", "owns": "reference to real Connection + reference to pool (for return)", "rel": "Wraps 1 Connection + points back to 1 Pool"},
+    {"entity": "ConnectionFactory", "owns": "DB URL, credentials, config", "rel": "Standalone service"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = PooledConnection (the proxy object clients hold). **Service** = ConnectionFactory (creation), ConnectionPool's borrow/return logic. **Controller** = ConnectionPool public API. The Proxy + Pool combination is the most important design decision here.",
+
+  "classes": [
+    {
+      "name": "ConnectionFactory", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "createConnection()", "returns": "Connection"}
+      ]
+    },
+    {
+      "name": "ConnectionPool", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "factory", "type": "ConnectionFactory"},
+        {"name": "available", "type": "BlockingQueue<Connection>"},
+        {"name": "allConnections", "type": "Set<Connection>"},
+        {"name": "poolSize", "type": "int"},
+        {"name": "closed", "type": "volatile boolean"}
+      ],
+      "methods": [
+        {"name": "borrowConnection(timeout)", "returns": "Connection (proxy)"},
+        {"name": "returnConnection(conn)", "returns": "void"},
+        {"name": "shutdown()", "returns": "void"},
+        {"name": "getIdleCount()", "returns": "int"},
+        {"name": "getActiveCount()", "returns": "int"}
+      ]
+    },
+    {
+      "name": "PooledConnection", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "delegate", "type": "Connection"},
+        {"name": "pool", "type": "ConnectionPool"},
+        {"name": "closed", "type": "boolean"}
+      ],
+      "methods": [
+        {"name": "close()", "returns": "void → returns to pool"},
+        {"name": "all other Connection methods", "returns": "delegate to underlying"}
+      ]
+    }
+  ],
+
+  "db_schema": [],
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Service — ConnectionFactory Interface",
+      "code": "import java.sql.Connection;\nimport java.sql.DriverManager;\nimport java.sql.SQLException;\n\ninterface ConnectionFactory {\n    Connection createConnection() throws SQLException;\n}\n\n// Concrete implementation — swap for tests\nclass JdbcConnectionFactory implements ConnectionFactory {\n    private final String url;\n    private final String user;\n    private final String password;\n\n    public JdbcConnectionFactory(String url, String user, String password) {\n        this.url = url;\n        this.user = user;\n        this.password = password;\n    }\n\n    @Override\n    public Connection createConnection() throws SQLException {\n        return DriverManager.getConnection(url, user, password);\n    }\n}"
+    },
+    {
+      "label": "Model — PooledConnection (Proxy Pattern)",
+      "flow": "All Connection methods delegate to the underlying `delegate`. **Only `close()` is special** — it marks the proxy as closed and returns the real connection to the pool. Subsequent calls on a closed proxy throw `SQLException`.",
+      "edge_cases": "Double-close → second `close()` is no-op (idempotent). Calling any method after close → `SQLException`. The underlying connection is never actually closed by the proxy — the pool handles real closes during shutdown.",
+      "code": "// In production you'd implement all ~40 Connection methods.\n// For LLD, show the key `close()` method and hint at the rest.\n\nclass PooledConnection implements Connection {\n    private final Connection delegate;\n    private final ConnectionPool pool;\n    private volatile boolean closed = false;\n\n    public PooledConnection(Connection delegate, ConnectionPool pool) {\n        this.delegate = delegate;\n        this.pool = pool;\n    }\n\n    // ── The key method: close() returns to pool instead of closing ──\n    @Override\n    public void close() throws SQLException {\n        if (closed) return;            // idempotent\n        closed = true;\n        pool.returnConnection(delegate);  // return the REAL connection\n    }\n\n    @Override\n    public boolean isClosed() throws SQLException {\n        return closed || delegate.isClosed();\n    }\n\n    // ── All other methods delegate to the real connection ──\n    @Override\n    public Statement createStatement() throws SQLException {\n        checkOpen();\n        return delegate.createStatement();\n    }\n\n    @Override\n    public PreparedStatement prepareStatement(String sql) throws SQLException {\n        checkOpen();\n        return delegate.prepareStatement(sql);\n    }\n\n    @Override\n    public void commit() throws SQLException {\n        checkOpen();\n        delegate.commit();\n    }\n\n    // ... ~35 more methods following the same pattern\n\n    private void checkOpen() throws SQLException {\n        if (closed)\n            throw new SQLException(\"Connection already returned to pool\");\n    }\n}"
+    },
+    {
+      "label": "Controller — ConnectionPool",
+      "flow": "**Constructor:** pre-create `poolSize` connections via factory, put in the available queue.\n**`borrow()`:** `available.poll(timeout)` → validate → if invalid, discard + create new → wrap in proxy → return.\n**`return()`:** put real connection back into available queue.\n**`shutdown()`:** flip `closed` flag → close all connections → clear queue.",
+      "edge_cases": "Borrow from closed pool → `PoolClosedException`. All connections invalid (DB down) → eventually give up (don't loop forever). Return a connection that's not from this pool → log and ignore (or throw). Pool construction fails mid-init → close any partially created connections.",
+      "code": "class ConnectionPool {\n    private final ConnectionFactory factory;\n    private final BlockingQueue<Connection> available;\n    private final Set<Connection> allConnections =\n        Collections.synchronizedSet(new HashSet<>());\n    private final int poolSize;\n    private volatile boolean closed = false;\n    private static final int VALIDATION_TIMEOUT_SECONDS = 1;\n    private static final int MAX_VALIDATION_RETRIES = 3;\n\n    public ConnectionPool(ConnectionFactory factory, int poolSize)\n            throws SQLException {\n        if (poolSize <= 0)\n            throw new IllegalArgumentException(\"poolSize must be positive\");\n        this.factory = factory;\n        this.poolSize = poolSize;\n        this.available = new LinkedBlockingQueue<>(poolSize);\n\n        // Eagerly create all connections\n        try {\n            for (int i = 0; i < poolSize; i++) {\n                Connection c = factory.createConnection();\n                available.offer(c);\n                allConnections.add(c);\n            }\n        } catch (SQLException e) {\n            // Rollback: close any created connections\n            closeAll();\n            throw e;\n        }\n    }\n\n    // ── borrow with timeout + validation ──\n    public Connection borrowConnection(long timeoutMs)\n            throws SQLException, InterruptedException {\n        if (closed)\n            throw new PoolClosedException(\"Pool is closed\");\n\n        long deadline = System.currentTimeMillis() + timeoutMs;\n\n        for (int attempt = 0; attempt < MAX_VALIDATION_RETRIES; attempt++) {\n            long remaining = deadline - System.currentTimeMillis();\n            if (remaining <= 0)\n                throw new PoolExhaustedException(\n                    \"Timeout waiting for connection\");\n\n            Connection conn = available.poll(remaining, TimeUnit.MILLISECONDS);\n            if (conn == null)\n                throw new PoolExhaustedException(\n                    \"Timeout waiting for connection\");\n\n            // Validate — if invalid, discard and create new\n            if (isValid(conn)) {\n                return new PooledConnection(conn, this);\n            } else {\n                // Dead connection — close it and try to create a replacement\n                closeQuietly(conn);\n                allConnections.remove(conn);\n                try {\n                    Connection fresh = factory.createConnection();\n                    allConnections.add(fresh);\n                    return new PooledConnection(fresh, this);\n                } catch (SQLException e) {\n                    // Replacement failed, try next iteration\n                }\n            }\n        }\n        throw new ConnectionValidationException(\n            \"Could not obtain a valid connection after \" + MAX_VALIDATION_RETRIES + \" attempts\");\n    }\n\n    // ── return (called by PooledConnection.close()) ──\n    public void returnConnection(Connection conn) {\n        if (closed) {\n            closeQuietly(conn);\n            return;\n        }\n        if (!allConnections.contains(conn)) {\n            // Not one of ours — caller bug, log and ignore\n            return;\n        }\n        // Return to available queue — offer since size is bounded\n        available.offer(conn);\n    }\n\n    // ── shutdown ─────────────────────────\n    public void shutdown() {\n        closed = true;\n        closeAll();\n    }\n\n    // ── Validation ───────────────────────\n    private boolean isValid(Connection conn) {\n        try {\n            return !conn.isClosed() && conn.isValid(VALIDATION_TIMEOUT_SECONDS);\n        } catch (SQLException e) {\n            return false;\n        }\n    }\n\n    private void closeAll() {\n        synchronized (allConnections) {\n            for (Connection c : allConnections) {\n                closeQuietly(c);\n            }\n            allConnections.clear();\n        }\n        available.clear();\n    }\n\n    private void closeQuietly(Connection c) {\n        try { c.close(); } catch (SQLException ignored) {}\n    }\n\n    public int getIdleCount() { return available.size(); }\n    public int getActiveCount() { return allConnections.size() - available.size(); }\n}"
+    },
+    {
+      "label": "Usage — Try-with-Resources (Auto-Return)",
+      "code": "ConnectionFactory factory = new JdbcConnectionFactory(\n    \"jdbc:postgresql://localhost/mydb\", \"user\", \"pass\");\nConnectionPool pool = new ConnectionPool(factory, 10);\n\n// Borrow with 5-second timeout\ntry (Connection conn = pool.borrowConnection(5000)) {\n    try (PreparedStatement ps = conn.prepareStatement(\n            \"SELECT * FROM users WHERE id = ?\")) {\n        ps.setInt(1, 42);\n        try (ResultSet rs = ps.executeQuery()) {\n            while (rs.next()) {\n                System.out.println(rs.getString(\"name\"));\n            }\n        }\n    }\n}  // conn.close() here → returns to pool, NOT closes underlying\n\n// Clean shutdown\npool.shutdown();"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Object Pool Pattern → ConnectionPool",
+      "why": "Creating a DB connection is expensive (TCP handshake, TLS, auth ~50–200ms). Reusing a fixed set of connections eliminates this cost on the hot path. The pool maintains a queue of available connections; clients borrow and return. This is the textbook use case for Object Pool.",
+      "where": "`ConnectionPool.available` queue + `borrowConnection()` / `returnConnection()`"
+    },
+    {
+      "name": "Proxy Pattern → PooledConnection",
+      "why": "We want clients to call `close()` and have it return to the pool — not close the real connection. The Proxy wraps the real connection, delegates most methods, but **overrides `close()`** to implement the return-to-pool behavior. This is what makes try-with-resources work transparently.",
+      "where": "`PooledConnection` class wrapping `Connection` with `close()` redefined"
+    },
+    {
+      "name": "Factory Pattern → ConnectionFactory",
+      "why": "Connection creation knows about URLs, credentials, and JDBC driver specifics. Hiding that behind a `ConnectionFactory` interface lets the pool stay agnostic. You can swap `JdbcConnectionFactory` for `H2Factory` in tests, or `MockConnectionFactory` in unit tests.",
+      "where": "`ConnectionFactory` interface + `JdbcConnectionFactory` impl"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two threads borrow the last connection simultaneously",
+      "fix": "`BlockingQueue.poll(timeout)` is atomic — only one thread gets the connection, the other waits for the timeout. We don't need additional synchronization: the BlockingQueue is the sync primitive."
+    },
+    {
+      "issue": "Borrow during shutdown",
+      "fix": "Check `closed` flag at entry to `borrowConnection()`. Shutdown sets `closed = true` first, then closes connections. In-flight borrows might get a connection just before shutdown; that's fine — their proxy's `close()` will check `closed` in `returnConnection()` and close the real connection instead of returning it."
+    },
+    {
+      "issue": "Connection becomes invalid while borrowed (DB restart mid-transaction)",
+      "fix": "This is outside the pool's control — the client's SQL operations will throw. The pool validates on **borrow**, not during use. On return, if the client noticed the connection is broken, they can call `invalidate()` (a pool extension) to force removal. For now, the next borrow revalidates and replaces if needed."
+    },
+    {
+      "issue": "Client forgets to close connection → leak",
+      "fix": "Try-with-resources makes this nearly impossible in practice. For extra safety, production pools (HikariCP) add a leak detection threshold: `ScheduledExecutorService` scans the borrowed set periodically, logs warnings if a connection has been checked out longer than N ms. Mention this; don't implement in interview."
+    },
+    {
+      "issue": "Replacement creation during borrow causes unbounded pool growth",
+      "fix": "The `allConnections` set tracks the total count. Replacement only happens when we remove a dead connection first — net pool size stays at `poolSize`. We never exceed it because the original connection is removed before the replacement is added."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why a Proxy instead of asking clients to explicitly call `pool.returnConnection(conn)`?",
+      "answer": "**Safety.** Explicit return is easy to forget, especially on exception paths. Try-with-resources (`try (Connection conn = pool.borrow())`) guarantees the close is always called, even on exception. But for this to work, the returned object must implement `AutoCloseable` and `close()` must mean 'return to pool' — hence the Proxy. The client writes standard JDBC code with no awareness of pooling. That's the beauty of it."
+    },
+    {
+      "question": "Why `LinkedBlockingQueue` instead of `ArrayBlockingQueue` or a custom lock?",
+      "answer": "`LinkedBlockingQueue` supports timed `poll(timeout)` which is exactly what we need. `ArrayBlockingQueue` works too — minor difference (linked is unbounded in theory but we never add beyond poolSize, so effectively bounded). A custom lock+condition is what HikariCP does for performance, but for LLD, the standard library primitives are fine. Don't reinvent."
+    },
+    {
+      "question": "Why validate on borrow instead of on return?",
+      "answer": "**Freshness at the right time.** Validating on return tells you the connection was good when the client finished — but it might become invalid before the next borrow (idle expiry, DB restart). Validating on borrow gives the client a freshly-checked connection. The trade-off is latency on borrow (a round-trip to the DB for the health check). HikariCP optimizes this by tracking `lastUsed` time — if < N seconds ago, skip validation."
+    },
+    {
+      "question": "How would you implement elastic sizing (min/max with growth)?",
+      "answer": "Add `minSize` and `maxSize`. On startup, create `minSize` connections. On borrow, if pool empty and total < maxSize, create a new connection. On return, if idle count > minSize and connection has been idle > idleTimeout, close it. Use a background thread for idle expiry. **Gotcha:** growth must be limited to prevent a thundering herd of new DB connections under load spike (stagger creations)."
+    },
+    {
+      "question": "What's the difference between this and HikariCP?",
+      "answer": "**HikariCP** is obsessively optimized: custom concurrent collection (`ConcurrentBag`) instead of BlockingQueue, thread-local caching of connections (ThreadLocal hit = zero contention), JIT-friendly hot paths, minimal volatile reads. It's 5–10x faster than older pools (DBCP, c3p0). Our design is correct but not micro-optimized — which is fine for LLD. Mention HikariCP as the production standard."
+    },
+    {
+      "question": "How do you handle connection failures during validation itself?",
+      "answer": "`isValid(timeout)` returns false or throws on failure. We catch and treat as invalid → discard and try to create a replacement. If the replacement also fails (DB is completely down), we've wasted an attempt. The retry loop (`MAX_VALIDATION_RETRIES = 3`) caps the wasted work. After 3 failed attempts, throw `ConnectionValidationException` so the client knows the pool can't serve them right now."
+    },
+    {
+      "question": "How would you test this without a real database?",
+      "answer": "**Inject a mock `ConnectionFactory`** that returns `Mockito.mock(Connection.class)`. Configure the mock's `isValid()` to return true/false based on test scenario. Test cases: (1) borrow succeeds within timeout, (2) borrow times out when pool exhausted, (3) invalid connection is replaced, (4) return adds back to queue, (5) shutdown closes all. The Factory abstraction is precisely for testability — no real DB needed."
+    }
+  ]
+}
