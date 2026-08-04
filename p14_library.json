@@ -1,0 +1,381 @@
+{
+  "title": "Library Management System",
+  "description": "Design a library system that tracks book inventory, manages member accounts, handles borrowing/returning, computes late fines, and supports reservations for unavailable books. A CRUD-heavy LLD that tests clean entity modeling and rule enforcement.",
+  "tags": [
+    {"type": "medium", "label": "Medium"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "pattern", "label": "Observer Pattern"},
+    {"type": "concept", "label": "State Machine"}
+  ],
+  "prompt": "Design a library management system where members can borrow and return books, with support for fines and reservations.",
+  "prompt_note": "Library problems are disarmingly simple-sounding. The trap is under-modeling: most candidates conflate 'Book' (the title) with 'BookItem' (the physical copy). Fix that up front and the design falls into place. Late fines are a natural **Strategy Pattern**, and reservation notifications are a natural **Observer**.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Can multiple members borrow the same book? I assume the library has multiple physical copies?\"",
+      "answer": "Interviewer: \"Yes — 'Book' is the title, but there are multiple physical copies ('BookItem' or 'BookCopy') that can be borrowed independently.\"",
+      "why": "**Critical distinction.** This must be clarified first or the whole design is wrong. Book = metadata; BookItem = loanable physical instance."
+    },
+    {
+      "question": "You: \"What's the borrowing limit and duration?\"",
+      "answer": "Interviewer: \"Max 5 books per member, 14-day loan period. Late returns incur a fine per day.\"",
+      "why": "Business rules to enforce at borrow time. Fine calculation is per overdue day."
+    },
+    {
+      "question": "You: \"What if a book is fully checked out? Can members reserve it?\"",
+      "answer": "Interviewer: \"Yes — reservation queue per book. When a copy is returned, notify the first member in the queue.\"",
+      "why": "Observer Pattern: members subscribe to a book; notified on return. FIFO reservation queue."
+    },
+    {
+      "question": "You: \"Can members pay fines through the system?\"",
+      "answer": "Interviewer: \"Mark as paid, yes. Don't integrate a payment gateway.\"",
+      "why": "Simple state toggle on the fine record."
+    },
+    {
+      "question": "You: \"Different member types — students, faculty, public — with different limits?\"",
+      "answer": "Interviewer: \"Yes. Students: 5 books, 14 days. Faculty: 10 books, 30 days. Public: 3 books, 7 days.\"",
+      "why": "Different borrow policies per member type → **Strategy Pattern** or configuration on Member."
+    },
+    {
+      "question": "You: \"Search — what can members search by?\"",
+      "answer": "Interviewer: \"Title, author, genre. Don't build a full-text search engine.\"",
+      "why": "Simple map-based lookups. Don't over-build the search layer."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Catalog management:** add/remove Books (metadata) and BookItems (physical copies).",
+      "**Member management:** register members with type (STUDENT/FACULTY/PUBLIC), each type has different borrow limits.",
+      "**Borrow:** member borrows a BookItem → validates (active, under limit, no pending fines) → transitions item to LOANED.",
+      "**Return:** member returns a BookItem → compute fine if late → transition to AVAILABLE → notify reservation queue.",
+      "**Reservation:** member reserves a Book (all copies checked out) → added to FIFO queue → notified on return.",
+      "**Fines:** computed on return based on days overdue × fine rate. Members can pay fines (mark as paid).",
+      "**Search:** find books by title, author, genre."
+    ],
+    "out_of_scope": [
+      "Full-text search, external ISBN lookup, payment gateway, barcode scanning, multi-branch coordination."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Audit trail:** every borrow/return/reserve is recorded in a loan history.",
+      "**Thread-safe operations:** concurrent borrows/returns on the same book must not corrupt inventory.",
+      "**Consistent state:** a BookItem can't be simultaneously LOANED to two members."
+    ],
+    "out_of_scope": [
+      "Distributed deployment, real-time notifications (we'll just log), high throughput."
+    ]
+  },
+
+  "primary_scope": [
+    "`borrowBook(memberId, bookItemId)` → validate → transition item to LOANED → create Loan record",
+    "`returnBook(loanId)` → compute fine → transition item to AVAILABLE → notify reservers",
+    "`reserveBook(memberId, bookId)` → add to reservation queue",
+    "`payFine(fineId)` → mark as paid",
+    "`search(query, type)` → lookup by title/author/genre"
+  ],
+  "termination_points": [
+    "`BookItemNotAvailableException` — item is LOANED, LOST, or MAINTENANCE",
+    "`MemberLimitExceededException` — member at borrow limit",
+    "`OutstandingFinesException` — member has unpaid fines (blocked from borrowing)",
+    "`MembershipExpiredException` / `MemberBlockedException`",
+    "`InvalidLoanException` — return with unknown loanId"
+  ],
+
+  "entity_intro": "The critical modeling decision: **Book vs BookItem.** Book holds metadata (title, author, ISBN, genre) shared across all copies. BookItem is a single physical loanable instance with its own barcode, location, and status. Members borrow BookItems, not Books.",
+  "entities": [
+    {
+      "name": "Book",
+      "role": "**Model.** Title-level metadata: title, author, ISBN, genre. Immutable reference data. One Book has many BookItems.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — metadata (many copies share one Book)"
+    },
+    {
+      "name": "BookItem",
+      "role": "**Model.** A physical copy — barcode, rack location, status (AVAILABLE/LOANED/LOST/MAINTENANCE). The loanable unit. State transitions: AVAILABLE → LOANED → AVAILABLE (or LOST on damage).",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — state machine (physical copy)"
+    },
+    {
+      "name": "Member",
+      "role": "**Model.** memberId, name, type (STUDENT/FACULTY/PUBLIC), status (ACTIVE/BLOCKED/EXPIRED), current loan count. Borrow limits derived from type.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — actor in the system"
+    },
+    {
+      "name": "Loan",
+      "role": "**Model.** loanId, memberId, bookItemId, borrowedAt, dueDate, returnedAt, fineAmount, status. The borrow transaction record.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — transaction audit"
+    },
+    {
+      "name": "Reservation",
+      "role": "**Model.** reservationId, memberId, bookId, createdAt, status. Added to a per-book queue when all items are loaned.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — queue entry"
+    },
+    {
+      "name": "Fine",
+      "role": "**Model.** fineId, loanId, memberId, amount, status (PENDING/PAID). Generated on late return. Blocks further borrowing until paid.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — financial record"
+    },
+    {
+      "name": "BorrowPolicy (Strategy)",
+      "role": "**Strategy interface.** `getMaxBooks(memberType)`, `getLoanDays(memberType)`, `getFinePerDay(memberType)`. Different values per member type. Could be a simple enum or a full Strategy Pattern — depends on how much variation is expected.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Strategy / Policy"
+    },
+    {
+      "name": "LibraryService",
+      "role": "**Controller.** Public API: borrow, return, reserve, search, payFine. Orchestrates members, books, loans, reservations.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "Book", "owns": "title, author, ISBN, genre", "rel": "1 → N BookItems (copies)"},
+    {"entity": "BookItem", "owns": "barcode, location, status, bookRef", "rel": "N → 1 Book, 0..1 → 1 Loan (current)"},
+    {"entity": "Member", "owns": "memberId, type, status, currentLoanCount", "rel": "1 → N Loans, 1 → N Reservations, 1 → N Fines"},
+    {"entity": "Loan", "owns": "memberId, bookItemId, dates, fineAmount, status", "rel": "N → 1 Member, 1 → 1 BookItem"},
+    {"entity": "LibraryService", "owns": "books map, items map, members map, loans map, reservationQueues per book", "rel": "Orchestrator over all entities"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Book, BookItem, Member, Loan, Reservation, Fine + enums. **Service** = BorrowPolicy (Strategy), FineCalculator. **Controller** = LibraryService (public API, orchestration). The Service layer is thin here — most logic is in the entities themselves (BookItem handles its state transitions, Loan computes its own overdue status).",
+
+  "classes": [
+    {
+      "name": "BookItem", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "barcode", "type": "String"},
+        {"name": "book", "type": "Book (ref)"},
+        {"name": "status", "type": "BookItemStatus (volatile)"},
+        {"name": "location", "type": "String (rack)"}
+      ],
+      "methods": [
+        {"name": "checkOut()", "returns": "void (AVAILABLE → LOANED, synchronized)"},
+        {"name": "checkIn()", "returns": "void (LOANED → AVAILABLE, synchronized)"},
+        {"name": "markLost()", "returns": "void"},
+        {"name": "isAvailable()", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "Member", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "memberId", "type": "String"},
+        {"name": "name", "type": "String"},
+        {"name": "type", "type": "MemberType"},
+        {"name": "status", "type": "MemberStatus"},
+        {"name": "currentLoanCount", "type": "int"},
+        {"name": "outstandingFines", "type": "long"}
+      ],
+      "methods": [
+        {"name": "canBorrow(policy)", "returns": "boolean"},
+        {"name": "incrementLoanCount()", "returns": "void"},
+        {"name": "decrementLoanCount()", "returns": "void"}
+      ]
+    },
+    {
+      "name": "Loan", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "loanId", "type": "String"},
+        {"name": "memberId", "type": "String"},
+        {"name": "bookItemBarcode", "type": "String"},
+        {"name": "borrowedAt", "type": "LocalDate"},
+        {"name": "dueDate", "type": "LocalDate"},
+        {"name": "returnedAt", "type": "LocalDate"},
+        {"name": "status", "type": "LoanStatus"}
+      ],
+      "methods": [
+        {"name": "isOverdue()", "returns": "boolean"},
+        {"name": "overdueDays()", "returns": "long"},
+        {"name": "markReturned()", "returns": "void"}
+      ]
+    },
+    {
+      "name": "BorrowPolicy", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "getMaxBooks(type)", "returns": "int"},
+        {"name": "getLoanDays(type)", "returns": "int"},
+        {"name": "getFinePerDay(type)", "returns": "long"}
+      ]
+    },
+    {
+      "name": "LibraryService", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "books", "type": "Map<String, Book>"},
+        {"name": "bookItems", "type": "Map<String, BookItem>"},
+        {"name": "members", "type": "Map<String, Member>"},
+        {"name": "loans", "type": "ConcurrentHashMap<String, Loan>"},
+        {"name": "fines", "type": "ConcurrentHashMap<String, Fine>"},
+        {"name": "reservationQueues", "type": "Map<String, Queue<Reservation>>"},
+        {"name": "policy", "type": "BorrowPolicy"}
+      ],
+      "methods": [
+        {"name": "borrowBook(memberId, barcode)", "returns": "String (loanId)"},
+        {"name": "returnBook(loanId)", "returns": "long (fine if any)"},
+        {"name": "reserveBook(memberId, bookId)", "returns": "String (reservationId)"},
+        {"name": "payFine(fineId)", "returns": "void"},
+        {"name": "searchByTitle(q)", "returns": "List<Book>"},
+        {"name": "searchByAuthor(q)", "returns": "List<Book>"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "books",
+      "columns": [
+        {"name": "book_id", "type": "UUID", "pk": true},
+        {"name": "title", "type": "VARCHAR", "idx": true},
+        {"name": "author", "type": "VARCHAR", "idx": true},
+        {"name": "isbn", "type": "VARCHAR(13)", "idx": true},
+        {"name": "genre", "type": "VARCHAR", "idx": true}
+      ]
+    },
+    {
+      "table": "book_items",
+      "columns": [
+        {"name": "barcode", "type": "VARCHAR", "pk": true},
+        {"name": "book_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "status", "type": "ENUM(AVAIL,LOANED,LOST,MAINT)", "idx": true},
+        {"name": "location", "type": "VARCHAR"}
+      ]
+    },
+    {
+      "table": "members",
+      "columns": [
+        {"name": "member_id", "type": "UUID", "pk": true},
+        {"name": "name", "type": "VARCHAR"},
+        {"name": "type", "type": "ENUM(STUDENT,FACULTY,PUBLIC)"},
+        {"name": "status", "type": "ENUM(ACTIVE,BLOCKED,EXPIRED)"},
+        {"name": "current_loan_count", "type": "INT"}
+      ]
+    },
+    {
+      "table": "loans",
+      "columns": [
+        {"name": "loan_id", "type": "UUID", "pk": true},
+        {"name": "member_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "barcode", "type": "VARCHAR", "fk": true},
+        {"name": "borrowed_at", "type": "DATE"},
+        {"name": "due_date", "type": "DATE", "idx": true},
+        {"name": "returned_at", "type": "DATE"},
+        {"name": "status", "type": "ENUM(ACTIVE,RETURNED)"}
+      ]
+    },
+    {
+      "table": "fines",
+      "columns": [
+        {"name": "fine_id", "type": "UUID", "pk": true},
+        {"name": "loan_id", "type": "UUID", "fk": true},
+        {"name": "member_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "amount", "type": "BIGINT"},
+        {"name": "status", "type": "ENUM(PENDING,PAID)"}
+      ]
+    },
+    {
+      "table": "reservations",
+      "columns": [
+        {"name": "reservation_id", "type": "UUID", "pk": true},
+        {"name": "book_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "member_id", "type": "UUID", "fk": true},
+        {"name": "created_at", "type": "TIMESTAMP", "idx": true},
+        {"name": "status", "type": "ENUM(WAITING,NOTIFIED,FULFILLED,CANCELLED)"}
+      ]
+    }
+  ],
+  "schema_note": "Index `(book_id, created_at)` on reservations for FIFO queue retrieval. Index `due_date` on loans for overdue detection jobs. Index `title` and `author` on books for search.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Models — Enums + Book + BookItem + Member + Loan",
+      "flow": "**BookItem** is a state machine with `checkOut()` and `checkIn()` transitions — both `synchronized` on the instance to prevent double-loan. **Loan** computes its own `overdueDays()` — encapsulates the business rule. **Member.canBorrow()** checks all the rules: active, under limit, no fines.",
+      "code": "enum MemberType     { STUDENT, FACULTY, PUBLIC }\nenum MemberStatus   { ACTIVE, BLOCKED, EXPIRED }\nenum BookItemStatus { AVAILABLE, LOANED, LOST, MAINTENANCE }\nenum LoanStatus     { ACTIVE, RETURNED }\nenum FineStatus     { PENDING, PAID }\n\nrecord Book(String bookId, String title, String author,\n            String isbn, String genre) {}\n\nclass BookItem {\n    private final String barcode;\n    private final Book book;\n    private volatile BookItemStatus status = BookItemStatus.AVAILABLE;\n    private final String location;\n\n    public BookItem(String barcode, Book book, String location) {\n        this.barcode = barcode;\n        this.book = book;\n        this.location = location;\n    }\n\n    public synchronized void checkOut() {\n        if (status != BookItemStatus.AVAILABLE)\n            throw new BookItemNotAvailableException(\n                \"BookItem \" + barcode + \" is \" + status);\n        status = BookItemStatus.LOANED;\n    }\n\n    public synchronized void checkIn() {\n        if (status != BookItemStatus.LOANED)\n            throw new IllegalStateException(\n                \"Cannot check in item in status \" + status);\n        status = BookItemStatus.AVAILABLE;\n    }\n\n    public synchronized void markLost() {\n        status = BookItemStatus.LOST;\n    }\n\n    public boolean isAvailable() { return status == BookItemStatus.AVAILABLE; }\n    public String getBarcode()   { return barcode; }\n    public Book getBook()        { return book; }\n}\n\nclass Member {\n    private final String memberId;\n    private final String name;\n    private final MemberType type;\n    private MemberStatus status = MemberStatus.ACTIVE;\n    private int currentLoanCount = 0;\n    private long outstandingFines = 0;\n\n    public Member(String memberId, String name, MemberType type) {\n        this.memberId = memberId;\n        this.name = name;\n        this.type = type;\n    }\n\n    public boolean canBorrow(BorrowPolicy policy) {\n        if (status != MemberStatus.ACTIVE) return false;\n        if (outstandingFines > 0) return false;\n        return currentLoanCount < policy.getMaxBooks(type);\n    }\n\n    public synchronized void incrementLoanCount() { currentLoanCount++; }\n    public synchronized void decrementLoanCount() { currentLoanCount--; }\n    public void addFine(long amount) { outstandingFines += amount; }\n    public void clearFine(long amount) { outstandingFines -= amount; }\n\n    public MemberType getType()       { return type; }\n    public String getMemberId()       { return memberId; }\n    public MemberStatus getStatus()   { return status; }\n    public long getOutstandingFines() { return outstandingFines; }\n    public int getCurrentLoanCount()  { return currentLoanCount; }\n}\n\nclass Loan {\n    private final String loanId;\n    private final String memberId;\n    private final String bookItemBarcode;\n    private final LocalDate borrowedAt;\n    private final LocalDate dueDate;\n    private LocalDate returnedAt;\n    private LoanStatus status = LoanStatus.ACTIVE;\n\n    public Loan(String memberId, String barcode, int loanDays) {\n        this.loanId = UUID.randomUUID().toString();\n        this.memberId = memberId;\n        this.bookItemBarcode = barcode;\n        this.borrowedAt = LocalDate.now();\n        this.dueDate = borrowedAt.plusDays(loanDays);\n    }\n\n    public boolean isOverdue() {\n        LocalDate checkDate = (returnedAt != null) ? returnedAt : LocalDate.now();\n        return checkDate.isAfter(dueDate);\n    }\n\n    public long overdueDays() {\n        if (!isOverdue()) return 0;\n        LocalDate checkDate = (returnedAt != null) ? returnedAt : LocalDate.now();\n        return ChronoUnit.DAYS.between(dueDate, checkDate);\n    }\n\n    public void markReturned() {\n        this.returnedAt = LocalDate.now();\n        this.status = LoanStatus.RETURNED;\n    }\n\n    public String getLoanId() { return loanId; }\n    public String getMemberId() { return memberId; }\n    public String getBarcode() { return bookItemBarcode; }\n    public LoanStatus getStatus() { return status; }\n}\n\nrecord Reservation(String reservationId, String bookId,\n                   String memberId, Instant createdAt) {}\nrecord Fine(String fineId, String loanId, String memberId,\n            long amount, FineStatus status) {}"
+    },
+    {
+      "label": "Service — BorrowPolicy (per-type rules)",
+      "flow": "Pure data class mapping member type → borrow rules. Could be a Strategy interface with three implementations, but a single config-style class is simpler for this scope.",
+      "code": "class BorrowPolicy {\n    public int getMaxBooks(MemberType type) {\n        return switch (type) {\n            case STUDENT -> 5;\n            case FACULTY -> 10;\n            case PUBLIC  -> 3;\n        };\n    }\n\n    public int getLoanDays(MemberType type) {\n        return switch (type) {\n            case STUDENT -> 14;\n            case FACULTY -> 30;\n            case PUBLIC  -> 7;\n        };\n    }\n\n    public long getFinePerDay(MemberType type) {\n        return switch (type) {\n            case STUDENT -> 5;   // cents per day\n            case FACULTY -> 2;\n            case PUBLIC  -> 10;\n        };\n    }\n}"
+    },
+    {
+      "label": "Controller — LibraryService (borrow / return / reserve / fine)",
+      "flow": "**`borrowBook`:** get member + item → validate canBorrow → `item.checkOut()` → create Loan → increment loan count.\n**`returnBook`:** get loan → compute fine if overdue → `item.checkIn()` → mark loan returned → decrement count → **notify reservation queue**.\n**`reserveBook`:** add to FIFO queue for that book.\n**`payFine`:** toggle status + clear member fines.",
+      "edge_cases": "Borrow with outstanding fine → reject. Borrow at limit → reject. Return same loan twice → guard with status check. Reserve a book you already have → allow (different use case). Member cancels reservation mid-notification → status check.",
+      "code": "class LibraryService {\n    private final Map<String, Book> books = new ConcurrentHashMap<>();\n    private final Map<String, BookItem> bookItems = new ConcurrentHashMap<>();\n    private final Map<String, Member> members = new ConcurrentHashMap<>();\n    private final ConcurrentHashMap<String, Loan> loans = new ConcurrentHashMap<>();\n    private final ConcurrentHashMap<String, Fine> fines = new ConcurrentHashMap<>();\n    // bookId → FIFO reservation queue\n    private final ConcurrentHashMap<String, Queue<Reservation>> reservationQueues =\n        new ConcurrentHashMap<>();\n    private final BorrowPolicy policy = new BorrowPolicy();\n\n    // ── borrowBook ──────────────────────\n    public String borrowBook(String memberId, String barcode) {\n        Member member = members.get(memberId);\n        if (member == null) throw new IllegalArgumentException(\"Unknown member\");\n\n        BookItem item = bookItems.get(barcode);\n        if (item == null) throw new IllegalArgumentException(\"Unknown item\");\n\n        if (!member.canBorrow(policy)) {\n            if (member.getOutstandingFines() > 0)\n                throw new OutstandingFinesException(\"Clear fines first\");\n            if (member.getStatus() != MemberStatus.ACTIVE)\n                throw new MemberBlockedException(\"Member not active\");\n            throw new MemberLimitExceededException(\n                \"At limit of \" + policy.getMaxBooks(member.getType()));\n        }\n\n        // State transition — throws if already loaned\n        item.checkOut();\n\n        int loanDays = policy.getLoanDays(member.getType());\n        Loan loan = new Loan(memberId, barcode, loanDays);\n        loans.put(loan.getLoanId(), loan);\n        member.incrementLoanCount();\n\n        return loan.getLoanId();\n    }\n\n    // ── returnBook ──────────────────────\n    public long returnBook(String loanId) {\n        Loan loan = loans.get(loanId);\n        if (loan == null) throw new InvalidLoanException(loanId);\n        if (loan.getStatus() != LoanStatus.ACTIVE)\n            throw new IllegalStateException(\"Loan already returned\");\n\n        Member member = members.get(loan.getMemberId());\n        BookItem item = bookItems.get(loan.getBarcode());\n\n        // Compute fine if overdue\n        long fineAmount = 0;\n        if (loan.isOverdue()) {\n            fineAmount = loan.overdueDays() * policy.getFinePerDay(member.getType());\n            Fine fine = new Fine(UUID.randomUUID().toString(),\n                loanId, member.getMemberId(), fineAmount, FineStatus.PENDING);\n            fines.put(fine.fineId(), fine);\n            member.addFine(fineAmount);\n        }\n\n        // Transition item and loan\n        item.checkIn();\n        loan.markReturned();\n        member.decrementLoanCount();\n\n        // Notify next reserver (Observer-ish)\n        notifyNextReserver(item.getBook().bookId());\n\n        return fineAmount;\n    }\n\n    // ── reserveBook (when all copies loaned) ──\n    public String reserveBook(String memberId, String bookId) {\n        Member member = members.get(memberId);\n        if (member == null) throw new IllegalArgumentException(\"Unknown member\");\n        if (!books.containsKey(bookId))\n            throw new IllegalArgumentException(\"Unknown book\");\n\n        Reservation r = new Reservation(\n            UUID.randomUUID().toString(), bookId, memberId, Instant.now());\n        reservationQueues\n            .computeIfAbsent(bookId, k -> new ConcurrentLinkedQueue<>())\n            .offer(r);\n        return r.reservationId();\n    }\n\n    // Called after return — notify first waiter if any\n    private void notifyNextReserver(String bookId) {\n        Queue<Reservation> queue = reservationQueues.get(bookId);\n        if (queue == null || queue.isEmpty()) return;\n        Reservation next = queue.poll();\n        // In production: send notification (email/push).\n        // Here: log it.\n        System.out.println(\"Notifying member \" + next.memberId() +\n            \" — book \" + bookId + \" is available\");\n    }\n\n    // ── payFine ─────────────────────────\n    public void payFine(String fineId) {\n        Fine existing = fines.get(fineId);\n        if (existing == null) throw new IllegalArgumentException(\"Unknown fine\");\n        if (existing.status() == FineStatus.PAID) return; // idempotent\n\n        Fine paid = new Fine(existing.fineId(), existing.loanId(),\n            existing.memberId(), existing.amount(), FineStatus.PAID);\n        fines.put(fineId, paid);\n\n        Member m = members.get(existing.memberId());\n        if (m != null) m.clearFine(existing.amount());\n    }\n\n    // ── Simple search ──────────────────\n    public List<Book> searchByTitle(String query) {\n        String q = query.toLowerCase();\n        return books.values().stream()\n            .filter(b -> b.title().toLowerCase().contains(q))\n            .toList();\n    }\n\n    public List<Book> searchByAuthor(String query) {\n        String q = query.toLowerCase();\n        return books.values().stream()\n            .filter(b -> b.author().toLowerCase().contains(q))\n            .toList();\n    }\n\n    public List<Book> searchByGenre(String genre) {\n        return books.values().stream()\n            .filter(b -> b.genre().equalsIgnoreCase(genre))\n            .toList();\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Strategy Pattern (light) → BorrowPolicy",
+      "why": "Different member types have different borrow rules. We could make this a full Strategy interface with three implementations, but the variation is small (just three numbers each), so a config-style class with switch expressions is cleaner. **Rule of thumb:** use full Strategy when behavior varies significantly; use config when only values vary.",
+      "where": "`BorrowPolicy` class with `switch` per member type"
+    },
+    {
+      "name": "Observer Pattern → Reservation Notification",
+      "why": "Members subscribe to a book; when an item is returned, the subject (LibraryService on return) notifies the next observer (member at head of reservation queue). The queue is a **FIFO observer list**. Real systems extend this with async email/push delivery — our version just logs.",
+      "where": "`reservationQueues` map + `notifyNextReserver()` called from `returnBook`"
+    },
+    {
+      "name": "State Machine → BookItem status",
+      "why": "BookItem has a clear state machine: AVAILABLE → LOANED → AVAILABLE (or LOST / MAINTENANCE as alternatives). The `checkOut()` and `checkIn()` methods are the only legal transitions and guard against invalid ones. Encapsulating state transitions inside the entity prevents external code from corrupting state.",
+      "where": "`BookItem` with `synchronized` state methods"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two members borrowing the same BookItem simultaneously",
+      "fix": "`BookItem.checkOut()` is `synchronized`. First thread transitions AVAILABLE → LOANED. Second thread sees status != AVAILABLE → throws. Only one wins. This is the **primary race** in a library system, and `synchronized` on the item is sufficient."
+    },
+    {
+      "issue": "Borrow and mark-lost race on the same item",
+      "fix": "Both `checkOut()` and `markLost()` are `synchronized` on the BookItem instance. They serialize. The one that acquires the lock first wins — the other sees the new state and handles it (checkOut throws, markLost becomes a no-op on already-lost)."
+    },
+    {
+      "issue": "Reservation queue race — two members both notified for the same returned item",
+      "fix": "`ConcurrentLinkedQueue.poll()` is atomic — only one member dequeued per call. `notifyNextReserver` is called once per return. If the notified member doesn't borrow the item, they lose their spot; the next return will re-notify the next person."
+    },
+    {
+      "issue": "Member's `currentLoanCount` updated concurrently by two borrows",
+      "fix": "`Member.incrementLoanCount()` is `synchronized`. But there's a TOCTOU race: `canBorrow()` check and `incrementLoanCount()` are two steps. A member with limit 5 and 4 current loans could see two concurrent borrows both pass `canBorrow()` → both increment → count becomes 6. **Fix:** make the check-and-increment atomic via a single `synchronized` block in `LibraryService.borrowBook`. Or use an `AtomicInteger` with CAS."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why distinguish Book from BookItem?",
+      "answer": "**A library has multiple copies of popular books.** 'Book' is a reference data entity (title, author, ISBN) — shared across all copies. 'BookItem' is the loanable physical object with its own barcode, location, and status. You borrow a BookItem, not a Book. Conflating them leads to bugs: 'borrow the book' is ambiguous when there are 5 copies. This is the first modeling decision that separates good from bad library designs."
+    },
+    {
+      "question": "Why isn't BookItem the 'book' entity and Book just a metadata blob on it?",
+      "answer": "**Reference data normalization.** If you put `title`, `author`, `ISBN` on every BookItem, you'd duplicate that data across copies. Changing an author's name spelling requires updating N rows. With the Book/BookItem split, metadata lives in one place and BookItem is lean. This is **database normalization applied to OOP** — the same principle as 1NF/2NF/3NF."
+    },
+    {
+      "question": "Why is reservation notification synchronous?",
+      "answer": "**It shouldn't be in production** — notification is a potentially slow operation (email, push, SMS). In our LLD it's a synchronous log statement for simplicity. Production extension: extract a `NotificationService` interface, inject it, and have it enqueue the message in a background queue. The `returnBook` call completes fast; notification happens asynchronously. This is the **Bulkhead + Observer** combination from the Pub/Sub problem."
+    },
+    {
+      "question": "How would you handle a member wanting to hold multiple reserved books?",
+      "answer": "A member can appear in multiple book queues (one per book they want). Each book has its own FIFO queue. When a book becomes available, the first member in **that book's queue** is notified. No interaction between queues. The only gotcha: if you want to enforce 'max reservations per member,' track it on the Member entity and check on `reserveBook`."
+    },
+    {
+      "question": "How do you handle overdue detection and fine generation at scale?",
+      "answer": "Two approaches: **(1) On-return:** compute fines only when the book is returned. Simple, but no reminders until return. **(2) Scheduled job:** a daily cron scans active loans with `dueDate < NOW()`, creates/updates Fine records, sends reminder emails. Production libraries do both — reminders from the cron, finalization on return. In a DB: `SELECT * FROM loans WHERE status='ACTIVE' AND due_date < CURRENT_DATE` with an index on `(status, due_date)`."
+    },
+    {
+      "question": "What about lost books — how does the fine work?",
+      "answer": "Lost books have a different fine model: the member pays the **replacement cost**, not overdue days. Add a `markLost(loanId)` method that: (1) transitions BookItem to LOST, (2) creates a Fine with amount = book's replacement cost, (3) closes the loan. Optionally, the library can set a **lost-book grace period** — the member has 30 days to find it before the replacement fine is finalized."
+    },
+    {
+      "question": "How would you prevent a member from reserving a book they already have checked out?",
+      "answer": "In `reserveBook()`, check if the member has an active loan for any BookItem of that Book: `loans.values().stream().anyMatch(l -> l.getMemberId().equals(memberId) && l.getStatus() == ACTIVE && getBookFromItem(l.getBarcode()).equals(bookId))`. If yes, either reject (strict mode) or allow (they may want a second copy — unlikely for a library). Business decision."
+    }
+  ]
+}

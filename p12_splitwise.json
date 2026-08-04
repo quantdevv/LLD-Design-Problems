@@ -1,0 +1,323 @@
+{
+  "title": "Splitwise — Expense Splitting",
+  "description": "Design an expense-splitting app where users create groups, add expenses, split them (equally, by percentage, or exactly), and see net balances. The interesting part is the balance sheet: representing who owes whom efficiently, and simplifying transitive debts.",
+  "tags": [
+    {"type": "medium", "label": "Medium"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "pattern", "label": "Observer Pattern"},
+    {"type": "concept", "label": "Graph Algorithms"}
+  ],
+  "prompt": "Design Splitwise — a system where users can record shared expenses and see who owes whom.",
+  "prompt_note": "Splitwise looks simple until you realize the balance sheet is a **directed graph** of debts. Alice owes Bob $10, Bob owes Carol $10 → this simplifies to Alice owes Carol $10. The split-type variation is a clean Strategy Pattern, but the graph simplification is where interviewers dig in.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"What types of splits are supported? Equal, exact amounts, percentages?\"",
+      "answer": "Interviewer: \"All three. Equal split (default), exact split (user specifies amount per person), percentage split.\"",
+      "why": "Three variations of the same operation → **Strategy Pattern**. Each strategy computes the per-user share differently."
+    },
+    {
+      "question": "You: \"Are expenses within groups, or can any user split with any other?\"",
+      "answer": "Interviewer: \"Both. Users can belong to groups; expenses can be group-scoped or ad-hoc between any users.\"",
+      "why": "Groups are a convenience layer. The core balance sheet is user-to-user."
+    },
+    {
+      "question": "You: \"Do we need to show 'simplified debts' — the minimum set of payments to settle everything?\"",
+      "answer": "Interviewer: \"Yes. If A→B→C all owe $10, show it as A→C directly.\"",
+      "why": "This is the **Debt Simplification** problem — non-trivial. There's a greedy O(N log N) approach and an optimal (NP-hard) version. Know both."
+    },
+    {
+      "question": "You: \"How do we record a settlement — when someone actually pays?\"",
+      "answer": "Interviewer: \"`settleUp(from, to, amount)` — records a payment that reduces the debt.\"",
+      "why": "Settlement is just a negative expense. Update the balance map."
+    },
+    {
+      "question": "You: \"Currency handling?\"",
+      "answer": "Interviewer: \"Single currency. Don't worry about conversion.\"",
+      "why": "Multi-currency would add a Currency entity + conversion rates. Out of scope."
+    },
+    {
+      "question": "You: \"Are expenses ever edited or deleted after creation?\"",
+      "answer": "Interviewer: \"Not in core scope. Mention it as an extension.\"",
+      "why": "Edits affect historical balances. Real Splitwise handles this with expense history + recomputation."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**User and Group management:** create users, create groups, add/remove members.",
+      "**Add expense:** specify paid-by user, amount, participants, and split type (EQUAL, EXACT, PERCENTAGE).",
+      "**Balance sheet:** for each user, show net balance with every other user (who owes what).",
+      "**Show per-user summary:** total amount this user owes / is owed overall.",
+      "**Settlement:** record when a user pays another user; update balances accordingly.",
+      "**Debt simplification:** given a group's balance sheet, compute the minimum set of payments to settle all debts."
+    ],
+    "out_of_scope": [
+      "Multi-currency, expense edit/delete history, receipt uploads, recurring expenses, notifications, payment gateway integration."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Correctness over performance:** balances must be accurate to the last cent (use integer cents, not doubles).",
+      "**Thread-safe balance updates:** multiple concurrent expenses in the same group must not corrupt the balance sheet.",
+      "**Audit trail:** every expense is stored — balances can be recomputed from scratch if needed."
+    ],
+    "out_of_scope": [
+      "Distributed storage, high-throughput, sub-millisecond latency."
+    ]
+  },
+
+  "primary_scope": [
+    "`addExpense(paidBy, amount, participants, splitStrategy)` → compute shares → update balance sheet",
+    "Split strategies compute `Map<userId, shareAmount>` — must sum to total",
+    "Balance sheet: `Map<userId, Map<otherUserId, amount>>` — nested map",
+    "`settleUp(from, to, amount)` → decrease debt in the balance sheet",
+    "`simplifyDebts(group)` → greedy algorithm over net balances"
+  ],
+  "termination_points": [
+    "`InvalidSplitException` — split amounts don't sum to total (exact/percentage)",
+    "`UserNotFoundException` — userId doesn't exist",
+    "`InsufficientSettlementException` — settling more than what's owed",
+    "`IllegalArgumentException` — negative amount, empty participant list"
+  ],
+
+  "entity_intro": "Users, groups, expenses — all clear nouns. The interesting design question is: **how do we store balances?** Option A: recompute from expense history every time (slow, always correct). Option B: maintain a running balance sheet (fast, must stay in sync). We choose B with the expense history as the source of truth for rebuilds.",
+  "entities": [
+    {
+      "name": "User",
+      "role": "**Model.** userId, name, email. Immutable identity — expenses and balances reference users by ID.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — identity"
+    },
+    {
+      "name": "Group",
+      "role": "**Model.** groupId, name, `Set<User> members`. Logical grouping for shared expenses. The group doesn't own its balances — balances are computed over the shared BalanceSheet.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — user collection"
+    },
+    {
+      "name": "Expense",
+      "role": "**Model.** expenseId, paidByUserId, totalAmount, `Map<userId, share>`, splitType, timestamp. Immutable once created. Part of the audit trail.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — audit record"
+    },
+    {
+      "name": "SplitStrategy (interface)",
+      "role": "**Strategy interface.** `computeShares(totalAmount, participants, params)` → Map<userId, long>. Three concrete implementations: Equal, Exact, Percentage.",
+      "verdict": "yes",
+      "verdict_label": "✓ Interface — Strategy Pattern"
+    },
+    {
+      "name": "BalanceSheet",
+      "role": "**Service.** The heart of the system. `Map<userId, Map<otherUserId, long>>` — nested map tracking net amounts. `addExpense` updates it; `getBalance(u1, u2)` reads it. Also owns the simplification algorithm.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — core state"
+    },
+    {
+      "name": "SplitwiseService",
+      "role": "**Controller.** Public API: `addExpense`, `settleUp`, `getBalance`, `simplifyDebts`. Orchestrates users, groups, expenses, and the balance sheet.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "SplitwiseService", "owns": "`Map<userId, User>`, `Map<groupId, Group>`, `List<Expense>` history, BalanceSheet", "rel": "1→N Users, 1→N Groups, 1→1 BalanceSheet"},
+    {"entity": "Group", "owns": "groupId, name, `Set<userId>`", "rel": "N→N with Users"},
+    {"entity": "Expense", "owns": "paidByUserId, totalAmount, `Map<userId, share>`, splitType", "rel": "N→1 with paying User, N→M with participant Users"},
+    {"entity": "BalanceSheet", "owns": "`ConcurrentHashMap<userId, ConcurrentHashMap<userId, Long>>`", "rel": "Shared across all users, updated on every expense"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = User, Group, Expense, SplitType enum. **Service** = BalanceSheet (the stateful core), SplitStrategy implementations. **Controller** = SplitwiseService (public API, orchestration). The split between Service and Controller matters here: BalanceSheet is the 'heart' that does real work; SplitwiseService is the thin facade.",
+
+  "classes": [
+    {
+      "name": "SplitStrategy", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "computeShares(total, participants, params)", "returns": "Map<String, Long>"}
+      ]
+    },
+    {
+      "name": "EqualSplit", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "computeShares(total, participants, params)", "returns": "Map<String, Long>"}
+      ]
+    },
+    {
+      "name": "ExactSplit", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "computeShares(total, participants, amountMap)", "returns": "Map<String, Long>"}
+      ]
+    },
+    {
+      "name": "PercentageSplit", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "computeShares(total, participants, percentMap)", "returns": "Map<String, Long>"}
+      ]
+    },
+    {
+      "name": "BalanceSheet", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "balances", "type": "ConcurrentHashMap<String, ConcurrentHashMap<String, Long>>"}
+      ],
+      "methods": [
+        {"name": "recordExpense(paidBy, shares)", "returns": "void"},
+        {"name": "recordSettlement(from, to, amount)", "returns": "void"},
+        {"name": "getBalance(u1, u2)", "returns": "long"},
+        {"name": "getNetBalances(users)", "returns": "Map<String, Long>"},
+        {"name": "simplifyDebts(users)", "returns": "List<Settlement>"}
+      ]
+    },
+    {
+      "name": "SplitwiseService", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "users", "type": "Map<String, User>"},
+        {"name": "groups", "type": "Map<String, Group>"},
+        {"name": "expenseHistory", "type": "List<Expense>"},
+        {"name": "balanceSheet", "type": "BalanceSheet"}
+      ],
+      "methods": [
+        {"name": "addExpense(paidBy, amount, participants, strategy, params)", "returns": "String (expenseId)"},
+        {"name": "settleUp(from, to, amount)", "returns": "void"},
+        {"name": "getBalance(u1, u2)", "returns": "long"},
+        {"name": "getUserSummary(userId)", "returns": "Map<String, Long>"},
+        {"name": "simplifyGroupDebts(groupId)", "returns": "List<Settlement>"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "users",
+      "columns": [
+        {"name": "user_id", "type": "UUID", "pk": true},
+        {"name": "name", "type": "VARCHAR"},
+        {"name": "email", "type": "VARCHAR", "idx": true}
+      ]
+    },
+    {
+      "table": "groups",
+      "columns": [
+        {"name": "group_id", "type": "UUID", "pk": true},
+        {"name": "name", "type": "VARCHAR"}
+      ]
+    },
+    {
+      "table": "group_members",
+      "columns": [
+        {"name": "group_id", "type": "UUID", "pk": true, "fk": true},
+        {"name": "user_id", "type": "UUID", "pk": true, "fk": true}
+      ]
+    },
+    {
+      "table": "expenses",
+      "columns": [
+        {"name": "expense_id", "type": "UUID", "pk": true},
+        {"name": "group_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "paid_by_user_id", "type": "UUID", "fk": true},
+        {"name": "total_amount", "type": "BIGINT"},
+        {"name": "split_type", "type": "ENUM(EQUAL,EXACT,PCT)"},
+        {"name": "created_at", "type": "TIMESTAMP", "idx": true}
+      ]
+    },
+    {
+      "table": "expense_shares",
+      "columns": [
+        {"name": "expense_id", "type": "UUID", "pk": true, "fk": true},
+        {"name": "user_id", "type": "UUID", "pk": true, "fk": true},
+        {"name": "share_amount", "type": "BIGINT"}
+      ]
+    }
+  ],
+  "schema_note": "**Store amounts as BIGINT in smallest currency unit** (paise/cents) — never as DOUBLE. Floating-point math on money is a recipe for off-by-one-cent bugs. Index `(group_id, created_at)` for fetching group expenses in order.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Strategy — Three Split Implementations",
+      "flow": "**EqualSplit:** divide total by N, distribute remainder (1 cent per person) to first K participants. Never lose a cent. **ExactSplit:** validate sum equals total. **PercentageSplit:** validate sum equals 100, multiply each by total/100.",
+      "edge_cases": "Equal split of 100 cents among 3 users → 33, 33, 34 (not 33.33 × 3 = 99.99 → losing a cent). Exact split doesn't sum to total → throw. Percentage sum ≠ 100 → throw.",
+      "code": "interface SplitStrategy {\n    Map<String, Long> computeShares(long totalAmount,\n                                     List<String> participants,\n                                     Object params);\n}\n\nclass EqualSplit implements SplitStrategy {\n    @Override\n    public Map<String, Long> computeShares(long total,\n                                            List<String> participants,\n                                            Object params) {\n        int n = participants.size();\n        if (n == 0) throw new IllegalArgumentException(\"no participants\");\n\n        long baseShare = total / n;\n        long remainder = total - (baseShare * n);  // cents unaccounted for\n\n        Map<String, Long> shares = new LinkedHashMap<>();\n        for (int i = 0; i < n; i++) {\n            // First `remainder` users pay 1 cent extra — no money lost\n            long share = baseShare + (i < remainder ? 1 : 0);\n            shares.put(participants.get(i), share);\n        }\n        return shares;\n    }\n}\n\nclass ExactSplit implements SplitStrategy {\n    @Override\n    @SuppressWarnings(\"unchecked\")\n    public Map<String, Long> computeShares(long total,\n                                            List<String> participants,\n                                            Object params) {\n        Map<String, Long> shares = (Map<String, Long>) params;\n        long sum = shares.values().stream().mapToLong(Long::longValue).sum();\n        if (sum != total)\n            throw new InvalidSplitException(\n                \"Exact split sum \" + sum + \" != total \" + total);\n        // Validate all participants are in shares map\n        for (String uid : participants) {\n            if (!shares.containsKey(uid))\n                throw new InvalidSplitException(\"Missing share for \" + uid);\n        }\n        return shares;\n    }\n}\n\nclass PercentageSplit implements SplitStrategy {\n    @Override\n    @SuppressWarnings(\"unchecked\")\n    public Map<String, Long> computeShares(long total,\n                                            List<String> participants,\n                                            Object params) {\n        Map<String, Double> percents = (Map<String, Double>) params;\n        double sumPct = percents.values().stream().mapToDouble(Double::doubleValue).sum();\n        if (Math.abs(sumPct - 100.0) > 0.001)\n            throw new InvalidSplitException(\n                \"Percentages must sum to 100, got \" + sumPct);\n\n        Map<String, Long> shares = new LinkedHashMap<>();\n        long allocated = 0;\n        List<String> pList = new ArrayList<>(percents.keySet());\n        for (int i = 0; i < pList.size() - 1; i++) {\n            String uid = pList.get(i);\n            long share = Math.round(total * percents.get(uid) / 100.0);\n            shares.put(uid, share);\n            allocated += share;\n        }\n        // Last participant gets the remainder — absorbs rounding error\n        shares.put(pList.get(pList.size() - 1), total - allocated);\n        return shares;\n    }\n}"
+    },
+    {
+      "label": "Service — BalanceSheet (nested map + Debt Simplification)",
+      "flow": "**`recordExpense(paidBy, shares)`:** for each participant (except payer), increment `balances[payer][participant]` by their share. **Normalization:** if A owes B, we store it as a positive value in one direction and deduce the other. **`simplifyDebts`:** compute net balance per user (positive = owed money, negative = owes money), then greedily match the biggest creditor with the biggest debtor until all are zero.",
+      "edge_cases": "User pays for themselves in an equal split → their own share is subtracted from the payment, don't record a self-debt. Empty group → return empty simplification. Circular debts (A→B→C→A of $10 each) → net out to zero for all.",
+      "code": "class BalanceSheet {\n    // balances[owedBy][owedTo] = amount\n    // If A owes B $10: balances[A][B] = 10, balances[B][A] = -10 (kept in sync)\n    private final ConcurrentHashMap<String, ConcurrentHashMap<String, Long>>\n        balances = new ConcurrentHashMap<>();\n    private final Object lock = new Object();\n\n    // ── Record an expense — paidBy paid for all participants ──\n    public void recordExpense(String paidBy, Map<String, Long> shares) {\n        synchronized (lock) {\n            for (Map.Entry<String, Long> e : shares.entrySet()) {\n                String participant = e.getKey();\n                long share = e.getValue();\n                if (participant.equals(paidBy)) continue;  // skip self\n                // participant owes paidBy `share`\n                updateBalance(participant, paidBy, share);\n            }\n        }\n    }\n\n    public void recordSettlement(String from, String to, long amount) {\n        synchronized (lock) {\n            // `from` pays `to` → reduces what `from` owes `to` (or increases what `to` owes `from`)\n            updateBalance(from, to, -amount);\n        }\n    }\n\n    // Internal: `debtor` owes `creditor` `amount` more\n    private void updateBalance(String debtor, String creditor, long amount) {\n        balances.computeIfAbsent(debtor, k -> new ConcurrentHashMap<>())\n                .merge(creditor, amount, Long::sum);\n        balances.computeIfAbsent(creditor, k -> new ConcurrentHashMap<>())\n                .merge(debtor, -amount, Long::sum);\n    }\n\n    // Net: positive = `u1` owes `u2`, negative = `u2` owes `u1`\n    public long getBalance(String u1, String u2) {\n        return balances.getOrDefault(u1, new ConcurrentHashMap<>())\n                       .getOrDefault(u2, 0L);\n    }\n\n    // Per-user net: sum across all counterparties\n    public Map<String, Long> getNetBalances(Set<String> users) {\n        Map<String, Long> net = new HashMap<>();\n        for (String u : users) {\n            long sum = balances.getOrDefault(u, new ConcurrentHashMap<>())\n                               .values().stream()\n                               .mapToLong(Long::longValue).sum();\n            // sum > 0 → user owes money (positive debt)\n            // sum < 0 → user is owed money (creditor)\n            // We invert so positive = creditor, for standard 'net balance'\n            net.put(u, -sum);\n        }\n        return net;\n    }\n\n    // ── Debt Simplification — Greedy O(N log N) ──\n    // Compute net per user; pair biggest creditor with biggest debtor until all zero.\n    public List<Settlement> simplifyDebts(Set<String> users) {\n        Map<String, Long> net = getNetBalances(users);\n\n        // Two priority queues: creditors (positive) and debtors (negative)\n        PriorityQueue<Map.Entry<String, Long>> creditors =\n            new PriorityQueue<>((a, b) -> Long.compare(b.getValue(), a.getValue()));\n        PriorityQueue<Map.Entry<String, Long>> debtors =\n            new PriorityQueue<>(Comparator.comparingLong(Map.Entry::getValue));\n\n        for (Map.Entry<String, Long> e : net.entrySet()) {\n            if (e.getValue() > 0) creditors.offer(new AbstractMap.SimpleEntry<>(e));\n            else if (e.getValue() < 0) debtors.offer(new AbstractMap.SimpleEntry<>(e));\n        }\n\n        List<Settlement> result = new ArrayList<>();\n        while (!creditors.isEmpty() && !debtors.isEmpty()) {\n            Map.Entry<String, Long> c = creditors.poll();\n            Map.Entry<String, Long> d = debtors.poll();\n\n            long amount = Math.min(c.getValue(), -d.getValue());\n            result.add(new Settlement(d.getKey(), c.getKey(), amount));\n\n            long cRemaining = c.getValue() - amount;\n            long dRemaining = d.getValue() + amount;\n\n            if (cRemaining > 0)\n                creditors.offer(new AbstractMap.SimpleEntry<>(c.getKey(), cRemaining));\n            if (dRemaining < 0)\n                debtors.offer(new AbstractMap.SimpleEntry<>(d.getKey(), dRemaining));\n        }\n        return result;\n    }\n}\n\nrecord Settlement(String from, String to, long amount) {}"
+    },
+    {
+      "label": "Controller — SplitwiseService (Public API)",
+      "flow": "**`addExpense`:** resolve strategy → compute shares → validate → persist expense to history → update balance sheet atomically. **`settleUp`:** record settlement in sheet. **`simplifyGroupDebts`:** delegate to balance sheet.",
+      "code": "class SplitwiseService {\n    private final Map<String, User> users = new ConcurrentHashMap<>();\n    private final Map<String, Group> groups = new ConcurrentHashMap<>();\n    private final List<Expense> expenseHistory =\n        Collections.synchronizedList(new ArrayList<>());\n    private final BalanceSheet balanceSheet = new BalanceSheet();\n\n    // ── addExpense ───────────────────────\n    public String addExpense(String paidByUserId, long amount,\n                              List<String> participantIds,\n                              SplitType splitType, Object params) {\n        if (amount <= 0)\n            throw new IllegalArgumentException(\"Amount must be positive\");\n        if (!users.containsKey(paidByUserId))\n            throw new UserNotFoundException(paidByUserId);\n        for (String pid : participantIds) {\n            if (!users.containsKey(pid))\n                throw new UserNotFoundException(pid);\n        }\n\n        SplitStrategy strategy = switch (splitType) {\n            case EQUAL      -> new EqualSplit();\n            case EXACT      -> new ExactSplit();\n            case PERCENTAGE -> new PercentageSplit();\n        };\n\n        Map<String, Long> shares =\n            strategy.computeShares(amount, participantIds, params);\n\n        Expense expense = new Expense(UUID.randomUUID().toString(),\n            paidByUserId, amount, shares, splitType, System.currentTimeMillis());\n        expenseHistory.add(expense);\n\n        balanceSheet.recordExpense(paidByUserId, shares);\n        return expense.expenseId();\n    }\n\n    public void settleUp(String fromUser, String toUser, long amount) {\n        if (amount <= 0)\n            throw new IllegalArgumentException(\"Amount must be positive\");\n        balanceSheet.recordSettlement(fromUser, toUser, amount);\n    }\n\n    public long getBalance(String u1, String u2) {\n        return balanceSheet.getBalance(u1, u2);\n    }\n\n    public List<Settlement> simplifyGroupDebts(String groupId) {\n        Group g = groups.get(groupId);\n        if (g == null) throw new IllegalArgumentException(\"Unknown group\");\n        return balanceSheet.simplifyDebts(g.memberIds());\n    }\n}\n\nenum SplitType { EQUAL, EXACT, PERCENTAGE }\nrecord Expense(String expenseId, String paidBy, long total,\n               Map<String, Long> shares, SplitType type, long timestamp) {}\nrecord User(String userId, String name, String email) {}\nrecord Group(String groupId, String name, Set<String> memberIds) {}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Strategy Pattern → SplitStrategy",
+      "why": "Three ways to split an expense, same interface. Adding a new strategy (e.g., 'share based on days stayed' for roommates) = one new class. The `SplitwiseService` doesn't know or care how shares are computed.",
+      "where": "`SplitStrategy` interface + `EqualSplit`, `ExactSplit`, `PercentageSplit`"
+    },
+    {
+      "name": "Event Sourcing (lightweight) → expenseHistory",
+      "why": "All state mutations are recorded as immutable events (expenses). The balance sheet is a **projection** of those events. If the balance sheet becomes corrupt (bug, crash), you can **recompute it from scratch** by replaying all expenses. Real Splitwise and most financial systems follow this pattern.",
+      "where": "`expenseHistory` list + `BalanceSheet.recordExpense()`"
+    },
+    {
+      "name": "Observer Pattern (potential extension)",
+      "why": "When balances change, notify connected clients (mobile push, web updates). Each user subscribes to balance changes involving them. Not implemented but natural extension — the BalanceSheet would fire events on mutation.",
+      "where": "Would be added to BalanceSheet as listener callbacks"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two concurrent expenses in the same group corrupt the balance sheet",
+      "fix": "`BalanceSheet.recordExpense()` is guarded by `synchronized (lock)`. The nested map updates aren't individually atomic, so we need coarse-grained locking. For higher throughput, you could lock per-user-pair, but the added complexity isn't worth it for typical Splitwise workloads."
+    },
+    {
+      "issue": "Read-write race: reading balance during a concurrent expense",
+      "fix": "`getBalance()` reads without the lock — it may see a stale value during an in-flight update. For Splitwise's use case, eventual consistency is fine (UI refreshes next tick). For strict consistency, use a `ReadWriteLock` with `readLock()` on gets."
+    },
+    {
+      "issue": "Settlement and expense race: both updating the same pair",
+      "fix": "Both go through the same `synchronized (lock)` block in BalanceSheet. They serialize. No double-update possible."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "How does debt simplification (greedy) work? Is it optimal?",
+      "answer": "**Greedy algorithm:** compute each user's net balance. Put creditors in a max-heap, debtors in a min-heap. Repeatedly pair the biggest creditor with the biggest debtor, transferring `min(creditor, debtor)`. Continue until all nets are zero. **O(N log N).** This produces a **valid** set of settlements but not always the **minimum number of transactions**. The optimal version is NP-hard (subset-sum reduction). For interview purposes, greedy is the right answer — mention it's not optimal but is fast and good enough."
+    },
+    {
+      "question": "Why store amounts in cents/paise as Long, not Double?",
+      "answer": "**Floating-point math on money is wrong.** `0.1 + 0.2 = 0.30000000000000004` in IEEE 754. Accumulated rounding errors cause off-by-one-cent bugs that are invisible until audit time. Always use integer types for money (`long` in cents) or `BigDecimal` with explicit rounding mode. Splitwise stores internally as the smallest currency unit; display layer formats with decimal."
+    },
+    {
+      "question": "Why keep both directions in the balance map (A→B = 10 and B→A = -10)?",
+      "answer": "**Symmetry for reads.** If someone queries 'what does A owe B?' we don't want to check both `balances[A][B]` AND `balances[B][A]` and negate. Storing both directions (kept in sync in `updateBalance`) lets any lookup be a single map access. Memory cost is 2x, trivial at typical scale. Alternative: canonical ordering (always store under min(userId) → max(userId)) — saves memory but makes reads more complex."
+    },
+    {
+      "question": "What about edit/delete of expenses?",
+      "answer": "**Recompute strategy:** mark the expense as deleted in history, then rebuild the balance sheet from scratch by replaying all non-deleted expenses. O(expenses) per edit — fine for typical user scale (hundreds of expenses). **Delta strategy:** compute the delta from the old expense, apply the negation, then apply the new expense. Faster but error-prone. Real Splitwise uses recompute — safer."
+    },
+    {
+      "question": "How would you handle multi-currency?",
+      "answer": "Add a `Currency` enum to Expense. Store amounts in their original currency. When computing balances for a group with mixed currencies, either: (1) convert all to a chosen base currency using historical rates at expense time (complex but correct), or (2) maintain a separate balance sheet per currency (simpler but user sees multiple numbers). Splitwise uses option (1) with daily exchange rates cached."
+    },
+    {
+      "question": "How would you scale to millions of users and billions of expenses?",
+      "answer": "**Shard by user:** each user's expenses and balances live on one shard (consistent-hashed). Cross-user queries (getBalance(u1, u2)) are slow — precompute and cache. **Event-sourced persistence:** all expenses append-only to Kafka; balance sheet is a materialized view in a DB, rebuildable from the log. **Read replicas:** balance queries hit replicas. This is HLD territory — mention the approach, don't implement."
+    },
+    {
+      "question": "Is the BalanceSheet a valid place for the simplification algorithm, or should it be a separate service?",
+      "answer": "**Arguable.** BalanceSheet owns the data; putting the algorithm there is Law of Demeter-friendly. **Counter-argument:** simplification is a read-only analysis, not a state mutation — it could live in a separate `DebtSimplifier` service that takes a `BalanceSheet` as input. In a larger system, extraction makes sense. In a 35-minute interview, keeping it on BalanceSheet is fine. Mention the trade-off to show you're thinking about it."
+    }
+  ]
+}
