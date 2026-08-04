@@ -1,0 +1,371 @@
+{
+  "title": "Notification Service",
+  "description": "Design a notification service that delivers messages via multiple channels (Email, SMS, Push). Supports user preferences, retry on failure, and rate limiting. Combines Strategy (per channel), Observer (for delivery callbacks), and Decorator (for cross-cutting concerns like rate limiting and templating).",
+  "tags": [
+    {"type": "medium", "label": "Medium"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "pattern", "label": "Observer Pattern"},
+    {"type": "pattern", "label": "Decorator Pattern"},
+    {"type": "concept", "label": "Multi-Channel Delivery"}
+  ],
+  "prompt": "Design a notification service that sends messages to users via multiple channels (email, SMS, push) with user preferences and retry on failure.",
+  "prompt_note": "Notification systems sound trivial — 'just send the message.' The interesting design questions are: (1) **multi-channel** without coupling business logic to channel-specific code, (2) **user preferences** that respect quiet hours and channel opt-outs, (3) **delivery reliability** with retries, and (4) **observability** so you know what was sent and what failed. The patterns stack nicely: Strategy for channels, Decorator for cross-cutting concerns, Observer for delivery events.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Which channels do we support?\"",
+      "answer": "Interviewer: \"Email, SMS, and Push (mobile push notifications). Be ready to add more.\"",
+      "why": "Three channels → **Strategy Pattern** with one implementation per channel. 'Be ready to add more' means the design must be open for extension."
+    },
+    {
+      "question": "You: \"Do users have channel preferences? Quiet hours? Opt-outs?\"",
+      "answer": "Interviewer: \"Yes — each user can enable/disable channels. Some notifications respect quiet hours; some are urgent and bypass them.\"",
+      "why": "Preferences are per-user. Some notifications are 'urgent' and override preferences. Need a way to flag urgency."
+    },
+    {
+      "question": "You: \"What if delivery fails — retry? How many times?\"",
+      "answer": "Interviewer: \"Retry up to 3 times with exponential backoff. After that, log to a dead-letter queue.\"",
+      "why": "Standard reliability pattern. **Don't lose messages silently** — DLQ for inspection."
+    },
+    {
+      "question": "You: \"Should we batch or rate-limit?\"",
+      "answer": "Interviewer: \"Yes — rate limit per user (max 5 notifications per minute) and per channel (avoid hitting provider quotas).\"",
+      "why": "Two layers of rate limiting. Per-user to prevent spam; per-channel to respect provider quotas."
+    },
+    {
+      "question": "You: \"Templating — does the caller pass raw text, or use templates?\"",
+      "answer": "Interviewer: \"Templates with placeholders. The caller picks a template ID + provides variables.\"",
+      "why": "Template rendering is a separate concern — fits naturally as a Decorator before delivery."
+    },
+    {
+      "question": "You: \"Synchronous send or async queue?\"",
+      "answer": "Interviewer: \"Async. Caller calls `notify()` and gets back immediately. Delivery happens in the background.\"",
+      "why": "Producer-consumer pattern. Caller doesn't wait for SMS provider latency."
+    },
+    {
+      "question": "You: \"Delivery confirmation / callbacks?\"",
+      "answer": "Interviewer: \"Yes — listeners can subscribe to delivery events (success, failure).\"",
+      "why": "**Observer Pattern** — emit events for delivery state changes."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Multi-channel delivery:** Email, SMS, Push. Each channel has its own implementation.",
+      "**User preferences:** per-user opt-in/opt-out per channel, quiet hours, urgent override.",
+      "**Templates:** notifications use named templates with placeholder substitution (e.g., `Hi {name}, your order {orderId} is ready`).",
+      "**Async delivery:** `notify()` is fire-and-forget. Background workers deliver from a queue.",
+      "**Retry with exponential backoff:** failed deliveries retry up to 3 times. Final failure → DLQ.",
+      "**Rate limiting:** per user (max 5/min) and per channel (provider quotas).",
+      "**Delivery events:** listeners subscribe to SUCCESS/FAILURE events for analytics."
+    ],
+    "out_of_scope": [
+      "Real provider integrations (Twilio, SendGrid, FCM), template management UI, A/B testing, internationalization, attachment support, scheduled (delayed) notifications."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Decoupled channels:** adding a 4th channel (e.g., WhatsApp) requires one new class, no changes to existing code.",
+      "**Decoupled cross-cutting concerns:** rate limiting, templating, retry are pluggable independently of channels.",
+      "**Async, non-blocking caller:** `notify()` returns immediately.",
+      "**No silent failures:** every send has a tracked outcome (delivered, retrying, dead-lettered)."
+    ],
+    "out_of_scope": [
+      "End-to-end encryption, GDPR compliance, multi-region delivery, real-time delivery tracking."
+    ]
+  },
+
+  "primary_scope": [
+    "`notify(notification)` → check user preferences → enqueue per applicable channel",
+    "Worker pulls from channel queue → render template → rate-limit check → deliver via channel strategy",
+    "On failure → retry with exponential backoff → DLQ after max retries",
+    "Listeners receive SUCCESS / FAILURE events"
+  ],
+  "termination_points": [
+    "`UserNotFoundException` — unknown userId",
+    "`TemplateNotFoundException` — invalid templateId",
+    "`MissingTemplateVariableException` — required placeholder not provided",
+    "`UserOptedOutException` — user disabled this channel (silent skip, not error)",
+    "Rate limit exceeded → defer (not throw)",
+    "Final delivery failure → dead-letter queue + emit FAILURE event"
+  ],
+
+  "entity_intro": "The goal is to keep three orthogonal concerns separate: **what to send** (message + template), **how to send it** (channel), and **whether to send it now** (preferences, rate limit). Each concern is a layer that can be modified independently.",
+  "entities": [
+    {
+      "name": "Notification",
+      "role": "**Model.** notificationId, userId, templateId, variables, urgent flag, createdAt. Immutable. Represents a single intent to notify.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — value object"
+    },
+    {
+      "name": "User + UserPreferences",
+      "role": "**Model.** User identity + per-channel preferences (enabled, contact info), quiet hours config. Looked up before delivery.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — preference owner"
+    },
+    {
+      "name": "Template",
+      "role": "**Model.** templateId, channel-specific bodies (email subject + HTML, SMS short text, push title + body). Rendered with variables before send.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — message blueprint"
+    },
+    {
+      "name": "NotificationChannel (interface)",
+      "role": "**Strategy interface.** `send(user, renderedMessage)` → DeliveryResult. Implementations: EmailChannel, SmsChannel, PushChannel. Each calls a different external provider.",
+      "verdict": "yes",
+      "verdict_label": "✓ Strategy — per-channel implementation"
+    },
+    {
+      "name": "ChannelDecorator (rate limit, retry, etc.)",
+      "role": "**Decorator wrapper.** Wraps a NotificationChannel to add cross-cutting behavior: rate limiting, retry, logging. Multiple decorators stack.",
+      "verdict": "yes",
+      "verdict_label": "✓ Decorator — cross-cutting concerns"
+    },
+    {
+      "name": "DeliveryEventListener",
+      "role": "**Observer interface.** `onDelivered(event)`, `onFailed(event)`. Subscribers (analytics, audit log) receive delivery state events.",
+      "verdict": "yes",
+      "verdict_label": "✓ Observer — delivery callbacks"
+    },
+    {
+      "name": "NotificationService",
+      "role": "**Controller.** Public API: `notify(notification)`. Owns the channel registry, user preferences lookup, async queue, retry logic, listeners.",
+      "verdict": "yes",
+      "verdict_label": "✓ Controller — Orchestrator"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "NotificationService", "owns": "channels map, userRepo, templateRepo, async queue, listeners list", "rel": "1 → N Channels, 1 → N Listeners"},
+    {"entity": "Notification", "owns": "id, userId, templateId, variables, urgent flag", "rel": "N → 1 User, N → 1 Template"},
+    {"entity": "User", "owns": "id, contact info, UserPreferences", "rel": "1 → 1 UserPreferences"},
+    {"entity": "ChannelDecorator", "owns": "wrapped NotificationChannel", "rel": "wraps 1 NotificationChannel (recursive)"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Notification, User, Template, DeliveryResult, ChannelType enum. **Service** = NotificationChannel implementations (per-channel logic), TemplateRenderer, RateLimiter, RetryPolicy. **Controller** = NotificationService (the public API). The interesting aspect is that **Service** here is layered: the channel strategy is at the bottom, decorators wrap it, and the controller orchestrates everything.",
+
+  "classes": [
+    {
+      "name": "NotificationChannel", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "send(user, message)", "returns": "DeliveryResult"},
+        {"name": "getChannelType()", "returns": "ChannelType"}
+      ]
+    },
+    {
+      "name": "EmailChannel", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "send(user, message)", "returns": "DeliveryResult (calls SMTP / SendGrid)"}
+      ]
+    },
+    {
+      "name": "SmsChannel", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "send(user, message)", "returns": "DeliveryResult (calls Twilio API)"}
+      ]
+    },
+    {
+      "name": "PushChannel", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "send(user, message)", "returns": "DeliveryResult (calls FCM / APNS)"}
+      ]
+    },
+    {
+      "name": "RateLimitDecorator", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "wrapped", "type": "NotificationChannel"},
+        {"name": "rateLimiter", "type": "RateLimiter"}
+      ],
+      "methods": [
+        {"name": "send(user, message)", "returns": "DeliveryResult (checks limit, then delegates)"}
+      ]
+    },
+    {
+      "name": "Notification", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "notificationId", "type": "String"},
+        {"name": "userId", "type": "String"},
+        {"name": "templateId", "type": "String"},
+        {"name": "variables", "type": "Map<String, String>"},
+        {"name": "channels", "type": "Set<ChannelType>"},
+        {"name": "urgent", "type": "boolean"},
+        {"name": "createdAt", "type": "Instant"}
+      ],
+      "methods": []
+    },
+    {
+      "name": "DeliveryEventListener", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "onDelivered(event)", "returns": "void"},
+        {"name": "onFailed(event)", "returns": "void"}
+      ]
+    },
+    {
+      "name": "NotificationService", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "channels", "type": "Map<ChannelType, NotificationChannel>"},
+        {"name": "userRepo", "type": "UserRepository"},
+        {"name": "templateRepo", "type": "TemplateRepository"},
+        {"name": "queue", "type": "BlockingQueue<DeliveryTask>"},
+        {"name": "listeners", "type": "CopyOnWriteArrayList<DeliveryEventListener>"},
+        {"name": "workers", "type": "ExecutorService"},
+        {"name": "deadLetter", "type": "List<DeliveryTask>"}
+      ],
+      "methods": [
+        {"name": "notify(notification)", "returns": "void (async)"},
+        {"name": "addListener(listener)", "returns": "void"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "users",
+      "columns": [
+        {"name": "user_id", "type": "UUID", "pk": true},
+        {"name": "name", "type": "VARCHAR"},
+        {"name": "email", "type": "VARCHAR"},
+        {"name": "phone", "type": "VARCHAR"},
+        {"name": "device_token", "type": "VARCHAR"}
+      ]
+    },
+    {
+      "table": "user_preferences",
+      "columns": [
+        {"name": "user_id", "type": "UUID", "pk": true, "fk": true},
+        {"name": "channel", "type": "ENUM(EMAIL,SMS,PUSH)", "pk": true},
+        {"name": "enabled", "type": "BOOLEAN"},
+        {"name": "quiet_hours_start", "type": "TIME"},
+        {"name": "quiet_hours_end", "type": "TIME"}
+      ]
+    },
+    {
+      "table": "templates",
+      "columns": [
+        {"name": "template_id", "type": "VARCHAR", "pk": true},
+        {"name": "channel", "type": "ENUM(EMAIL,SMS,PUSH)", "pk": true},
+        {"name": "subject", "type": "TEXT"},
+        {"name": "body", "type": "TEXT"}
+      ]
+    },
+    {
+      "table": "notification_log",
+      "columns": [
+        {"name": "notification_id", "type": "UUID", "pk": true},
+        {"name": "user_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "channel", "type": "ENUM"},
+        {"name": "template_id", "type": "VARCHAR", "fk": true},
+        {"name": "status", "type": "ENUM(QUEUED,DELIVERED,FAILED,DEAD_LETTERED)", "idx": true},
+        {"name": "attempt_count", "type": "INT"},
+        {"name": "last_error", "type": "TEXT"},
+        {"name": "delivered_at", "type": "TIMESTAMP"}
+      ]
+    }
+  ],
+  "schema_note": "**`notification_log` is the audit trail.** Every notification is recorded with status. Index `(user_id, status)` for 'show user their notification history' queries. Index `(status, created_at)` for monitoring (count of FAILED in last hour).",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Notification + DeliveryResult + Enums",
+      "code": "import java.time.Instant;\nimport java.util.*;\n\nenum ChannelType { EMAIL, SMS, PUSH }\nenum DeliveryStatus { SUCCESS, FAILED_RETRYABLE, FAILED_PERMANENT }\n\nrecord Notification(\n    String notificationId,\n    String userId,\n    String templateId,\n    Map<String, String> variables,\n    Set<ChannelType> channels,\n    boolean urgent,\n    Instant createdAt\n) {\n    public static Notification of(String userId, String templateId,\n                                   Map<String, String> vars,\n                                   Set<ChannelType> channels) {\n        return new Notification(UUID.randomUUID().toString(),\n            userId, templateId, vars, channels, false, Instant.now());\n    }\n\n    public Notification asUrgent() {\n        return new Notification(notificationId, userId, templateId,\n            variables, channels, true, createdAt);\n    }\n}\n\nrecord DeliveryResult(DeliveryStatus status, String errorMessage) {\n    public static DeliveryResult success() {\n        return new DeliveryResult(DeliveryStatus.SUCCESS, null);\n    }\n    public static DeliveryResult retryable(String error) {\n        return new DeliveryResult(DeliveryStatus.FAILED_RETRYABLE, error);\n    }\n    public static DeliveryResult permanent(String error) {\n        return new DeliveryResult(DeliveryStatus.FAILED_PERMANENT, error);\n    }\n}\n\nrecord User(String userId, String email, String phone, String deviceToken) {}\n\nrecord UserPreferences(\n    String userId,\n    Map<ChannelType, Boolean> channelEnabled,\n    Optional<QuietHours> quietHours\n) {\n    public boolean isChannelEnabled(ChannelType c) {\n        return channelEnabled.getOrDefault(c, true);\n    }\n}\n\nrecord QuietHours(int startHour, int endHour) {\n    public boolean isInQuietHours(Instant now) {\n        int hour = now.atZone(java.time.ZoneId.systemDefault()).getHour();\n        if (startHour <= endHour)\n            return hour >= startHour && hour < endHour;\n        // Overnight (e.g., 22 → 7)\n        return hour >= startHour || hour < endHour;\n    }\n}\n\nrecord Template(String templateId, ChannelType channel, String subject, String body) {\n    public String render(Map<String, String> variables) {\n        String result = body;\n        for (Map.Entry<String, String> e : variables.entrySet()) {\n            result = result.replace(\"{\" + e.getKey() + \"}\", e.getValue());\n        }\n        return result;\n    }\n}"
+    },
+    {
+      "label": "Strategy — NotificationChannel + 3 Implementations",
+      "flow": "Each channel implementation calls a different provider. Failures are categorized: retryable (network blip, 5xx) vs permanent (invalid email format, opt-out). The classification informs the retry logic.",
+      "edge_cases": "Invalid contact info (no email on file) → permanent failure. Provider rate limit response → retryable. Invalid template after rendering → permanent.",
+      "code": "interface NotificationChannel {\n    DeliveryResult send(User user, String renderedMessage, String subject);\n    ChannelType getChannelType();\n}\n\nclass EmailChannel implements NotificationChannel {\n    @Override\n    public DeliveryResult send(User user, String body, String subject) {\n        if (user.email() == null || user.email().isBlank())\n            return DeliveryResult.permanent(\"No email on file\");\n        try {\n            // emailProvider.send(user.email(), subject, body);\n            // Simulate provider call\n            return DeliveryResult.success();\n        } catch (TransientException e) {\n            return DeliveryResult.retryable(e.getMessage());\n        } catch (Exception e) {\n            return DeliveryResult.permanent(e.getMessage());\n        }\n    }\n\n    @Override\n    public ChannelType getChannelType() { return ChannelType.EMAIL; }\n}\n\nclass SmsChannel implements NotificationChannel {\n    @Override\n    public DeliveryResult send(User user, String body, String subject) {\n        if (user.phone() == null || user.phone().isBlank())\n            return DeliveryResult.permanent(\"No phone on file\");\n        try {\n            // twilioClient.send(user.phone(), body);\n            return DeliveryResult.success();\n        } catch (TransientException e) {\n            return DeliveryResult.retryable(e.getMessage());\n        } catch (Exception e) {\n            return DeliveryResult.permanent(e.getMessage());\n        }\n    }\n\n    @Override\n    public ChannelType getChannelType() { return ChannelType.SMS; }\n}\n\nclass PushChannel implements NotificationChannel {\n    @Override\n    public DeliveryResult send(User user, String body, String subject) {\n        if (user.deviceToken() == null)\n            return DeliveryResult.permanent(\"No device token registered\");\n        try {\n            // fcmClient.send(user.deviceToken(), subject, body);\n            return DeliveryResult.success();\n        } catch (TransientException e) {\n            return DeliveryResult.retryable(e.getMessage());\n        } catch (Exception e) {\n            return DeliveryResult.permanent(e.getMessage());\n        }\n    }\n\n    @Override\n    public ChannelType getChannelType() { return ChannelType.PUSH; }\n}\n\nclass TransientException extends RuntimeException {\n    public TransientException(String msg) { super(msg); }\n}"
+    },
+    {
+      "label": "Decorator — RateLimitDecorator wrapping any channel",
+      "flow": "Wraps a real channel and intercepts `send()` calls. Checks the rate limiter first; if denied, defers (returns retryable so the worker re-queues). If allowed, delegates to the underlying channel. **Stackable** — wrap with LoggingDecorator → RateLimitDecorator → real channel.",
+      "code": "// Decorator: adds rate limiting to any channel without changing it\nclass RateLimitDecorator implements NotificationChannel {\n    private final NotificationChannel wrapped;\n    private final RateLimiter limiter; // from Problem 6\n\n    public RateLimitDecorator(NotificationChannel wrapped, RateLimiter limiter) {\n        this.wrapped = wrapped;\n        this.limiter = limiter;\n    }\n\n    @Override\n    public DeliveryResult send(User user, String body, String subject) {\n        String key = wrapped.getChannelType() + \":\" + user.userId();\n        if (!limiter.allowRequest(key)) {\n            return DeliveryResult.retryable(\"Rate limit exceeded — will retry\");\n        }\n        return wrapped.send(user, body, subject);\n    }\n\n    @Override\n    public ChannelType getChannelType() { return wrapped.getChannelType(); }\n}\n\nclass LoggingDecorator implements NotificationChannel {\n    private final NotificationChannel wrapped;\n\n    public LoggingDecorator(NotificationChannel wrapped) {\n        this.wrapped = wrapped;\n    }\n\n    @Override\n    public DeliveryResult send(User user, String body, String subject) {\n        long start = System.currentTimeMillis();\n        DeliveryResult result = wrapped.send(user, body, subject);\n        long elapsed = System.currentTimeMillis() - start;\n        // log: channel=X user=Y status=Z latency=elapsed\n        return result;\n    }\n\n    @Override\n    public ChannelType getChannelType() { return wrapped.getChannelType(); }\n}"
+    },
+    {
+      "label": "Controller — NotificationService (async + retry + observer)",
+      "flow": "**`notify()`:** lookup user + preferences → filter channels (skip opted-out, skip quiet hours unless urgent) → for each remaining channel, enqueue a `DeliveryTask`. **Workers:** poll the queue → render template → call channel → on retryable failure, re-enqueue with backoff → on permanent or max-retries, dead-letter.",
+      "edge_cases": "User opted out of all channels for this notification → silent skip (not error). Template not found → permanent failure. Worker thread interrupted → re-enqueue current task before exiting. Listener throws → catch and continue (don't fail delivery on observer bugs).",
+      "code": "import java.util.concurrent.*;\nimport java.util.concurrent.atomic.AtomicInteger;\n\nrecord DeliveryTask(\n    Notification notification,\n    ChannelType channel,\n    int attemptNumber,\n    long earliestRetryAt\n) {}\n\nrecord DeliveryEvent(String notificationId, String userId,\n                     ChannelType channel, DeliveryStatus status, String error) {}\n\ninterface DeliveryEventListener {\n    void onDelivered(DeliveryEvent event);\n    void onFailed(DeliveryEvent event);\n}\n\nclass NotificationService {\n    private static final int MAX_RETRIES = 3;\n\n    private final Map<ChannelType, NotificationChannel> channels;\n    private final UserRepository userRepo;\n    private final TemplateRepository templateRepo;\n    private final BlockingQueue<DeliveryTask> queue = new LinkedBlockingQueue<>();\n    private final CopyOnWriteArrayList<DeliveryEventListener> listeners = new CopyOnWriteArrayList<>();\n    private final List<DeliveryTask> deadLetter = Collections.synchronizedList(new ArrayList<>());\n    private final ExecutorService workers;\n    private volatile boolean running = true;\n\n    public NotificationService(Map<ChannelType, NotificationChannel> channels,\n                               UserRepository userRepo,\n                               TemplateRepository templateRepo,\n                               int workerCount) {\n        this.channels = channels;\n        this.userRepo = userRepo;\n        this.templateRepo = templateRepo;\n        this.workers = Executors.newFixedThreadPool(workerCount);\n        for (int i = 0; i < workerCount; i++) workers.submit(this::workerLoop);\n    }\n\n    // ── Public API ──────────────────────\n    public void notify(Notification notification) {\n        UserPreferences prefs = userRepo.getPreferences(notification.userId());\n\n        for (ChannelType ch : notification.channels()) {\n            // Respect user opt-out (urgent overrides this)\n            if (!notification.urgent() && !prefs.isChannelEnabled(ch))\n                continue;\n\n            // Respect quiet hours (urgent overrides)\n            if (!notification.urgent() && prefs.quietHours().isPresent()\n                    && prefs.quietHours().get().isInQuietHours(Instant.now()))\n                continue;\n\n            queue.offer(new DeliveryTask(notification, ch, 1, 0));\n        }\n    }\n\n    public void addListener(DeliveryEventListener listener) {\n        listeners.add(listener);\n    }\n\n    public void shutdown() {\n        running = false;\n        workers.shutdown();\n    }\n\n    // ── Worker loop ─────────────────────\n    private void workerLoop() {\n        while (running) {\n            try {\n                DeliveryTask task = queue.poll(1, TimeUnit.SECONDS);\n                if (task == null) continue;\n\n                // Honor backoff\n                long now = System.currentTimeMillis();\n                if (task.earliestRetryAt() > now) {\n                    Thread.sleep(task.earliestRetryAt() - now);\n                }\n\n                process(task);\n            } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n                break;\n            }\n        }\n    }\n\n    // ── Process a single delivery task ──\n    private void process(DeliveryTask task) {\n        Notification n = task.notification();\n        User user = userRepo.getUser(n.userId());\n        if (user == null) {\n            emitFailed(n, task.channel(), \"Unknown user\");\n            return;\n        }\n\n        Template template = templateRepo.get(n.templateId(), task.channel());\n        if (template == null) {\n            emitFailed(n, task.channel(), \"Unknown template\");\n            return;\n        }\n\n        String body = template.render(n.variables());\n        NotificationChannel channel = channels.get(task.channel());\n        if (channel == null) {\n            emitFailed(n, task.channel(), \"Unknown channel\");\n            return;\n        }\n\n        DeliveryResult result = channel.send(user, body, template.subject());\n\n        switch (result.status()) {\n            case SUCCESS -> emitDelivered(n, task.channel());\n            case FAILED_PERMANENT -> emitFailed(n, task.channel(), result.errorMessage());\n            case FAILED_RETRYABLE -> {\n                if (task.attemptNumber() >= MAX_RETRIES) {\n                    deadLetter.add(task);\n                    emitFailed(n, task.channel(),\n                        \"Max retries exceeded: \" + result.errorMessage());\n                } else {\n                    // Exponential backoff: 1s, 2s, 4s\n                    long backoffMs = 1000L * (1L << task.attemptNumber());\n                    queue.offer(new DeliveryTask(\n                        n, task.channel(), task.attemptNumber() + 1,\n                        System.currentTimeMillis() + backoffMs));\n                }\n            }\n        }\n    }\n\n    private void emitDelivered(Notification n, ChannelType channel) {\n        DeliveryEvent event = new DeliveryEvent(\n            n.notificationId(), n.userId(), channel,\n            DeliveryStatus.SUCCESS, null);\n        for (DeliveryEventListener l : listeners) {\n            try { l.onDelivered(event); } catch (Exception ignored) {}\n        }\n    }\n\n    private void emitFailed(Notification n, ChannelType channel, String error) {\n        DeliveryEvent event = new DeliveryEvent(\n            n.notificationId(), n.userId(), channel,\n            DeliveryStatus.FAILED_PERMANENT, error);\n        for (DeliveryEventListener l : listeners) {\n            try { l.onFailed(event); } catch (Exception ignored) {}\n        }\n    }\n}\n\ninterface UserRepository {\n    User getUser(String userId);\n    UserPreferences getPreferences(String userId);\n}\n\ninterface TemplateRepository {\n    Template get(String templateId, ChannelType channel);\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Strategy Pattern → NotificationChannel",
+      "why": "Three channels with completely different delivery mechanisms (SMTP, Twilio, FCM). Each implements the same `send()` interface. The NotificationService treats all channels uniformly — it doesn't know which provider is on the other end. **Adding WhatsApp = one new class** implementing NotificationChannel; zero changes to NotificationService.",
+      "where": "`NotificationChannel` interface + `EmailChannel`, `SmsChannel`, `PushChannel`"
+    },
+    {
+      "name": "Decorator Pattern → RateLimitDecorator, LoggingDecorator",
+      "why": "Cross-cutting concerns (rate limiting, logging, retry tracking) shouldn't pollute the channel implementations. Decorators wrap any channel and add behavior **before/after** the actual send. Multiple decorators stack: `LoggingDecorator(RateLimitDecorator(EmailChannel))`. Each layer adds one concern. **You can mix and match** — SMS might need rate limiting + logging, push might need retries + logging.",
+      "where": "`RateLimitDecorator`, `LoggingDecorator` — wrap any `NotificationChannel`"
+    },
+    {
+      "name": "Observer Pattern → DeliveryEventListener",
+      "why": "Multiple consumers want to know about delivery outcomes: analytics, audit log, billing, alerting. Instead of NotificationService calling each one explicitly, listeners subscribe and are notified on every event. **New listeners can be added without touching NotificationService.**",
+      "where": "`DeliveryEventListener` interface + `addListener` + `emitDelivered/emitFailed`"
+    },
+    {
+      "name": "Producer-Consumer (Queue + Workers)",
+      "why": "Caller's `notify()` enqueues tasks and returns. Worker threads pull from the queue and deliver. Decouples the caller's latency from the (slow) delivery providers. Same architecture as the Pub/Sub problem (P9) and Task Scheduler (P7) — this pattern is everywhere.",
+      "where": "`BlockingQueue<DeliveryTask>` + `workers` ExecutorService + `workerLoop()`"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Multiple workers processing the same notification simultaneously",
+      "fix": "Each `DeliveryTask` is dequeued exactly once (BlockingQueue.poll is atomic). Different workers process different tasks — no overlap. The fan-out across channels happens at enqueue time: one Notification → N tasks (one per channel) → N independent worker pickups."
+    },
+    {
+      "issue": "Listener throws an exception during onDelivered",
+      "fix": "Each listener call is wrapped in try-catch — failure in one listener doesn't affect others or the delivery itself. Logged separately for debugging. **Never let observer failures propagate** to the subject."
+    },
+    {
+      "issue": "Rate limiter race — two concurrent sends both pass the check",
+      "fix": "The RateLimiter from Problem 6 uses per-key locking internally (`tryConsume()` is `synchronized` per bucket). Two workers checking the same user's rate are serialized. Only one passes; the other gets a retryable response and re-queues."
+    },
+    {
+      "issue": "Worker shutdown loses in-flight tasks",
+      "fix": "Workers check `running` flag in the loop. On `shutdown()`, current task completes (worker finishes the iteration), then exits. **For graceful drain:** call `workers.shutdown()` then `awaitTermination(30s)` — gives in-flight tasks time to finish. Tasks still in the queue at shutdown are lost — could be persisted to disk for recovery."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why Decorator instead of just adding rate limiting inside each channel?",
+      "answer": "**Composability and orthogonality.** If rate limiting was inside EmailChannel, you'd duplicate the same logic in SmsChannel and PushChannel. With Decorator, the rate limit logic is one class, applied once, reused everywhere. **Stack flexibility:** in production, you might want logging + rate limiting on email, but only logging on push. With decorators: `Logging(RateLimit(Email))` and `Logging(Push)` — same logging code, different stacks. Inside-the-channel duplication can't do this without duplication or flags."
+    },
+    {
+      "question": "Why distinguish FAILED_RETRYABLE from FAILED_PERMANENT?",
+      "answer": "**Don't waste retries on hopeless cases.** A 5xx response from Twilio is transient — retry might succeed. An invalid phone number is permanent — no number of retries will help. Treating both the same wastes resources and delays the inevitable failure event. The channel implementation knows best (it sees the provider's response code) and categorizes the failure. The retry policy then makes informed decisions."
+    },
+    {
+      "question": "How does urgent override work?",
+      "answer": "**Urgent flag bypasses two checks:** (1) user opt-out preferences, (2) quiet hours. The notification is delivered even if the user normally wouldn't receive it. **Use case:** security alerts (suspicious login), payment failures, account lockouts. Urgent doesn't bypass dead-letter logic — even urgent notifications fail eventually if the channel is broken. **Don't abuse urgent** — it's for actual emergencies; otherwise users disable the app entirely."
+    },
+    {
+      "question": "Why not use a real message queue like Kafka or RabbitMQ?",
+      "answer": "**For production, you should.** In-process `BlockingQueue` is sufficient for: (1) single JVM, (2) low/medium scale, (3) acceptable to lose tasks on crash. For real-world notification systems serving millions of users, you'd use Kafka (or SQS, Pulsar, RabbitMQ) for: (1) durability — tasks survive crashes, (2) horizontal scaling — multiple consumer instances, (3) backpressure — built-in. Mention this as the production upgrade path. **Our LLD design stays the same** — only the queue implementation changes."
+    },
+    {
+      "question": "How would you support batching (digest emails)?",
+      "answer": "**Add a batching channel decorator.** `BatchingDecorator` accumulates notifications for a user over a window (e.g., 5 minutes) and sends them as a single email with all updates. Implementation: per-user buffer, a scheduler that flushes buffers at the window boundary. Trickier with templates (you need a 'digest template' that renders multiple notifications). The Decorator pattern makes this clean — wrap EmailChannel with BatchingDecorator without touching anything else."
+    },
+    {
+      "question": "How do you observe delivery rates and failures in production?",
+      "answer": "**Listeners feed metrics.** Add a `MetricsListener implements DeliveryEventListener` that increments counters: `notifications_delivered_total{channel=email}`, `notifications_failed_total{channel=sms,reason=invalid_number}`. Expose via Prometheus. Add an `AuditListener` that writes every event to a database for compliance/debugging. **The Observer Pattern is precisely for this** — the same delivery events power metrics, audit, alerting, all decoupled from each other."
+    },
+    {
+      "question": "How would you handle template versioning?",
+      "answer": "**Add a version field to templateId.** `templateRepo.get('order-confirmed-v2', EMAIL)`. New campaigns reference new versions; old in-flight notifications continue using their version. Deletes/archives are soft (`active = false` flag). For A/B tests: the templateId is decided by the caller, not the service. The service is just a renderer. Template logic lives in a separate **TemplateService** — decoupled from delivery. Don't conflate them."
+    }
+  ]
+}
