@@ -1,0 +1,357 @@
+{
+  "title": "Hotel Booking System",
+  "description": "Design a hotel booking system that handles room search, availability queries across date ranges, booking with hold-and-confirm, cancellations, and overbooking policies. The central challenge is **date-range availability** — harder than movie seats because reservations span multiple consecutive nights.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "pattern", "label": "Hold-and-Confirm"},
+    {"type": "concept", "label": "Date Range Queries"},
+    {"type": "concept", "label": "Concurrency"}
+  ],
+  "prompt": "Design a hotel booking system where users can search for rooms, check availability for specific date ranges, book rooms, and cancel reservations.",
+  "prompt_note": "Hotel bookings look like movie tickets at first glance but have one crucial difference: **reservations span multiple nights.** A room is 'booked' not for a single instant but for a range of dates. Checking availability means 'is this room free for every night in [checkIn, checkOut)?' That makes the data structure question interesting — how do you efficiently query and update a date range?",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"One hotel or multiple? What's the room hierarchy?\"",
+      "answer": "Interviewer: \"Multiple hotels. Each hotel has rooms; rooms belong to room types (Standard, Deluxe, Suite). Users search by city + dates, not a specific room.\"",
+      "why": "Search is **by room type, not by specific room.** The system picks which physical room. This is the key design insight."
+    },
+    {
+      "question": "You: \"How is availability tracked per room? Per day, or per range?\"",
+      "answer": "Interviewer: \"Per day. A room is either available or booked for each night.\"",
+      "why": "Per-night granularity. Use a `Set<LocalDate>` of booked dates, or a `Map<date, bookingId>`."
+    },
+    {
+      "question": "You: \"Hold-and-confirm like movie tickets? Payment flow?\"",
+      "answer": "Interviewer: \"Yes — hold for 10 minutes, confirm with payment, release on timeout.\"",
+      "why": "Same pattern as P13 (movie ticket), extended to date ranges."
+    },
+    {
+      "question": "You: \"Overbooking — do we allow it?\"",
+      "answer": "Interviewer: \"Yes. Hotels overbook by ~5% to account for no-shows. Make the overbook percentage configurable.\"",
+      "why": "Introduces a **policy parameter.** The 'available' count = actual rooms × (1 + overbook%)."
+    },
+    {
+      "question": "You: \"Cancellation policy — free cancel, partial refund, non-refundable?\"",
+      "answer": "Interviewer: \"Support multiple cancellation policies per booking. Free cancel up to 24h before check-in.\"",
+      "why": "**Strategy Pattern** for cancellation policies. Different rates per rate plan."
+    },
+    {
+      "question": "You: \"Search by city and dates — what does it return?\"",
+      "answer": "Interviewer: \"List of hotels that have at least one available room of any type for the requested date range.\"",
+      "why": "Search is a filter operation over all hotels in the city. For LLD, iterate; for HLD, inverted index."
+    },
+    {
+      "question": "You: \"What about variable pricing by date or season?\"",
+      "answer": "Interviewer: \"Mention it. Not in core implementation.\"",
+      "why": "Pricing engines are their own beast. Acknowledge, don't implement."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Search:** find hotels in a city with any available rooms for `[checkIn, checkOut)` date range.",
+      "**Availability query:** for a specific hotel + room type + date range, return available rooms count (respecting overbook policy).",
+      "**Hold:** hold a room for a date range (10-minute TTL). Atomic — either all nights hold or none.",
+      "**Confirm booking:** after payment, transition hold → confirmed booking.",
+      "**Cancel booking:** release rooms per cancellation policy; compute refund amount.",
+      "**Overbooking:** allow bookings up to `actualRooms × (1 + overbookPct)` for each date.",
+      "**Background cleanup:** release expired holds automatically."
+    ],
+    "out_of_scope": [
+      "Variable pricing by date/season, payment gateway integration, loyalty programs, room preferences (specific floor, view), amenities search, recommendation engine, multi-currency."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Date-range availability is O(nights)** — fast enough for interactive search.",
+      "**Thread-safe hold operations** — two concurrent users must not both hold the same room.",
+      "**Atomic multi-night hold** — all nights lock together, or none do.",
+      "**Accurate overbook accounting** — never exceed the overbooked capacity."
+    ],
+    "out_of_scope": [
+      "Cross-datacenter consistency, real-time inventory sync with third-party OTAs, sub-millisecond search latency."
+    ]
+  },
+
+  "primary_scope": [
+    "`search(city, checkIn, checkOut, guests)` → filter hotels → filter by room type availability",
+    "`getAvailability(hotelId, roomType, dateRange)` → count rooms available every night in range",
+    "`holdRooms(hotelId, roomType, dateRange, count)` → atomic multi-night hold → return holdId",
+    "`confirmBooking(holdId, paymentToken)` → transition hold to booking",
+    "`cancelBooking(bookingId)` → release rooms + compute refund via policy",
+    "Background job: release expired holds"
+  ],
+  "termination_points": [
+    "`NoAvailabilityException` — not enough rooms for the date range",
+    "`HoldExpiredException` — confirming an expired hold",
+    "`InvalidDateRangeException` — checkout <= checkin, or dates in past",
+    "`HotelNotFoundException` / `RoomTypeNotFoundException`",
+    "`CancellationNotAllowedException` — non-refundable policy, past cutoff"
+  ],
+
+  "entity_intro": "The critical modeling insight: **don't track individual rooms for availability.** Track room-type inventory per hotel per date. Individual room assignment is a post-booking concern (front desk picks at check-in). This simplifies the data structure dramatically.",
+  "entities": [
+    {
+      "name": "Hotel",
+      "role": "**Model.** hotelId, name, city, location. Contains multiple RoomType instances. Top-level entity for search.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — top-level container"
+    },
+    {
+      "name": "RoomType",
+      "role": "**Model.** typeId (STANDARD, DELUXE, SUITE), totalRooms, basePrice, overbookPercentage. Each hotel has its own RoomTypes.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — inventory definition"
+    },
+    {
+      "name": "Inventory",
+      "role": "**Service.** Per-hotel, per-room-type, per-date bookings count. `Map<(hotelId, typeId), Map<LocalDate, Integer>>`. The heart of availability tracking. Also holds the hold-count separately from confirmed bookings.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — the central state"
+    },
+    {
+      "name": "Hold",
+      "role": "**Model.** holdId, hotelId, roomTypeId, dateRange, count, userId, createdAt, ttl. Temporary reservation before payment.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — temporary state"
+    },
+    {
+      "name": "Booking",
+      "role": "**Model.** bookingId, userId, hotelId, roomTypeId, checkIn, checkOut, count, totalAmount, cancellationPolicy, status. Confirmed reservation.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — persistent reservation"
+    },
+    {
+      "name": "CancellationPolicy (Strategy)",
+      "role": "**Strategy interface.** `calculateRefund(booking, cancelTime)` → amount. Implementations: FreeCancellation (full refund until 24h), NonRefundable (zero refund), Partial (tiered by time).",
+      "verdict": "yes",
+      "verdict_label": "✓ Strategy — refund rules"
+    },
+    {
+      "name": "Room (physical room)",
+      "role": "**Model — but NOT used for availability.** Represents a physical room with number, floor, specific amenities. Assigned at check-in from the pool of available rooms of that type. Keeps the availability data structure simple.",
+      "verdict": "maybe",
+      "verdict_label": "? Optional — only needed if you track specific rooms"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "Hotel", "owns": "id, name, city, `Map<roomTypeId, RoomType>`", "rel": "1 → N RoomTypes"},
+    {"entity": "RoomType", "owns": "id, totalRooms, basePrice, overbookPct", "rel": "N → 1 Hotel"},
+    {"entity": "Inventory", "owns": "`Map<(hotelId, typeId), Map<date, count>>` for confirmed + holds", "rel": "Tracks state for all Hotel × RoomType × Date tuples"},
+    {"entity": "Booking", "owns": "id, userId, hotelId, typeId, dateRange, count, amount, policy, status", "rel": "N → 1 Hotel, N → 1 RoomType, N → 1 User"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Hotel, RoomType, Hold, Booking, BookingStatus enum. **Service** = Inventory (the stateful core with locking), CancellationPolicy strategies. **Controller** = BookingService (search, hold, confirm, cancel APIs). Unlike movie ticket booking, the 'unit of inventory' here is room-type × date, not an individual seat. **The inventory representation is the key design decision.**",
+
+  "classes": [
+    {
+      "name": "Inventory", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "bookedCounts", "type": "Map<(hotelId, typeId), Map<LocalDate, Integer>>"},
+        {"name": "heldCounts", "type": "Map<(hotelId, typeId), Map<LocalDate, Integer>>"},
+        {"name": "lock", "type": "ReentrantLock"}
+      ],
+      "methods": [
+        {"name": "getAvailable(hotelId, typeId, date, roomType)", "returns": "int"},
+        {"name": "tryHold(hotelId, typeId, dateRange, count, roomType)", "returns": "boolean"},
+        {"name": "confirmHold(hotelId, typeId, dateRange, count)", "returns": "void"},
+        {"name": "releaseHold(hotelId, typeId, dateRange, count)", "returns": "void"},
+        {"name": "cancelBooking(hotelId, typeId, dateRange, count)", "returns": "void"}
+      ]
+    },
+    {
+      "name": "CancellationPolicy", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "calculateRefund(booking, cancelTime)", "returns": "long"}
+      ]
+    },
+    {
+      "name": "FreeCancellation24h", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "calculateRefund(booking, cancelTime)", "returns": "long (full if > 24h before checkIn, else 0)"}
+      ]
+    },
+    {
+      "name": "Hold", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "holdId", "type": "String"},
+        {"name": "hotelId", "type": "String"},
+        {"name": "roomTypeId", "type": "String"},
+        {"name": "checkIn", "type": "LocalDate"},
+        {"name": "checkOut", "type": "LocalDate"},
+        {"name": "roomCount", "type": "int"},
+        {"name": "userId", "type": "String"},
+        {"name": "createdAt", "type": "Instant"},
+        {"name": "ttl", "type": "Duration"}
+      ],
+      "methods": [
+        {"name": "isExpired()", "returns": "boolean"},
+        {"name": "getNights()", "returns": "List<LocalDate>"}
+      ]
+    },
+    {
+      "name": "BookingService", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "hotels", "type": "Map<String, Hotel>"},
+        {"name": "inventory", "type": "Inventory"},
+        {"name": "holds", "type": "ConcurrentHashMap<String, Hold>"},
+        {"name": "bookings", "type": "ConcurrentHashMap<String, Booking>"},
+        {"name": "paymentService", "type": "PaymentService"},
+        {"name": "cleanupScheduler", "type": "ScheduledExecutorService"}
+      ],
+      "methods": [
+        {"name": "search(city, checkIn, checkOut, guests)", "returns": "List<Hotel>"},
+        {"name": "getAvailability(hotelId, typeId, range)", "returns": "int"},
+        {"name": "holdRooms(hotelId, typeId, checkIn, checkOut, count, userId)", "returns": "String"},
+        {"name": "confirmBooking(holdId, paymentToken)", "returns": "Booking"},
+        {"name": "cancelBooking(bookingId)", "returns": "long (refund)"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "hotels",
+      "columns": [
+        {"name": "hotel_id", "type": "UUID", "pk": true},
+        {"name": "name", "type": "VARCHAR"},
+        {"name": "city", "type": "VARCHAR", "idx": true},
+        {"name": "lat", "type": "DOUBLE"},
+        {"name": "lng", "type": "DOUBLE"}
+      ]
+    },
+    {
+      "table": "room_types",
+      "columns": [
+        {"name": "hotel_id", "type": "UUID", "pk": true, "fk": true},
+        {"name": "room_type_id", "type": "VARCHAR", "pk": true},
+        {"name": "total_rooms", "type": "INT"},
+        {"name": "base_price_cents", "type": "BIGINT"},
+        {"name": "overbook_percentage", "type": "DOUBLE"}
+      ]
+    },
+    {
+      "table": "inventory",
+      "columns": [
+        {"name": "hotel_id", "type": "UUID", "pk": true, "fk": true},
+        {"name": "room_type_id", "type": "VARCHAR", "pk": true, "fk": true},
+        {"name": "date", "type": "DATE", "pk": true, "idx": true},
+        {"name": "booked_count", "type": "INT"},
+        {"name": "held_count", "type": "INT"}
+      ]
+    },
+    {
+      "table": "bookings",
+      "columns": [
+        {"name": "booking_id", "type": "UUID", "pk": true},
+        {"name": "user_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "hotel_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "room_type_id", "type": "VARCHAR"},
+        {"name": "check_in", "type": "DATE", "idx": true},
+        {"name": "check_out", "type": "DATE"},
+        {"name": "room_count", "type": "INT"},
+        {"name": "total_amount", "type": "BIGINT"},
+        {"name": "cancellation_policy", "type": "VARCHAR"},
+        {"name": "status", "type": "ENUM(CONFIRMED,CANCELLED)", "idx": true},
+        {"name": "created_at", "type": "TIMESTAMP"}
+      ]
+    }
+  ],
+  "schema_note": "**The `inventory` table is the hot-spot.** One row per (hotel, room type, date). For a 500-hotel chain with 5 types and 365 days, that's ~900K rows — easily fits in memory. Index `(hotel_id, room_type_id, date)` is the primary key. Use `SELECT ... FOR UPDATE` on the range of dates when holding, or use optimistic locking with a version column per row.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Hotel, RoomType, Hold, Booking, Enums",
+      "code": "import java.time.*;\nimport java.util.*;\nimport java.util.concurrent.*;\nimport java.util.concurrent.locks.ReentrantLock;\n\nenum BookingStatus { CONFIRMED, CANCELLED }\n\nrecord RoomType(String roomTypeId, String displayName,\n                int totalRooms, long basePriceCents,\n                double overbookPercentage) {\n    public int overbookedCapacity() {\n        return (int) Math.floor(totalRooms * (1 + overbookPercentage));\n    }\n}\n\nrecord Hotel(String hotelId, String name, String city,\n             Map<String, RoomType> roomTypes) {}\n\nclass Hold {\n    private final String holdId;\n    private final String hotelId;\n    private final String roomTypeId;\n    private final LocalDate checkIn;\n    private final LocalDate checkOut;\n    private final int roomCount;\n    private final String userId;\n    private final Instant createdAt;\n    private final Duration ttl;\n\n    public Hold(String hotelId, String roomTypeId, LocalDate checkIn,\n                LocalDate checkOut, int roomCount, String userId, Duration ttl) {\n        this.holdId = UUID.randomUUID().toString();\n        this.hotelId = hotelId;\n        this.roomTypeId = roomTypeId;\n        this.checkIn = checkIn;\n        this.checkOut = checkOut;\n        this.roomCount = roomCount;\n        this.userId = userId;\n        this.createdAt = Instant.now();\n        this.ttl = ttl;\n    }\n\n    // All nights from checkIn (inclusive) to checkOut (exclusive)\n    // checkIn=Mar 5, checkOut=Mar 8 → [Mar 5, Mar 6, Mar 7] (3 nights)\n    public List<LocalDate> getNights() {\n        List<LocalDate> nights = new ArrayList<>();\n        LocalDate d = checkIn;\n        while (d.isBefore(checkOut)) {\n            nights.add(d);\n            d = d.plusDays(1);\n        }\n        return nights;\n    }\n\n    public boolean isExpired() {\n        return Instant.now().isAfter(createdAt.plus(ttl));\n    }\n\n    public String getHoldId()   { return holdId; }\n    public String getHotelId()  { return hotelId; }\n    public String getRoomTypeId() { return roomTypeId; }\n    public int getRoomCount()   { return roomCount; }\n    public String getUserId()   { return userId; }\n    public LocalDate getCheckIn()  { return checkIn; }\n    public LocalDate getCheckOut() { return checkOut; }\n}\n\nrecord Booking(String bookingId, String userId, String hotelId,\n               String roomTypeId, LocalDate checkIn, LocalDate checkOut,\n               int roomCount, long totalAmount,\n               String cancellationPolicyId, BookingStatus status,\n               Instant createdAt) {}"
+    },
+    {
+      "label": "Service — Inventory (the central availability tracker)",
+      "flow": "**Data structure:** `Map<(hotelId, typeId), Map<LocalDate, Integer>>` — two nested maps. Outer key identifies the room type in a hotel; inner map holds booked count per date. We maintain **two separate maps**: one for confirmed bookings, one for active holds. Available = capacity − booked − held.\n\n**`tryHold(dateRange)`:** lock → for each night in range, check `booked + held + newCount <= overbookedCapacity` → if all nights pass, increment `held` for each night → return true → else return false (no mutations).",
+      "edge_cases": "Single-night stay (checkOut = checkIn + 1) → one entry in the loop. Checkout on the morning means the room is free that day — we don't count the checkout date. Empty date range (checkIn == checkOut) → error; a booking must have at least one night. Fully overbooked date → reject.",
+      "code": "class Inventory {\n    // Key: (hotelId, roomTypeId) as a concatenated string\n    // Value: date → count\n    private final Map<String, Map<LocalDate, Integer>> bookedCounts = new ConcurrentHashMap<>();\n    private final Map<String, Map<LocalDate, Integer>> heldCounts = new ConcurrentHashMap<>();\n    private final ReentrantLock lock = new ReentrantLock();\n\n    private String key(String hotelId, String roomTypeId) {\n        return hotelId + \":\" + roomTypeId;\n    }\n\n    // ── getAvailable for a single date ──\n    public int getAvailable(String hotelId, String roomTypeId,\n                             LocalDate date, RoomType roomType) {\n        lock.lock();\n        try {\n            String k = key(hotelId, roomTypeId);\n            int booked = bookedCounts.getOrDefault(k, Map.of()).getOrDefault(date, 0);\n            int held = heldCounts.getOrDefault(k, Map.of()).getOrDefault(date, 0);\n            return roomType.overbookedCapacity() - booked - held;\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    // ── Available for every night in the range ──\n    public int getAvailableForRange(String hotelId, String roomTypeId,\n                                     List<LocalDate> nights, RoomType roomType) {\n        lock.lock();\n        try {\n            int minAvailable = Integer.MAX_VALUE;\n            for (LocalDate d : nights) {\n                int avail = getAvailable(hotelId, roomTypeId, d, roomType);\n                minAvailable = Math.min(minAvailable, avail);\n            }\n            return minAvailable;\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    // ── Atomic multi-night hold ──────────\n    // Two-phase inside the lock: validate all nights, then mutate all nights.\n    public boolean tryHold(String hotelId, String roomTypeId,\n                           List<LocalDate> nights, int count, RoomType roomType) {\n        lock.lock();\n        try {\n            String k = key(hotelId, roomTypeId);\n            Map<LocalDate, Integer> bookedMap = bookedCounts.computeIfAbsent(k, x -> new HashMap<>());\n            Map<LocalDate, Integer> heldMap = heldCounts.computeIfAbsent(k, x -> new HashMap<>());\n\n            // Phase 1: validate ALL nights have capacity\n            for (LocalDate d : nights) {\n                int booked = bookedMap.getOrDefault(d, 0);\n                int held = heldMap.getOrDefault(d, 0);\n                if (booked + held + count > roomType.overbookedCapacity()) {\n                    return false; // insufficient — no mutations\n                }\n            }\n\n            // Phase 2: commit — increment held for every night\n            for (LocalDate d : nights) {\n                heldMap.merge(d, count, Integer::sum);\n            }\n            return true;\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    // ── Confirm: held → booked ──\n    public void confirmHold(String hotelId, String roomTypeId,\n                             List<LocalDate> nights, int count) {\n        lock.lock();\n        try {\n            String k = key(hotelId, roomTypeId);\n            Map<LocalDate, Integer> heldMap = heldCounts.getOrDefault(k, Map.of());\n            Map<LocalDate, Integer> bookedMap = bookedCounts.computeIfAbsent(k, x -> new HashMap<>());\n\n            for (LocalDate d : nights) {\n                Integer h = heldMap.get(d);\n                if (h == null || h < count)\n                    throw new IllegalStateException(\n                        \"Hold no longer valid for \" + d);\n            }\n            // Commit\n            for (LocalDate d : nights) {\n                heldMap.merge(d, -count, Integer::sum);\n                bookedMap.merge(d, count, Integer::sum);\n            }\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    // ── Release a hold (TTL expiry or cancel before confirm) ──\n    public void releaseHold(String hotelId, String roomTypeId,\n                             List<LocalDate> nights, int count) {\n        lock.lock();\n        try {\n            String k = key(hotelId, roomTypeId);\n            Map<LocalDate, Integer> heldMap = heldCounts.getOrDefault(k, Map.of());\n            for (LocalDate d : nights) {\n                heldMap.merge(d, -count, Integer::sum);\n            }\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    // ── Release a confirmed booking (cancellation) ──\n    public void cancelBooking(String hotelId, String roomTypeId,\n                               List<LocalDate> nights, int count) {\n        lock.lock();\n        try {\n            String k = key(hotelId, roomTypeId);\n            Map<LocalDate, Integer> bookedMap = bookedCounts.getOrDefault(k, Map.of());\n            for (LocalDate d : nights) {\n                bookedMap.merge(d, -count, Integer::sum);\n            }\n        } finally {\n            lock.unlock();\n        }\n    }\n}"
+    },
+    {
+      "label": "Strategy — Cancellation Policies",
+      "code": "interface CancellationPolicy {\n    // Returns refund amount in cents. 0 = non-refundable.\n    long calculateRefund(Booking booking, Instant cancelTime);\n}\n\nclass FreeCancellation24h implements CancellationPolicy {\n    @Override\n    public long calculateRefund(Booking booking, Instant cancelTime) {\n        // Free cancellation if cancelling > 24h before check-in\n        Instant cutoff = booking.checkIn().atStartOfDay(ZoneId.systemDefault())\n            .toInstant().minus(Duration.ofHours(24));\n        if (cancelTime.isBefore(cutoff)) return booking.totalAmount();\n        return 0;\n    }\n}\n\nclass NonRefundable implements CancellationPolicy {\n    @Override\n    public long calculateRefund(Booking booking, Instant cancelTime) {\n        return 0; // no refund ever\n    }\n}\n\nclass PartialRefundPolicy implements CancellationPolicy {\n    @Override\n    public long calculateRefund(Booking booking, Instant cancelTime) {\n        Instant checkInInstant = booking.checkIn().atStartOfDay(ZoneId.systemDefault()).toInstant();\n        Duration untilCheckIn = Duration.between(cancelTime, checkInInstant);\n\n        if (untilCheckIn.toDays() >= 7)   return booking.totalAmount();        // full refund\n        if (untilCheckIn.toDays() >= 3)   return booking.totalAmount() / 2;    // 50%\n        if (untilCheckIn.toHours() >= 24) return booking.totalAmount() / 4;    // 25%\n        return 0;\n    }\n}"
+    },
+    {
+      "label": "Controller — BookingService (search, hold, confirm, cancel)",
+      "code": "class BookingService {\n    private static final Duration HOLD_TTL = Duration.ofMinutes(10);\n\n    private final Map<String, Hotel> hotels = new ConcurrentHashMap<>();\n    private final Inventory inventory = new Inventory();\n    private final ConcurrentHashMap<String, Hold> holds = new ConcurrentHashMap<>();\n    private final ConcurrentHashMap<String, Booking> bookings = new ConcurrentHashMap<>();\n    private final Map<String, CancellationPolicy> policies = Map.of(\n        \"free24h\",       new FreeCancellation24h(),\n        \"non-refundable\", new NonRefundable(),\n        \"partial\",       new PartialRefundPolicy()\n    );\n    private final PaymentService paymentService;\n    private final ScheduledExecutorService cleanupScheduler;\n\n    public BookingService(PaymentService paymentService) {\n        this.paymentService = paymentService;\n        this.cleanupScheduler = Executors.newSingleThreadScheduledExecutor();\n        cleanupScheduler.scheduleAtFixedRate(\n            this::cleanupExpiredHolds, 30, 30, TimeUnit.SECONDS);\n    }\n\n    // ── Search ───────────────────────────\n    public List<Hotel> search(String city, LocalDate checkIn, LocalDate checkOut, int guests) {\n        validateDateRange(checkIn, checkOut);\n        List<LocalDate> nights = toNights(checkIn, checkOut);\n\n        return hotels.values().stream()\n            .filter(h -> h.city().equalsIgnoreCase(city))\n            .filter(h -> h.roomTypes().values().stream().anyMatch(rt ->\n                inventory.getAvailableForRange(h.hotelId(), rt.roomTypeId(), nights, rt) > 0))\n            .toList();\n    }\n\n    // ── Availability query ───────────────\n    public int getAvailability(String hotelId, String roomTypeId,\n                                LocalDate checkIn, LocalDate checkOut) {\n        validateDateRange(checkIn, checkOut);\n        Hotel hotel = hotels.get(hotelId);\n        if (hotel == null) throw new HotelNotFoundException(hotelId);\n        RoomType rt = hotel.roomTypes().get(roomTypeId);\n        if (rt == null) throw new RoomTypeNotFoundException(roomTypeId);\n\n        return inventory.getAvailableForRange(hotelId, roomTypeId, toNights(checkIn, checkOut), rt);\n    }\n\n    // ── holdRooms (atomic multi-night) ──\n    public String holdRooms(String hotelId, String roomTypeId,\n                             LocalDate checkIn, LocalDate checkOut,\n                             int count, String userId) {\n        validateDateRange(checkIn, checkOut);\n        if (count <= 0) throw new IllegalArgumentException(\"count must be positive\");\n\n        Hotel hotel = hotels.get(hotelId);\n        if (hotel == null) throw new HotelNotFoundException(hotelId);\n        RoomType rt = hotel.roomTypes().get(roomTypeId);\n        if (rt == null) throw new RoomTypeNotFoundException(roomTypeId);\n\n        List<LocalDate> nights = toNights(checkIn, checkOut);\n\n        if (!inventory.tryHold(hotelId, roomTypeId, nights, count, rt))\n            throw new NoAvailabilityException(\"Not enough rooms for the date range\");\n\n        Hold hold = new Hold(hotelId, roomTypeId, checkIn, checkOut, count, userId, HOLD_TTL);\n        holds.put(hold.getHoldId(), hold);\n        return hold.getHoldId();\n    }\n\n    // ── Confirm booking ──────────────────\n    public Booking confirmBooking(String holdId, String paymentToken, String policyId) {\n        Hold hold = holds.get(holdId);\n        if (hold == null) throw new InvalidHoldException(\"Hold not found\");\n\n        if (hold.isExpired()) {\n            inventory.releaseHold(hold.getHotelId(), hold.getRoomTypeId(),\n                hold.getNights(), hold.getRoomCount());\n            holds.remove(holdId);\n            throw new HoldExpiredException(\"Hold expired, please retry\");\n        }\n\n        Hotel hotel = hotels.get(hold.getHotelId());\n        RoomType rt = hotel.roomTypes().get(hold.getRoomTypeId());\n        long nightsCount = hold.getNights().size();\n        long total = rt.basePriceCents() * nightsCount * hold.getRoomCount();\n\n        if (!paymentService.charge(hold.getUserId(), total, paymentToken)) {\n            // Payment failed — keep the hold alive (user may retry with different card)\n            throw new PaymentFailedException(\"Payment declined\");\n        }\n\n        try {\n            inventory.confirmHold(hold.getHotelId(), hold.getRoomTypeId(),\n                hold.getNights(), hold.getRoomCount());\n        } catch (IllegalStateException e) {\n            // Rare: hold expired between our check and confirmation. Refund.\n            paymentService.refund(hold.getUserId(), total);\n            throw new HoldExpiredException(\"Hold invalidated during confirmation\");\n        }\n\n        Booking booking = new Booking(\n            UUID.randomUUID().toString(),\n            hold.getUserId(),\n            hold.getHotelId(),\n            hold.getRoomTypeId(),\n            hold.getCheckIn(),\n            hold.getCheckOut(),\n            hold.getRoomCount(),\n            total,\n            policyId,\n            BookingStatus.CONFIRMED,\n            Instant.now());\n        bookings.put(booking.bookingId(), booking);\n        holds.remove(holdId);\n        return booking;\n    }\n\n    // ── cancelBooking ───────────────────\n    public long cancelBooking(String bookingId) {\n        Booking booking = bookings.get(bookingId);\n        if (booking == null) throw new IllegalArgumentException(\"Booking not found\");\n        if (booking.status() != BookingStatus.CONFIRMED)\n            throw new IllegalStateException(\"Already cancelled\");\n\n        CancellationPolicy policy = policies.get(booking.cancellationPolicyId());\n        if (policy == null) policy = new NonRefundable(); // fallback\n        long refund = policy.calculateRefund(booking, Instant.now());\n\n        // Release inventory\n        List<LocalDate> nights = toNights(booking.checkIn(), booking.checkOut());\n        inventory.cancelBooking(booking.hotelId(), booking.roomTypeId(),\n            nights, booking.roomCount());\n\n        // Process refund (if any)\n        if (refund > 0) paymentService.refund(booking.userId(), refund);\n\n        // Update booking status\n        bookings.put(bookingId, new Booking(\n            booking.bookingId(), booking.userId(), booking.hotelId(),\n            booking.roomTypeId(), booking.checkIn(), booking.checkOut(),\n            booking.roomCount(), booking.totalAmount(),\n            booking.cancellationPolicyId(), BookingStatus.CANCELLED,\n            booking.createdAt()));\n\n        return refund;\n    }\n\n    // ── Background cleanup ───────────────\n    private void cleanupExpiredHolds() {\n        holds.forEach((id, hold) -> {\n            if (hold.isExpired()) {\n                inventory.releaseHold(hold.getHotelId(), hold.getRoomTypeId(),\n                    hold.getNights(), hold.getRoomCount());\n                holds.remove(id);\n            }\n        });\n    }\n\n    // ── Helpers ──────────────────────────\n    private void validateDateRange(LocalDate checkIn, LocalDate checkOut) {\n        if (checkIn == null || checkOut == null)\n            throw new IllegalArgumentException(\"dates required\");\n        if (!checkOut.isAfter(checkIn))\n            throw new InvalidDateRangeException(\"checkOut must be after checkIn\");\n        if (checkIn.isBefore(LocalDate.now()))\n            throw new InvalidDateRangeException(\"checkIn must be in the future\");\n    }\n\n    private List<LocalDate> toNights(LocalDate checkIn, LocalDate checkOut) {\n        List<LocalDate> nights = new ArrayList<>();\n        LocalDate d = checkIn;\n        while (d.isBefore(checkOut)) {\n            nights.add(d);\n            d = d.plusDays(1);\n        }\n        return nights;\n    }\n}\n\ninterface PaymentService {\n    boolean charge(String userId, long amount, String token);\n    void refund(String userId, long amount);\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Hold-and-Confirm (extended to date ranges)",
+      "why": "Same two-phase pattern as movie ticket booking, but the 'unit' is a date range, not a seat. The hold locks capacity across all nights atomically. Payment → confirm transitions held counts to booked counts. TTL cleanup releases expired holds. The extension is the multi-date atomic operation.",
+      "where": "`holdRooms` → hold TTL → `confirmBooking` → cleanup job"
+    },
+    {
+      "name": "Strategy Pattern → CancellationPolicy",
+      "why": "Different rate plans have different refund rules. `FreeCancellation24h`, `NonRefundable`, `PartialRefundPolicy` each compute refunds differently. The BookingService selects the policy by name at cancel time; the policy's logic is isolated. **Adding a 'loyalty member full refund' policy** is one new class.",
+      "where": "`CancellationPolicy` interface + three implementations"
+    },
+    {
+      "name": "Two-Phase Validate-Then-Commit",
+      "why": "`tryHold` validates ALL nights before mutating ANY. This gives all-or-nothing semantics without needing to roll back partial changes. If any night lacks capacity, return false with zero state modified. This pattern is the foundation of atomic multi-key operations.",
+      "where": "`Inventory.tryHold()` — two phases inside a single lock"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two users hold overlapping date ranges on the same room type simultaneously",
+      "fix": "`Inventory.lock` serializes hold operations. Both threads attempt `tryHold`; the first's two-phase validate-and-commit runs atomically. If capacity is 5 and both want 3, the first takes 3 (held becomes 3), the second checks (3 + 3 = 6 > 5) and fails. Exactly one succeeds when capacity would be exceeded."
+    },
+    {
+      "issue": "TTL expiry during confirm",
+      "fix": "Confirm checks `isExpired()` before calling `inventory.confirmHold()`. If the check passes but cleanup runs between the check and confirm, `confirmHold` sees `held < count` and throws `IllegalStateException`. We catch it and throw `HoldExpiredException` to the user. **Payment already went through** at this point — so we refund before throwing. This is the tightest race window in the system."
+    },
+    {
+      "issue": "Inventory lock contention on a popular hotel",
+      "fix": "The single `Inventory.lock` serializes all mutations across all hotels. For higher throughput, shard by `(hotelId, roomTypeId)` — each shard has its own lock. Operations on different hotels never contend. For our LLD, the coarse lock is fine; mention sharding as the production extension."
+    },
+    {
+      "issue": "Cleanup during active confirm — race on the same hold",
+      "fix": "Both call `inventory.releaseHold` or `confirmHold`, both under the same lock. The winner determines the outcome: if cleanup wins, confirm sees the released state and throws. If confirm wins, cleanup sees the hold already removed from the holds map and skips. **No inconsistent state possible.**"
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why track availability by room TYPE instead of individual rooms?",
+      "answer": "**Simplicity and flexibility.** Tracking individual rooms (room #305 vs #306) would require: (1) picking a specific room at booking time, (2) juggling 50+ rooms per date in the data structure, (3) handling room swaps at check-in. Tracking by type lets us count 'how many Deluxe rooms are booked tonight' without caring which specific rooms. **The front desk assigns a specific room at check-in** based on whatever's convenient. Real hotels work this way — the booking guarantees a room type, not a specific room number."
+    },
+    {
+      "question": "Why two separate maps (bookedCounts + heldCounts) instead of one?",
+      "answer": "**Clarity and separation of concerns.** Available = capacity − booked − held. Bookings are permanent; holds are ephemeral. Mixing them makes it hard to answer 'how many are really booked vs just held'. Separation: (1) cleanup only touches `heldCounts`, (2) cancel only touches `bookedCounts`, (3) stats (occupancy rate) read only `bookedCounts`. **You could combine them** with a single count — it works, but separation helps observability."
+    },
+    {
+      "question": "What's the check-in day vs checkout day semantics?",
+      "answer": "**A stay from March 5 to March 8 uses nights [Mar 5, Mar 6, Mar 7] — 3 nights, 4 days.** The room is occupied on the night of check-in through the morning of checkout. So we store bookings for `checkIn` through `checkOut - 1` (exclusive of checkOut). A guest checking out on March 8 frees the room that morning — another guest can check in on March 8. **This is the industry convention** and matches how hotel nights actually work."
+    },
+    {
+      "question": "How does overbooking work without corrupting the counts?",
+      "answer": "**The overbook % inflates the capacity, not the count.** `overbookedCapacity = totalRooms × (1 + overbookPct)`. If the hotel has 100 rooms with 5% overbook, we accept up to 105 bookings per night. The data structure tracks counts without caring about the cap — the check `booked + held + new <= overbookedCapacity` enforces it. **If everyone shows up** (no-shows are lower than predicted), the hotel walks guests to another hotel. That's a business problem, not a data structure problem."
+    },
+    {
+      "question": "How would you scale search across millions of hotels?",
+      "answer": "**Inverted index on city.** `Map<city, List<Hotel>>`. Search by city → get candidate hotels → filter by availability. For 1M hotels, even iterating a city's worth (~1000) and checking availability is fast enough. For cross-city or lat/lng radius search: **geospatial index** (PostGIS, Elasticsearch geo_point, or S2/H3 cells). The availability check is per-hotel — parallelize across hotels with an ExecutorService. For huge scale, pre-compute hot-date availability summaries (hourly refresh) to avoid live lock acquisition."
+    },
+    {
+      "question": "Why is the payment processed BEFORE confirmHold instead of after?",
+      "answer": "**To minimize the time the hold is in a 'pending payment' state.** If we confirmed first and payment failed, we'd need to roll back confirmed state — messier. If payment succeeds first and confirmHold fails (rare — only if hold expired during payment), we refund. Refunds are standard; rollback of a confirmed booking is unusual. **The preferred order: payment → confirm.** Worst case is a refund, which is an accepted operation. Best case is no anomaly."
+    },
+    {
+      "question": "How would you handle peak dates (New Year, holidays) with extreme contention?",
+      "answer": "**Two strategies.** (1) **Waiting room** — rate-limit users trying to book peak dates; let ~100 at a time into the hold flow. Smooths load. (2) **Optimistic locking per date** — instead of a single `Inventory.lock`, each (hotelId, roomTypeId, date) has its own version number. Holds use CAS per date, retrying on conflict. Under normal load, zero contention. Under peak load, retries increase but no global serialization. Caffeine's approach: **striped locks** — hash the key to one of 64 locks, so unrelated dates never contend."
+    }
+  ]
+}

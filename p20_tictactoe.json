@@ -1,0 +1,293 @@
+{
+  "title": "Tic-Tac-Toe (Game Engine Framework)",
+  "description": "Design Tic-Tac-Toe, but with a twist: build it as a **generic game engine** that could be extended to Connect-Four, Gomoku, or other grid-based games. Tests your ability to distinguish 'rules of Tic-Tac-Toe' from 'rules of any grid game' and separate them via the Template Method pattern.",
+  "tags": [
+    {"type": "medium", "label": "Medium"},
+    {"type": "pattern", "label": "Template Method"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "concept", "label": "Extensibility"},
+    {"type": "concept", "label": "Polymorphism"}
+  ],
+  "prompt": "Design a Tic-Tac-Toe game. Bonus: make it extensible so the same engine can run Connect-Four with minimal changes.",
+  "prompt_note": "The trap here is over-simplifying. 'Just a 3×3 board with X and O' feels like it needs ~50 lines of code. That's fine for a junior interview, but senior candidates should **design for extension**. The win-check logic, move validation, and board size are all game-specific. Isolate them into overridable hooks. Connect-Four should then be one new class (plus a different win checker).",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Just Tic-Tac-Toe, or should the design support other grid games like Connect-Four?\"",
+      "answer": "Interviewer: \"Start with Tic-Tac-Toe, but structure it so Connect-Four would be easy to add.\"",
+      "why": "**This is the key framing.** It signals Template Method: a generic `BoardGame` base class with hooks for game-specific behavior."
+    },
+    {
+      "question": "You: \"Two human players alternating, or AI support?\"",
+      "answer": "Interviewer: \"Two players for now. Mention AI as an extension.\"",
+      "why": "Keeps scope focused. AI (minimax) is a separate class that calls `makeMove()` — not part of the core."
+    },
+    {
+      "question": "You: \"Fixed 3×3 board, or configurable?\"",
+      "answer": "Interviewer: \"3×3 by default, but parameterize it. Board size is a property of the game subclass.\"",
+      "why": "Allows 4×4 Tic-Tac-Toe or arbitrary grids. Connect-Four is 6×7. Board dimensions belong to the subclass."
+    },
+    {
+      "question": "You: \"What ends a game? Win, draw, both?\"",
+      "answer": "Interviewer: \"Win (game-specific rule), draw (board full with no winner), resign (optional).\"",
+      "why": "The game has clear terminal states. Each game defines its own win condition but draw detection (board full) is generic."
+    },
+    {
+      "question": "You: \"How do players make moves? Row + column, or just a single 'position' number?\"",
+      "answer": "Interviewer: \"Row + column for Tic-Tac-Toe. Connect-Four would use just column (piece falls).\"",
+      "why": "Another hint that move input varies per game. Consider making move validation generic (is position in bounds, is cell empty) and move execution game-specific (Tic-Tac-Toe places at exact spot, Connect-Four drops)."
+    },
+    {
+      "question": "You: \"Should the game track move history for undo?\"",
+      "answer": "Interviewer: \"Optional. Mention it.\"",
+      "why": "Undo is a nice extension via Memento or simple move log."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Two players** alternating turns. Player 1 = X (or RED), Player 2 = O (or YELLOW).",
+      "**Configurable board size** per game subclass (3×3 for Tic-Tac-Toe, 6×7 for Connect-Four).",
+      "**Move validation:** is the position in bounds? Is the cell valid for this game (empty for Tic-Tac-Toe, lowest empty in column for Connect-Four)?",
+      "**Win detection** after every move. Game-specific: Tic-Tac-Toe checks row/col/diagonal of length 3. Connect-Four checks any 4-in-a-row.",
+      "**Draw detection:** board full with no winner → draw.",
+      "**Game state:** IN_PROGRESS, WON, DRAWN.",
+      "**Template Method:** generic game loop — subclasses override `isValidMove`, `applyMove`, `checkWinCondition`."
+    ],
+    "out_of_scope": [
+      "AI opponents (mention as extension), networking, UI/rendering, move history persistence, replay files, tournament management."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Extensibility:** adding Connect-Four should be one new subclass with ~50 lines. No changes to the base engine.",
+      "**Correctness:** no illegal moves accepted, no false win detection, draw detected exactly when appropriate.",
+      "**Immutable history** (if move log is kept) — past moves can't be modified."
+    ],
+    "out_of_scope": [
+      "Concurrency (turn-based, single-thread), performance (games are small), persistence."
+    ]
+  },
+
+  "primary_scope": [
+    "`makeMove(player, position)` → validate turn → validate move → apply → check winner → check draw → switch turn",
+    "Subclass overrides: board dimensions, `isValidMove`, `applyMove`, `checkWinCondition`",
+    "Base class handles: turn alternation, state transitions, draw detection, generic validation"
+  ],
+  "termination_points": [
+    "`InvalidMoveException` — out of bounds, cell occupied, invalid for game rules",
+    "`WrongTurnException` — player moved out of turn",
+    "`GameAlreadyOverException` — move attempted after WON or DRAWN state",
+    "Final states: WON (one player wins), DRAWN (board full, no winner)"
+  ],
+
+  "entity_intro": "The design hinges on separating **what every grid game has in common** from **what's specific to Tic-Tac-Toe**. Common: a 2D board, two players alternating, terminal states, move validation framework. Game-specific: board size, win condition, how moves apply. Template Method handles this cleanly.",
+  "entities": [
+    {
+      "name": "BoardGame (abstract)",
+      "role": "**Abstract base — Template Method.** Owns the board, players, current turn, game state. Defines the game loop (`makeMove`) with hooks for subclasses to override: `isValidMove`, `applyMove`, `checkWinCondition`. The skeleton is fixed; the variable parts are subclass responsibilities.",
+      "verdict": "yes",
+      "verdict_label": "✓ Abstract base — Template Method"
+    },
+    {
+      "name": "TicTacToe",
+      "role": "**Concrete game.** Extends BoardGame with 3×3 board, places pieces exactly at the requested cell, win condition = 3 in a row/col/diagonal.",
+      "verdict": "yes",
+      "verdict_label": "✓ Subclass — Tic-Tac-Toe rules"
+    },
+    {
+      "name": "ConnectFour",
+      "role": "**Concrete game (for demonstration).** Extends BoardGame with 6×7 board, moves are by column (piece drops to lowest empty row), win condition = 4 in a row/col/diagonal. Shows the Template Method in action.",
+      "verdict": "yes",
+      "verdict_label": "✓ Subclass — shows extensibility"
+    },
+    {
+      "name": "Player",
+      "role": "**Model.** playerId, name, symbol (X, O, RED, YELLOW, etc.). Two players per game.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — game participant"
+    },
+    {
+      "name": "Position",
+      "role": "**Value object.** `(row, col)` pair. Used for moves and cell references.",
+      "verdict": "yes",
+      "verdict_label": "✓ Value object"
+    },
+    {
+      "name": "Board",
+      "role": "**Model.** 2D array of cells (Player references, null = empty). Provides `getCell`, `setCell`, `isFull`, dimensions. Game-agnostic — games interpret cells however they want.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — grid container"
+    },
+    {
+      "name": "GameState enum",
+      "role": "`IN_PROGRESS`, `WON`, `DRAWN`. Represents the terminal state of the game.",
+      "verdict": "yes",
+      "verdict_label": "✓ Enum — game state"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "BoardGame (abstract)", "owns": "Board, `Player[2]`, currentTurnIndex, GameState, winner", "rel": "1 → 1 Board, 1 → 2 Players"},
+    {"entity": "Board", "owns": "`Player[rows][cols]` grid, dimensions", "rel": "Contains Player references (or null for empty cells)"},
+    {"entity": "TicTacToe", "owns": "inherited from BoardGame, plus the 3×3 size constant", "rel": "Extends BoardGame"},
+    {"entity": "ConnectFour", "owns": "inherited plus 6×7 size and column-based move logic", "rel": "Extends BoardGame"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Board, Player, Position, GameState enum. **Service** = BoardGame (the abstract template) + subclasses (TicTacToe, ConnectFour — each encapsulates game rules). **Controller** = The public `makeMove` API on BoardGame. This is a problem where **Model and Service blur** — the BoardGame subclasses carry both state (board, turn) and logic (rules).",
+
+  "classes": [
+    {
+      "name": "BoardGame (abstract)", "type": "abstract", "layer": "Service",
+      "fields": [
+        {"name": "board", "type": "Board"},
+        {"name": "players", "type": "Player[2]"},
+        {"name": "currentPlayerIndex", "type": "int"},
+        {"name": "state", "type": "GameState"},
+        {"name": "winner", "type": "Player (nullable)"},
+        {"name": "moveHistory", "type": "List<Move>"}
+      ],
+      "methods": [
+        {"name": "makeMove(playerId, position)", "returns": "void (template)"},
+        {"name": "isValidMove(position)", "returns": "boolean (hook)"},
+        {"name": "applyMove(player, position)", "returns": "Position (hook)"},
+        {"name": "checkWinCondition(lastMove)", "returns": "boolean (hook)"},
+        {"name": "getBoardSize()", "returns": "int[] (hook)"},
+        {"name": "getState()", "returns": "GameState"},
+        {"name": "getWinner()", "returns": "Player"}
+      ]
+    },
+    {
+      "name": "TicTacToe", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "SIZE", "type": "static final int = 3"}
+      ],
+      "methods": [
+        {"name": "isValidMove(pos)", "returns": "boolean (in bounds + empty)"},
+        {"name": "applyMove(player, pos)", "returns": "Position (place at pos)"},
+        {"name": "checkWinCondition(lastMove)", "returns": "boolean (3 in a row/col/diag)"}
+      ]
+    },
+    {
+      "name": "ConnectFour", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "ROWS", "type": "static final int = 6"},
+        {"name": "COLS", "type": "static final int = 7"},
+        {"name": "WIN_LENGTH", "type": "static final int = 4"}
+      ],
+      "methods": [
+        {"name": "isValidMove(pos)", "returns": "boolean (column in bounds + not full)"},
+        {"name": "applyMove(player, pos)", "returns": "Position (drop to lowest empty row in column)"},
+        {"name": "checkWinCondition(lastMove)", "returns": "boolean (4 in any direction from lastMove)"}
+      ]
+    },
+    {
+      "name": "Board", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "rows", "type": "int"},
+        {"name": "cols", "type": "int"},
+        {"name": "grid", "type": "Player[][]"}
+      ],
+      "methods": [
+        {"name": "getCell(pos)", "returns": "Player (or null)"},
+        {"name": "setCell(pos, player)", "returns": "void"},
+        {"name": "isFull()", "returns": "boolean"},
+        {"name": "isEmpty(pos)", "returns": "boolean"},
+        {"name": "inBounds(pos)", "returns": "boolean"}
+      ]
+    }
+  ],
+
+  "db_schema": [],
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Position + Player + Board + GameState",
+      "code": "import java.util.*;\n\nenum GameState { IN_PROGRESS, WON, DRAWN }\n\nrecord Position(int row, int col) {}\nrecord Player(String playerId, String name, char symbol) {}\n\nclass Board {\n    private final int rows;\n    private final int cols;\n    private final Player[][] grid;\n\n    public Board(int rows, int cols) {\n        this.rows = rows;\n        this.cols = cols;\n        this.grid = new Player[rows][cols];\n    }\n\n    public Player getCell(Position p) {\n        if (!inBounds(p)) return null;\n        return grid[p.row()][p.col()];\n    }\n\n    public void setCell(Position p, Player player) {\n        if (!inBounds(p))\n            throw new IndexOutOfBoundsException(\"Position out of bounds: \" + p);\n        grid[p.row()][p.col()] = player;\n    }\n\n    public boolean isEmpty(Position p) {\n        return inBounds(p) && grid[p.row()][p.col()] == null;\n    }\n\n    public boolean inBounds(Position p) {\n        return p.row() >= 0 && p.row() < rows && p.col() >= 0 && p.col() < cols;\n    }\n\n    public boolean isFull() {\n        for (int r = 0; r < rows; r++) {\n            for (int c = 0; c < cols; c++) {\n                if (grid[r][c] == null) return false;\n            }\n        }\n        return true;\n    }\n\n    public int getRows() { return rows; }\n    public int getCols() { return cols; }\n\n    // Utility for debugging / display\n    public String render() {\n        StringBuilder sb = new StringBuilder();\n        for (int r = 0; r < rows; r++) {\n            for (int c = 0; c < cols; c++) {\n                Player p = grid[r][c];\n                sb.append(p == null ? '.' : p.symbol());\n                sb.append(' ');\n            }\n            sb.append('\\n');\n        }\n        return sb.toString();\n    }\n}"
+    },
+    {
+      "label": "Template Method — BoardGame abstract base",
+      "flow": "**The template method is `makeMove`.** It enforces the game loop: check state → check turn → validate → apply → check win → check draw → switch turns. Each bulleted step has a hook or common logic. Subclasses override **only the game-specific hooks**: board dimensions, move validation details, move application, win detection.",
+      "edge_cases": "Making a move after the game is over → throw. Wrong player's turn → throw. Invalid move (subclass decides) → throw. Applied move results in invalid position (subclass bug) → throw via Board's bounds check.",
+      "code": "public abstract class BoardGame {\n    protected final Board board;\n    protected final Player[] players = new Player[2];\n    protected int currentPlayerIndex = 0;\n    protected GameState state = GameState.IN_PROGRESS;\n    protected Player winner;\n    protected final List<Move> moveHistory = new ArrayList<>();\n\n    protected BoardGame(Player player1, Player player2) {\n        // Subclass provides board dimensions via getBoardSize()\n        int[] size = getBoardSize();\n        this.board = new Board(size[0], size[1]);\n        this.players[0] = player1;\n        this.players[1] = player2;\n    }\n\n    // ── Template method — the fixed game loop ──\n    public final void makeMove(String playerId, Position position) {\n        // 1. Game already over?\n        if (state != GameState.IN_PROGRESS)\n            throw new GameAlreadyOverException(\"Game is \" + state);\n\n        // 2. Right player's turn?\n        Player currentPlayer = players[currentPlayerIndex];\n        if (!currentPlayer.playerId().equals(playerId))\n            throw new WrongTurnException(\n                \"Expected \" + currentPlayer.name() + \" to move\");\n\n        // 3. Valid move per game rules? (hook)\n        if (!isValidMove(position))\n            throw new InvalidMoveException(\"Invalid move: \" + position);\n\n        // 4. Apply the move (hook — may adjust position, e.g., Connect-Four drops)\n        Position actualPosition = applyMove(currentPlayer, position);\n        moveHistory.add(new Move(currentPlayer, actualPosition));\n\n        // 5. Check win (hook)\n        if (checkWinCondition(actualPosition)) {\n            state = GameState.WON;\n            winner = currentPlayer;\n            return;\n        }\n\n        // 6. Check draw (generic — board full with no win)\n        if (board.isFull()) {\n            state = GameState.DRAWN;\n            return;\n        }\n\n        // 7. Switch turns\n        currentPlayerIndex = 1 - currentPlayerIndex;\n    }\n\n    // ── Abstract hooks — subclasses must provide ──\n\n    // Board dimensions: [rows, cols]\n    protected abstract int[] getBoardSize();\n\n    // Is this a valid position to move to in this game?\n    protected abstract boolean isValidMove(Position position);\n\n    // Apply the move — may transform the position (e.g., Connect-Four drops)\n    // Returns the actual final position on the board\n    protected abstract Position applyMove(Player player, Position requested);\n\n    // Did this move win the game?\n    protected abstract boolean checkWinCondition(Position lastMove);\n\n    // ── Public state accessors ──\n    public GameState getState()           { return state; }\n    public Player getWinner()             { return winner; }\n    public Player getCurrentPlayer()      { return players[currentPlayerIndex]; }\n    public Board getBoard()               { return board; }\n    public List<Move> getMoveHistory()    { return Collections.unmodifiableList(moveHistory); }\n}\n\nrecord Move(Player player, Position position) {}"
+    },
+    {
+      "label": "Concrete Game — TicTacToe",
+      "flow": "`isValidMove`: in bounds + cell empty. `applyMove`: place exactly at requested position. `checkWinCondition`: scan row, column, and both diagonals through the last move for 3 matching symbols.",
+      "edge_cases": "Last move at (0,0) has no anti-diagonal on the right. Last move at (1,1) needs to check both diagonals. The symmetric row/col/diag check is O(size) — for 3×3, trivial.",
+      "code": "public class TicTacToe extends BoardGame {\n    private static final int SIZE = 3;\n\n    public TicTacToe(Player x, Player o) {\n        super(x, o);\n    }\n\n    @Override\n    protected int[] getBoardSize() {\n        return new int[]{SIZE, SIZE};\n    }\n\n    @Override\n    protected boolean isValidMove(Position pos) {\n        return board.inBounds(pos) && board.isEmpty(pos);\n    }\n\n    @Override\n    protected Position applyMove(Player player, Position requested) {\n        board.setCell(requested, player);\n        return requested; // no transformation\n    }\n\n    @Override\n    protected boolean checkWinCondition(Position lastMove) {\n        Player p = board.getCell(lastMove);\n        int row = lastMove.row();\n        int col = lastMove.col();\n\n        // Row check\n        boolean rowWin = true;\n        for (int c = 0; c < SIZE; c++) {\n            if (board.getCell(new Position(row, c)) != p) {\n                rowWin = false;\n                break;\n            }\n        }\n        if (rowWin) return true;\n\n        // Column check\n        boolean colWin = true;\n        for (int r = 0; r < SIZE; r++) {\n            if (board.getCell(new Position(r, col)) != p) {\n                colWin = false;\n                break;\n            }\n        }\n        if (colWin) return true;\n\n        // Main diagonal (only if on diagonal)\n        if (row == col) {\n            boolean diagWin = true;\n            for (int i = 0; i < SIZE; i++) {\n                if (board.getCell(new Position(i, i)) != p) {\n                    diagWin = false;\n                    break;\n                }\n            }\n            if (diagWin) return true;\n        }\n\n        // Anti-diagonal (only if on anti-diagonal)\n        if (row + col == SIZE - 1) {\n            boolean antiWin = true;\n            for (int i = 0; i < SIZE; i++) {\n                if (board.getCell(new Position(i, SIZE - 1 - i)) != p) {\n                    antiWin = false;\n                    break;\n                }\n            }\n            if (antiWin) return true;\n        }\n\n        return false;\n    }\n}"
+    },
+    {
+      "label": "Concrete Game — ConnectFour (demonstrates extensibility)",
+      "flow": "Connect-Four reuses the **entire engine**. Only three hooks differ: (1) board is 6×7, (2) moves specify a column and the piece drops to the lowest empty row, (3) win requires 4 in a row in any of 8 directions. **About 60 lines of code** to add a whole new game on top of the existing BoardGame base.",
+      "edge_cases": "Dropping into a full column → `isValidMove` returns false. The `applyMove` walks down from the top to find the first empty row. Win detection walks in 4 directions from the landing position (horizontal, vertical, two diagonals).",
+      "code": "public class ConnectFour extends BoardGame {\n    private static final int ROWS = 6;\n    private static final int COLS = 7;\n    private static final int WIN_LENGTH = 4;\n\n    public ConnectFour(Player red, Player yellow) {\n        super(red, yellow);\n    }\n\n    @Override\n    protected int[] getBoardSize() {\n        return new int[]{ROWS, COLS};\n    }\n\n    @Override\n    protected boolean isValidMove(Position pos) {\n        // Connect-Four: only column matters. Valid if column exists and not full.\n        int col = pos.col();\n        if (col < 0 || col >= COLS) return false;\n        // Column is full if the top row in that column is occupied\n        return board.isEmpty(new Position(0, col));\n    }\n\n    @Override\n    protected Position applyMove(Player player, Position requested) {\n        int col = requested.col();\n        // Drop to the lowest empty row in this column\n        for (int row = ROWS - 1; row >= 0; row--) {\n            Position p = new Position(row, col);\n            if (board.isEmpty(p)) {\n                board.setCell(p, player);\n                return p; // actual landing position\n            }\n        }\n        throw new IllegalStateException(\"Column full — should have been caught by isValidMove\");\n    }\n\n    @Override\n    protected boolean checkWinCondition(Position lastMove) {\n        Player p = board.getCell(lastMove);\n        // 4 directions: horizontal, vertical, two diagonals\n        int[][] directions = {\n            {0, 1},   // horizontal\n            {1, 0},   // vertical\n            {1, 1},   // diagonal ↘\n            {1, -1}   // diagonal ↙\n        };\n\n        for (int[] dir : directions) {\n            if (countInDirection(lastMove, p, dir[0], dir[1]) >= WIN_LENGTH)\n                return true;\n        }\n        return false;\n    }\n\n    // Count consecutive pieces of 'player' through lastMove in the given direction\n    // (both ways along the axis, since lastMove could be anywhere in the winning line)\n    private int countInDirection(Position from, Player player, int dr, int dc) {\n        int count = 1; // the piece at `from` itself\n\n        // Forward direction\n        int r = from.row() + dr, c = from.col() + dc;\n        while (r >= 0 && r < ROWS && c >= 0 && c < COLS\n                && board.getCell(new Position(r, c)) == player) {\n            count++;\n            r += dr;\n            c += dc;\n        }\n\n        // Backward direction\n        r = from.row() - dr;\n        c = from.col() - dc;\n        while (r >= 0 && r < ROWS && c >= 0 && c < COLS\n                && board.getCell(new Position(r, c)) == player) {\n            count++;\n            r -= dr;\n            c -= dc;\n        }\n\n        return count;\n    }\n}"
+    },
+    {
+      "label": "Usage — demonstrating both games share the engine",
+      "code": "// Tic-Tac-Toe game\nPlayer alice = new Player(\"alice\", \"Alice\", 'X');\nPlayer bob = new Player(\"bob\", \"Bob\", 'O');\nTicTacToe ttt = new TicTacToe(alice, bob);\n\nttt.makeMove(\"alice\", new Position(0, 0));  // X at top-left\nttt.makeMove(\"bob\",   new Position(1, 1));  // O center\nttt.makeMove(\"alice\", new Position(0, 1));  // X top-middle\nttt.makeMove(\"bob\",   new Position(2, 2));  // O bottom-right\nttt.makeMove(\"alice\", new Position(0, 2));  // X top-right — wins!\n\nSystem.out.println(ttt.getState());  // WON\nSystem.out.println(ttt.getWinner().name()); // Alice\nSystem.out.println(ttt.getBoard().render());\n\n// Connect-Four game — reuses the same engine\nPlayer red = new Player(\"red\", \"Red\", 'R');\nPlayer yellow = new Player(\"yellow\", \"Yellow\", 'Y');\nConnectFour c4 = new ConnectFour(red, yellow);\n\n// Red drops in column 3; actual row is determined by applyMove\nc4.makeMove(\"red\", new Position(0, 3));\nc4.makeMove(\"yellow\", new Position(0, 2));\nc4.makeMove(\"red\", new Position(0, 3));\n// ... continue play\n\nSystem.out.println(c4.getBoard().render());"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Template Method Pattern → BoardGame.makeMove()",
+      "why": "**The defining pattern of this problem.** `makeMove` in the base class lays out the **fixed skeleton** of the game loop: check state → check turn → validate → apply → check winner → check draw → switch turns. The variable parts (`isValidMove`, `applyMove`, `checkWinCondition`, `getBoardSize`) are abstract hooks overridden by subclasses. Adding a new game means implementing the hooks, not rewriting the loop. The base class is marked `final` on `makeMove` to prevent subclasses from breaking the invariants.",
+      "where": "`BoardGame.makeMove()` (final) + abstract hooks implemented by TicTacToe and ConnectFour"
+    },
+    {
+      "name": "Abstract Factory (implicit) — game instantiation",
+      "why": "Each game subclass is its own factory for a specific game type. `new TicTacToe(p1, p2)` sets up the 3×3 board; `new ConnectFour(p1, p2)` sets up the 6×7 board. The subclass constructor enforces its own rules (board size). If we wanted a `GameFactory` to create games by name (`factory.create(\"tictactoe\", players)`), that would be an explicit Abstract Factory — overkill for our scope.",
+      "where": "Subclass constructors + `getBoardSize()` hook"
+    },
+    {
+      "name": "Strategy Pattern (alternative framing)",
+      "why": "Instead of inheritance, you could inject a `GameRules` strategy object into BoardGame. `BoardGame` holds a `GameRules` and calls `rules.isValidMove(...)`, `rules.checkWinCondition(...)`. **Pros:** composition over inheritance, rules are swappable at runtime, easier to test. **Cons:** more classes, more indirection. **Template Method is the classical choice** for this problem — but mention Strategy as an alternative to show you understand the tradeoffs.",
+      "where": "Could refactor: `BoardGame(GameRules rules)` instead of `TicTacToe extends BoardGame`"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Not applicable — turn-based, single-threaded",
+      "fix": "Tic-Tac-Toe is inherently sequential. One player moves, the other responds. No meaningful concurrency concerns for local play. For **network play**, you'd synchronize `makeMove` on the game instance — but that's an extension, not core."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why Template Method instead of just writing two separate game classes?",
+      "answer": "**Code reuse and consistency.** Two separate classes would duplicate the game loop, state management, turn alternation, draw detection, and move history. That's 80% of the code. **With Template Method, the duplication is eliminated** — each game is only ~60 lines of game-specific logic. More importantly, the **loop invariants** (you can't move after game over, you can't skip a turn) are enforced in one place. Two separate implementations might have subtle bugs where one handles an edge case and the other doesn't."
+    },
+    {
+      "question": "Why make makeMove final?",
+      "answer": "**To prevent subclasses from breaking the template.** If TicTacToe overrode `makeMove`, it could skip the turn alternation, skip draw detection, or introduce its own invariants. The whole point of Template Method is that the skeleton is fixed — only the hooks vary. Marking `makeMove` as `final` enforces this at the compiler level. **A junior dev can't accidentally 'optimize' the loop in a subclass** and break everything."
+    },
+    {
+      "question": "Why pass Position to applyMove and have it return a (possibly different) Position?",
+      "answer": "**Because Connect-Four changes the position.** In Tic-Tac-Toe, the player says 'place at (1, 2)' and that's where it goes. In Connect-Four, the player says 'drop in column 3' and the piece lands at whatever row happens to be empty. The **returned position is the actual landing spot** — used by `checkWinCondition` to check for wins emanating from that spot. Without this, Connect-Four would need to re-scan the column to find the landing spot, duplicating work."
+    },
+    {
+      "question": "How would you add an AI player?",
+      "answer": "**An AI is a class that computes moves and calls `makeMove()` for its turn.** The simplest AI (for Tic-Tac-Toe): random valid move. Better: minimax with alpha-beta pruning — for 3×3, fully solvable in microseconds. Even better: precomputed optimal play table (9! = 362,880 states). **The game engine is untouched** — the AI is just another caller. The interface is already right: `game.makeMove(aiPlayerId, computedMove)`. This is the beauty of clean separation."
+    },
+    {
+      "question": "Why not use a generic Board<T> with pluggable cell types?",
+      "answer": "**YAGNI for this scope.** Both Tic-Tac-Toe and Connect-Four use Player references as cells — no need for type parameterization. If you needed a game like Go with 'stone groups' or Chess with 'pieces and state', then yes — `Board<Cell>` where Cell is a game-specific type. For now, `Player[][]` is clear and direct. **Don't add generics until a second cell type actually appears.**"
+    },
+    {
+      "question": "How would you serialize a game for save/load?",
+      "answer": "**Serialize: board state + current turn + game state + player info.** JSON format: `{type: 'tictactoe', board: [[...]], currentPlayer: 0, state: 'IN_PROGRESS', players: [...]}`. To load: instantiate the correct subclass via a factory based on `type`, then replay the move history (or restore state directly). **Replaying is simpler** — guarantees consistency with the game rules. Direct state restoration risks loading an invalid state into the engine."
+    },
+    {
+      "question": "How do you test the generic engine vs game-specific logic?",
+      "answer": "**Two layers of tests.** (1) **Engine tests** (BoardGame abstract): create a minimal test subclass with trivial rules, verify turn alternation, state transitions, 'can't move after game over', draw detection on full board. (2) **Game-specific tests** (TicTacToe, ConnectFour): test `isValidMove`, `applyMove`, `checkWinCondition` directly. The Template Method pattern makes this **clean to test** because the concerns are separated. Testing a monolithic implementation would mix engine and rules in every test."
+    },
+    {
+      "question": "How would you handle games with more than two players?",
+      "answer": "**Parameterize the player count.** Change `Player[2]` to `List<Player>`. The `currentPlayerIndex = (currentPlayerIndex + 1) % players.size()`. Turn alternation becomes rotation. Win condition is unchanged — whoever made the last move wins if their move triggers a win. **Consider:** some games might have elimination (player loses, others continue). That's a new hook: `isPlayerActive(player)`. Add it to the base class as a default returning true. **YAGNI until you need it.**"
+    }
+  ]
+}

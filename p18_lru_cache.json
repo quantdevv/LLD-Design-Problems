@@ -1,0 +1,232 @@
+{
+  "title": "LRU Cache (Least Recently Used)",
+  "description": "Implement a thread-safe LRU cache with O(1) get and put operations. The canonical data structure problem that combines a **doubly-linked list** with a **hash map**. Appears in every LLD interview list because it tests data structure design, not just application modeling.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Proxy Pattern"},
+    {"type": "concept", "label": "Data Structure Design"},
+    {"type": "concept", "label": "O(1) Operations"},
+    {"type": "concept", "label": "Concurrency"}
+  ],
+  "prompt": "Implement a thread-safe Least Recently Used (LRU) cache with O(1) get and put operations and a fixed capacity.",
+  "prompt_note": "LRU Cache is a **data structure design** problem, not an application LLD. The interviewer wants to see that you know why HashMap alone isn't enough (can't track order), why LinkedList alone isn't enough (O(N) lookup), and why the combination works (O(1) everything). The thread-safety layer is the LLD veneer on top of the data structure. Get the invariants right before writing a single line of code.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Fixed capacity that's set at construction time?\"",
+      "answer": "Interviewer: \"Yes. The cache has a max size; on eviction, the least recently used entry is removed.\"",
+      "why": "Sets the core invariant: `size <= capacity`. Eviction triggered on put when full."
+    },
+    {
+      "question": "You: \"What counts as 'use' — both get and put, or only get?\"",
+      "answer": "Interviewer: \"Both. Any access (get or put) marks the entry as most recently used.\"",
+      "why": "This affects where the 'move to front' logic runs. Standard LRU counts puts as access."
+    },
+    {
+      "question": "You: \"What does `get` return for a missing key — null, exception, Optional?\"",
+      "answer": "Interviewer: \"Return -1 (or null). Missing keys are normal, not an error.\"",
+      "why": "Follows the LeetCode convention. Missing key is a cache miss, not a failure."
+    },
+    {
+      "question": "You: \"Must it be thread-safe? Multiple readers and writers?\"",
+      "answer": "Interviewer: \"Yes — thread-safe. Prioritize correctness over throughput for this problem.\"",
+      "why": "Coarse-grained lock is acceptable. Fine-grained is a deep-dive follow-up."
+    },
+    {
+      "question": "You: \"Does it need TTL-based expiry, or just capacity-based eviction?\"",
+      "answer": "Interviewer: \"Just capacity-based for the core. Mention TTL as an extension.\"",
+      "why": "Keeps scope clean. TTL adds a background cleaner, which is a separate concern."
+    },
+    {
+      "question": "You: \"Do we need eviction callbacks or listeners?\"",
+      "answer": "Interviewer: \"Not core. Mention the extension point.\"",
+      "why": "Real cache libraries (Caffeine, Guava) have eviction listeners. Acknowledge without implementing."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**`get(key)`** — return the value if present, else null. Promotes the entry to most-recently-used.",
+      "**`put(key, value)`** — insert or update. Promotes the entry to most-recently-used. If size exceeds capacity, evict the least-recently-used entry.",
+      "**Both operations O(1)** average case (HashMap lookup + linked list pointer updates).",
+      "**Fixed capacity** set at construction.",
+      "**Thread-safe** concurrent access from multiple threads."
+    ],
+    "out_of_scope": [
+      "TTL-based expiry, size-based eviction (by memory bytes), distributed cache, persistence, eviction listeners, statistics (hit rate), lock-free implementation."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**O(1) for get and put** — no list scans, no sorting.",
+      "**Thread-safe** — concurrent gets don't corrupt the linked list. Concurrent puts don't double-insert.",
+      "**Memory bounded by capacity** — exactly N entries at steady state."
+    ],
+    "out_of_scope": [
+      "Lock-free concurrency, microbenchmarks, off-heap storage."
+    ]
+  },
+
+  "primary_scope": [
+    "`get(key)`: HashMap lookup → if found, move node to front of list → return value",
+    "`put(key, value)`: HashMap lookup → if exists, update + move to front → else create node, add to front, insert into map → if over capacity, remove tail + remove from map",
+    "Thread safety: single `ReentrantLock` guarding all mutations"
+  ],
+  "termination_points": [
+    "`IllegalArgumentException` — capacity ≤ 0 in constructor",
+    "Missing key in `get` → returns null (or -1 per convention) — not an exception",
+    "Null key or null value in `put` → `NullPointerException` (or configurable)"
+  ],
+
+  "entity_intro": "This is a **one-class problem.** The interesting design is internal: a HashMap provides O(1) lookups, a doubly-linked list provides O(1) reorder + eviction. The Node class is a private inner class — not a separate entity. Don't overthink this.",
+  "entities": [
+    {
+      "name": "LRUCache<K, V>",
+      "role": "**The entire data structure.** Exposes `get` and `put`. Internally: holds a HashMap and a doubly-linked list with dummy head/tail sentinels.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — the only public class"
+    },
+    {
+      "name": "Node<K, V> (private inner class)",
+      "role": "**Internal bookkeeping.** Holds key, value, prev, next. Key is stored on the Node so we can remove the entry from the HashMap when evicting from the list tail (we need the key to call `map.remove`).",
+      "verdict": "yes",
+      "verdict_label": "✓ Inner class — private detail"
+    },
+    {
+      "name": "Cache interface",
+      "role": "Could be extracted for testability (easy to swap LRU with LFU, FIFO). Mention but don't over-engineer for the core problem.",
+      "verdict": "maybe",
+      "verdict_label": "? Extract only if multiple cache types are needed"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "LRUCache", "owns": "`HashMap<K, Node<K,V>>`, dummy head Node, dummy tail Node, capacity, `ReentrantLock`", "rel": "1 → N Nodes (bounded by capacity)"},
+    {"entity": "Node", "owns": "key, value, prev ref, next ref", "rel": "Doubly-linked: prev/next ↔ Nodes, referenced by 1 HashMap entry"}
+  ],
+
+  "mvc_note": "**MVC doesn't apply** — this is a data structure, not an application. The single class encapsulates all state and behavior. The **design principle at play is information hiding**: callers see `get`/`put`; they don't see the HashMap or linked list. The internal data structure is a pure implementation detail.",
+
+  "classes": [
+    {
+      "name": "LRUCache<K, V>", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "capacity", "type": "int"},
+        {"name": "map", "type": "HashMap<K, Node<K,V>>"},
+        {"name": "head", "type": "Node (dummy sentinel)"},
+        {"name": "tail", "type": "Node (dummy sentinel)"},
+        {"name": "lock", "type": "ReentrantLock"}
+      ],
+      "methods": [
+        {"name": "get(key)", "returns": "V"},
+        {"name": "put(key, value)", "returns": "void"},
+        {"name": "size()", "returns": "int"},
+        {"name": "containsKey(key)", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "Node<K, V> (private inner)", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "key", "type": "K"},
+        {"name": "value", "type": "V"},
+        {"name": "prev", "type": "Node"},
+        {"name": "next", "type": "Node"}
+      ],
+      "methods": []
+    }
+  ],
+
+  "db_schema": [],
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "The core data structure — HashMap + Doubly-Linked List",
+      "flow": "**List ordering convention:** `head ↔ (most recently used) ↔ ... ↔ (least recently used) ↔ tail`. Dummy head and tail sentinels mean we never have null checks at the ends — every real node has both a prev and a next.\n\n**`get(key)`:** map lookup → if found, unlink the node and re-insert after head → return value.\n\n**`put(key, value)`:** if key exists, update value and move to front. Else: create new node, add after head, insert into map. If over capacity: remove the node before tail, remove from map.",
+      "edge_cases": "Get on missing key → return null (no list mutation). Put with existing key → update value, move to front, size unchanged. Put when full → evict **before** adding new (or after — both work as long as order is consistent). Capacity = 1 → each put evicts the previous entry.",
+      "code": "import java.util.HashMap;\nimport java.util.concurrent.locks.ReentrantLock;\n\npublic class LRUCache<K, V> {\n    // Private doubly-linked list node\n    private static class Node<K, V> {\n        K key;\n        V value;\n        Node<K, V> prev;\n        Node<K, V> next;\n\n        Node(K key, V value) {\n            this.key = key;\n            this.value = value;\n        }\n    }\n\n    private final int capacity;\n    private final HashMap<K, Node<K, V>> map;\n    // Dummy sentinels — simplify insert/remove (no null checks)\n    private final Node<K, V> head = new Node<>(null, null);\n    private final Node<K, V> tail = new Node<>(null, null);\n    private final ReentrantLock lock = new ReentrantLock();\n\n    public LRUCache(int capacity) {\n        if (capacity <= 0)\n            throw new IllegalArgumentException(\"Capacity must be positive\");\n        this.capacity = capacity;\n        this.map = new HashMap<>();\n        // Sentinel wiring: head ↔ tail (empty list state)\n        head.next = tail;\n        tail.prev = head;\n    }\n\n    // ── get ────────────────────────────\n    public V get(K key) {\n        lock.lock();\n        try {\n            Node<K, V> node = map.get(key);\n            if (node == null) return null;  // cache miss\n\n            // Move to front — mark as most recently used\n            removeNode(node);\n            addToFront(node);\n            return node.value;\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    // ── put ────────────────────────────\n    public void put(K key, V value) {\n        if (key == null) throw new NullPointerException(\"key\");\n        if (value == null) throw new NullPointerException(\"value\");\n\n        lock.lock();\n        try {\n            Node<K, V> existing = map.get(key);\n\n            if (existing != null) {\n                // Update in place — move to front\n                existing.value = value;\n                removeNode(existing);\n                addToFront(existing);\n                return;\n            }\n\n            // New entry — evict if at capacity\n            if (map.size() == capacity) {\n                // Evict the LRU entry (the node right before tail)\n                Node<K, V> lru = tail.prev;\n                removeNode(lru);\n                map.remove(lru.key);\n            }\n\n            Node<K, V> newNode = new Node<>(key, value);\n            addToFront(newNode);\n            map.put(key, newNode);\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    public int size() {\n        lock.lock();\n        try {\n            return map.size();\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    public boolean containsKey(K key) {\n        lock.lock();\n        try {\n            return map.containsKey(key);\n        } finally {\n            lock.unlock();\n        }\n    }\n\n    // ── Doubly-linked list helpers ────────\n    // Assumptions: sentinels are never removed; we always operate on real nodes.\n\n    // Insert right after head (becomes the new most-recently-used)\n    private void addToFront(Node<K, V> node) {\n        node.prev = head;\n        node.next = head.next;\n        head.next.prev = node;\n        head.next = node;\n    }\n\n    // Unlink from current position in the list\n    private void removeNode(Node<K, V> node) {\n        node.prev.next = node.next;\n        node.next.prev = node.prev;\n        // Optional: null out prev/next on the removed node to help GC\n        // node.prev = null;\n        // node.next = null;\n    }\n}"
+    },
+    {
+      "label": "Usage example + invariant check",
+      "code": "LRUCache<Integer, String> cache = new LRUCache<>(3);\n\ncache.put(1, \"one\");      // list: 1\ncache.put(2, \"two\");      // list: 2 -> 1\ncache.put(3, \"three\");    // list: 3 -> 2 -> 1\ncache.get(1);             // list: 1 -> 3 -> 2 (1 moved to front)\ncache.put(4, \"four\");     // list: 4 -> 1 -> 3 (2 evicted)\ncache.get(2);             // returns null (evicted)\ncache.get(3);             // list: 3 -> 4 -> 1\ncache.put(1, \"ONE!\");     // list: 1 -> 3 -> 4 (update + move to front)\n\nSystem.out.println(cache.size()); // 3\nSystem.out.println(cache.get(1)); // \"ONE!\"\n\n// Multi-threaded demo: 10 threads hammering the cache\nExecutorService pool = Executors.newFixedThreadPool(10);\nfor (int t = 0; t < 10; t++) {\n    final int tid = t;\n    pool.submit(() -> {\n        for (int i = 0; i < 1000; i++) {\n            cache.put(tid * 1000 + i, \"val-\" + i);\n            cache.get(tid * 1000 + (i - 1));\n        }\n    });\n}\npool.shutdown();\n// Invariant: cache.size() <= capacity always holds."
+    },
+    {
+      "label": "Alternative — LinkedHashMap one-liner (for comparison)",
+      "flow": "**Java trick:** `LinkedHashMap` with access-order mode already maintains a doubly-linked list keyed by insertion/access order. Override `removeEldestEntry` to implement LRU eviction in ~10 lines. **Interviewers will sometimes ask for this** as a follow-up, but the from-scratch version is what they really want to see.",
+      "code": "import java.util.LinkedHashMap;\nimport java.util.Map;\n\n// One-liner LRU cache — not thread-safe as written\nclass LinkedHashMapLRU<K, V> extends LinkedHashMap<K, V> {\n    private final int capacity;\n\n    public LinkedHashMapLRU(int capacity) {\n        // initial capacity, load factor, accessOrder=true → LRU behavior\n        super(capacity, 0.75f, true);\n        this.capacity = capacity;\n    }\n\n    @Override\n    protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {\n        return size() > capacity;\n    }\n}\n\n// To make it thread-safe:\n// Map<K, V> cache = Collections.synchronizedMap(new LinkedHashMapLRU<>(100));\n// (But this blocks on every access; the from-scratch version is more informative.)"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Composite Data Structure — HashMap + Doubly-Linked List",
+      "why": "**The key insight.** HashMap alone: O(1) lookup but no ordering. LinkedList alone: O(1) reorder at known positions but O(N) lookup. **Combining them** gives O(1) for everything: HashMap for lookup, doubly-linked list for order tracking. This pattern appears in every textbook on data structures — knowing it by heart is table stakes for senior interviews.",
+      "where": "`map` for lookups + `head`/`tail` sentinels for order"
+    },
+    {
+      "name": "Sentinel Nodes",
+      "why": "Dummy head and tail nodes eliminate edge cases. Every real node has a non-null prev and next. `addToFront` and `removeNode` work uniformly — no 'is this the first/last node' branches. Adds 2 nodes of overhead but saves ~8 lines of null-check code. **Classic trick** in doubly-linked list implementations.",
+      "where": "`head` and `tail` fields + `addToFront` / `removeNode` helpers"
+    },
+    {
+      "name": "Proxy Pattern (for thread safety)",
+      "why": "The `ReentrantLock` wrapping all methods makes this a **synchronized proxy** around an otherwise single-threaded data structure. For production use, consider `Collections.synchronizedMap` wrapping a LinkedHashMap, or use `Caffeine`/`Guava Cache` which are designed for concurrency from scratch.",
+      "where": "`lock.lock()` / `lock.unlock()` around every operation"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two threads calling get/put concurrently → linked list corruption",
+      "fix": "Single `ReentrantLock` serializes all mutations. Every public method acquires the lock. No two threads can modify the list pointers or the map simultaneously. **Coarse but correct** — this is the only guarantee you need for an LLD answer."
+    },
+    {
+      "issue": "Double-eviction race",
+      "fix": "`put` holds the lock while it checks `size == capacity`, evicts, and inserts. Two concurrent puts can't both evict the same LRU entry — the second put sees the map size post-eviction and either evicts a different entry or skips eviction. The check-and-evict is atomic within the lock."
+    },
+    {
+      "issue": "Reader starvation under heavy writes",
+      "fix": "`ReentrantLock` is fair=false by default — writers can starve readers (and vice versa). For read-heavy workloads, use `ReentrantReadWriteLock` with reads on the read lock. **Caveat:** `get()` promotes to front, so it's actually a write. This is why the LRU `get` is inherently serializing — it can't benefit from a read lock. **LFU** is better for read-lock optimization."
+    },
+    {
+      "issue": "Iteration during mutation",
+      "fix": "This implementation doesn't expose iteration. If you add `iterator()`, snapshot the list under the lock and return an unmodifiable copy. Never return the live linked list — external iteration breaks LRU semantics (every traversal would touch every entry)."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why store the key in the Node instead of just the value?",
+      "answer": "**You need the key to delete the HashMap entry during eviction.** When you evict the LRU node (tail.prev), you have a reference to the Node — but `map.remove(key)` needs the key. If the Node only holds the value, you'd need to iterate the map to find which key maps to this node (O(N)). Storing the key on the Node makes eviction O(1). **This is the subtle bit** that trips up candidates implementing it from memory."
+    },
+    {
+      "question": "Why doubly-linked list instead of singly-linked?",
+      "answer": "**Removing a node mid-list needs to update its predecessor's `next` pointer.** Singly-linked: finding the predecessor is O(N) (scan from head). Doubly-linked: `node.prev` is O(1). Since `get` removes the node from its current position and re-adds at the front, this happens on **every access** — singly-linked would make `get` O(N), defeating the whole point."
+    },
+    {
+      "question": "Why sentinel nodes instead of handling head/tail as null?",
+      "answer": "**Eliminates 4 edge cases:** adding to empty list, removing the only element, adding at head, removing at head/tail. With sentinels, every real node has `node.prev != null && node.next != null`. `removeNode` is three lines with no branches. Without sentinels, you need `if (node == head) ... else if (node == tail) ... else ...` — 10+ lines and more bugs. **The 2 extra nodes of memory are worth it.**"
+    },
+    {
+      "question": "What's the difference between LRU and LFU?",
+      "answer": "**LRU (Least Recently Used):** evict the entry accessed furthest in the past. **LFU (Least Frequently Used):** evict the entry with the smallest access count. LRU is simpler (just an ordered list); LFU needs per-entry counts and a frequency-sorted structure (usually a min-heap or a frequency bucket list — both more complex). **When to use:** LRU for temporal locality (recent items likely to be re-accessed), LFU for persistent hot items. Real caches (Redis, memcached) offer both."
+    },
+    {
+      "question": "How would you make this lock-free?",
+      "answer": "**Very hard.** The doubly-linked list makes atomic multi-step updates (remove + add) intrinsically tricky. One approach: use a `ConcurrentHashMap` for the backing store and use **segments/shards** — each shard has its own lock. Caffeine takes a different approach: it uses a **segmented buffer** for recording accesses asynchronously, then batches list maintenance. The result is O(1) lock-free reads and O(1) amortized writes. **For an interview:** acknowledge the complexity, reference Caffeine, and stick with the locked version."
+    },
+    {
+      "question": "How would you add TTL expiry?",
+      "answer": "**Add a `timestamp` or `expiresAt` field to Node.** On `get`, check if the entry has expired — if yes, remove it and return null. For proactive cleanup (don't wait for a get on an expired entry), run a background `ScheduledExecutorService` that scans for expired entries. **Caution:** two eviction policies compete — TTL and LRU. Define precedence (usually TTL wins; if a TTL'd entry is still under capacity, no LRU eviction). Caffeine and Guava handle this cleanly — don't roll your own."
+    },
+    {
+      "question": "What's the memory overhead per entry?",
+      "answer": "**Per node:** key reference (8 bytes), value reference (8 bytes), prev (8), next (8), object header (~16), + padding = **~48 bytes.** Plus a HashMap entry (~48 bytes with key, value, hash, next). **Total ~96 bytes per entry** on top of the actual key and value. For a 1M-entry cache: ~100MB of bookkeeping overhead. Caffeine optimizes this with packed entries. For huge caches, use off-heap storage (Chronicle Map) or a real cache library."
+    },
+    {
+      "question": "How would you test this?",
+      "answer": "**Unit tests:** (1) Basic get/put. (2) Eviction order — fill beyond capacity, verify LRU is evicted. (3) Update in place — put on existing key, verify size unchanged and value updated. (4) Access promotes — get then put to capacity+1, verify get'd entry is retained. (5) Capacity 1 edge case. **Concurrency tests:** (6) Spawn N threads doing random get/puts on a shared key space, assert `size() <= capacity` throughout. (7) Use `CountDownLatch` to start all threads simultaneously for maximum contention. (8) Verify no `NullPointerException` from linked list corruption."
+    }
+  ]
+}
