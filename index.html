@@ -39,15 +39,21 @@ body{background:var(--bg);color:var(--text);font-family:'Sora',sans-serif;font-s
 
 /* ── LAYOUT ── */
 .layout{display:flex;max-width:1440px;margin:0 auto;padding:0 24px;gap:36px}
-.sidebar{width:270px;flex-shrink:0;padding-top:32px;position:sticky;top:68px;align-self:flex-start;max-height:calc(100vh - 68px);overflow-y:auto}
-.sidebar::-webkit-scrollbar{width:3px}.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.sb-title{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;padding:0 10px}
+.layout.sidebar-collapsed{gap:0}
+.sidebar{width:270px;flex-shrink:0;padding-top:32px;position:sticky;top:68px;align-self:flex-start;max-height:calc(100vh - 68px);overflow-y:auto;transition:width .3s ease}
+.sidebar.collapsed{width:0;padding:0;overflow:hidden}
+.sb-title{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.sb-title:hover{color:var(--text)}
 .sb-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--rs);text-decoration:none;color:var(--muted);font-size:12.5px;transition:all .15s;cursor:pointer}
 .sb-item:hover{background:var(--s2);color:var(--text)}
 .sb-item.active{background:var(--accg);color:var(--accl)}
 .sb-num{width:20px;height:20px;border-radius:4px;background:var(--s3);border:1px solid var(--border);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--dim);flex-shrink:0}
 .sb-item.active .sb-num{background:var(--accg);border-color:rgba(79,142,247,.4);color:var(--acc)}
 .sb-section{margin-bottom:20px}
+.sb-items{display:none}
+.sb-items.expanded{display:block}
+.sb-toggle{font-size:8px;transition:transform .2s}
+.sb-section .sb-items.expanded ~ .sb-title .sb-toggle{transform:rotate(180deg)}
 .main{flex:1;min-width:0;padding:32px 0 120px}
 
 /* ── HERO ── */
@@ -864,18 +870,35 @@ function renderSidebar(problems){
   const sb = document.getElementById('sidebar');
   let h = '';
   let currentGroup = '';
+  let firstGroup = true;
   problems.forEach((p,i) => {
     const grp = MANIFEST[i]?.group || '';
     if(grp !== currentGroup){
-      if(currentGroup) h += `</div>`;
+      if(currentGroup) h += `</div></div>`;
       currentGroup = grp;
-      h += `<div class="sb-section"><div class="sb-title">${esc(grp)}</div>`;
+      const expanded = firstGroup ? ' expanded' : '';
+      firstGroup = false;
+      h += `<div class="sb-section"><div class="sb-title" onclick="toggleSection(this)">${esc(grp)} <span class="sb-toggle">▼</span></div><div class="sb-items${expanded}">`;
     }
     const num = String(i+1).padStart(2,'0');
     h += `<a href="#p${i+1}" class="sb-item"><span class="sb-num">${num}</span>${esc(p.title||'Loading…')}</a>`;
   });
-  if(currentGroup) h += `</div>`;
+  if(currentGroup) h += `</div></div>`;
   sb.innerHTML = h;
+}
+
+// ═══════════════════════════════════════════════════
+// SIDEBAR SECTION TOGGLE
+// ═══════════════════════════════════════════════════
+function toggleSection(titleEl) {
+  const section = titleEl.parentElement;
+  const items = section.querySelector('.sb-items');
+  const isExpanded = items.classList.contains('expanded');
+  if (isExpanded) {
+    items.classList.remove('expanded');
+  } else {
+    items.classList.add('expanded');
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -949,7 +972,15 @@ async function loadAll() {
         sbItems.forEach(i => i.classList.remove('active'));
         const id = entry.target.id;
         const a = document.querySelector(`.sb-item[href="#${id}"]`);
-        if(a) a.classList.add('active');
+        if(a) {
+          a.classList.add('active');
+          // Expand the section containing the active item
+          const section = a.closest('.sb-section');
+          const items = section.querySelector('.sb-items');
+          if (!items.classList.contains('expanded')) {
+            items.classList.add('expanded');
+          }
+        }
       }
     });
   }, {rootMargin:'-20% 0px -70% 0px'});

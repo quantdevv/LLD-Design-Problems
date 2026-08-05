@@ -1,0 +1,520 @@
+{
+  "title": "Collaborative Document Editor (Session-Based)",
+  "description": "Design a document editing system where users create, own, share, version, and collaboratively edit documents with access-level controls and session-based editing. Unlike CRDT-based real-time collab (P21), this focuses on **session lifecycle, access control via Strategy Pattern, version history, and sharing**. This is the LLD that shows up at Indian product companies — structured around MVC with clear entity/service/controller separation.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "pattern", "label": "Factory Pattern"},
+    {"type": "pattern", "label": "Observer Pattern"},
+    {"type": "concept", "label": "Session Management"},
+    {"type": "concept", "label": "Access Control"}
+  ],
+  "prompt": "Design a system where users create, own, share, and collaboratively edit documents with access-level controls (VIEW, COMMENT, EDIT), version history, and session-based editing.",
+  "prompt_note": "This is the **practical/interview-friendly** version of the collaborative editor problem. No CRDTs or OT — instead, it tests your ability to model: (1) access control as a clean Strategy Pattern, (2) session lifecycle (open → edit → save → close), (3) version vs snapshot distinction, (4) sharing with granular permissions. Indian product companies (Flipkart, Swiggy, PhonePe, Atlassian) ask this exact variant.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"What access levels are supported when sharing a document?\"",
+      "answer": "Interviewer: \"Three levels: VIEW (read-only), COMMENT (view + add comments), EDIT (full editing). The owner has all privileges plus delete and share.\"",
+      "why": "Four distinct permission tiers → **Strategy Pattern** with one policy class per level. Adding a new level (e.g., SUGGEST) = one new class."
+    },
+    {
+      "question": "You: \"How does editing work — direct mutation or within a session?\"",
+      "answer": "Interviewer: \"All edits must occur within an editor session. User opens a session → edits (auto-snapshot) → explicitly saves (creates a version) → closes session.\"",
+      "why": "**EditSession is a first-class entity** with lifecycle (ACTIVE/CLOSED), its own Snapshot, and access validation. This is NOT just 'call updateContent()' — there's a whole state machine."
+    },
+    {
+      "question": "You: \"What's the difference between a snapshot and a version?\"",
+      "answer": "Interviewer: \"Snapshot = ephemeral, auto-saved within a session, overwritten on each edit. Version = immutable, explicitly created on 'save', permanent in version history.\"",
+      "why": "Critical distinction. Snapshot has `sessionId + updatedAt` (mutable, ephemeral). Version has `versionNumber + savedBy + message` (immutable, permanent). The *fields tell the story*."
+    },
+    {
+      "question": "You: \"Can multiple users have active edit sessions on the same document?\"",
+      "answer": "Interviewer: \"Yes — each user gets their own session with their own snapshot. On save, use optimistic locking (check version number hasn't changed). If conflict → user must refresh.\"",
+      "why": "Optimistic vs pessimistic locking — a concurrency stance the interviewer expects. Mention both, let them choose."
+    },
+    {
+      "question": "You: \"Can comments exist as a separate feature, not just inline edits?\"",
+      "answer": "Interviewer: \"Yes — comments are positioned (start, end) on the document text. Users with COMMENT access can add them but not edit the document.\"",
+      "why": "If you don't model Comment as an entity, the COMMENT access level is meaningless — what does it *do*?"
+    },
+    {
+      "question": "You: \"Revert to a previous version — does it create a new version or overwrite?\"",
+      "answer": "Interviewer: \"Append-only history. Reverting to version 3 creates a NEW version (v6) with v3's content. No destructive rewrite.\"",
+      "why": "Immutable version history = audit trail. Same principle as event sourcing."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Document CRUD:** users create and own documents. Only owner can delete.",
+      "**Share with access levels:** share documents with VIEW, COMMENT, or EDIT access. Only owner can share/revoke.",
+      "**Session-based editing:** all edits occur within an EditSession (open → edit → save → close).",
+      "**Auto-snapshot:** each edit within a session overwrites an ephemeral Snapshot (not a version).",
+      "**Explicit save → immutable Version:** user explicitly saves, creating a permanent Version with version number and message.",
+      "**Revert:** revert to any previous version (creates a NEW version — append-only history).",
+      "**Comments:** users with COMMENT+ access can add positioned comments. Author or owner can resolve them.",
+      "**Revoke sharing / delete documents:** owner can revoke shares, delete cascades (closes sessions, removes shares)."
+    ],
+    "out_of_scope": [
+      "Real-time collaborative editing (CRDT/OT), rich text formatting, persistence/DB, authentication (assume JWT → userId)."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**SOLID throughout:** Strategy Pattern for access control, Factory for policy creation, Observer for notifications.",
+      "**Access enforcement at the service layer** — not the caller's responsibility. Every service method resolves access before proceeding.",
+      "**Thread-safety on concurrent edit sessions** — optimistic locking on save (check versionNum hasn't changed).",
+      "**No partial saves, no orphaned snapshots** — consistent data at all times."
+    ],
+    "out_of_scope": [
+      "Distributed deployment, caching, full-text search, pagination."
+    ]
+  },
+
+  "primary_scope": [
+    "Document lifecycle: create → share → open session → edit → save → revert → delete",
+    "Access control: owner=all privileges, EDIT=edit+comment+view, COMMENT=comment+view, VIEW=view only",
+    "Session lifecycle: ACTIVE → edits update Snapshot → explicit save creates Version → CLOSED",
+    "Version history: append-only, revert creates a new version with old content",
+    "Comment lifecycle: add (COMMENT+ access) → resolve (author or owner)"
+  ],
+  "termination_points": [
+    "`UserNotHaveAccessException` — no Share or insufficient AccessLevel",
+    "`DocumentNotEditableException` — user's policy returns canEdit()=false",
+    "`SessionNotFoundException` / `SessionNotActiveException` — bad session ID or editing a CLOSED session",
+    "`VersionNotFoundException` — requested versionNumber doesn't exist in history",
+    "`UserAlreadyHasAccessException` — duplicate share attempt",
+    "`DocumentNotFoundException` — documentId doesn't exist",
+    "`ConflictException` — optimistic locking: versionNum changed since session opened"
+  ],
+
+  "entity_intro": "This problem has **rich entity behavior** — Document has `applyEdit()`, `revertTo()`, `isOwnedBy()` instead of just getters/setters. This kills the 'anemic domain model' critique that interviewers look for. EditSession is a **first-class entity** with state, lifecycle methods, and Snapshot ownership — not a disconnected box.",
+  "entities": [
+    {
+      "name": "User",
+      "role": "**Model.** id, name, email, createdAt. Identity entity — referenced by Document (owner), Share (sharedBy/sharedWith), EditSession, Comment (author).",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — identity"
+    },
+    {
+      "name": "Document",
+      "role": "**Model with behavior.** id, name, content (current), owner, currentVersionNum, `List<Version>` versionHistory. **Methods:** `applyEdit(newContent)`, `incrementVersion()`, `revertTo(version)`, `isOwnedBy(user)`. NOT anemic — encapsulates domain logic.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — rich domain model"
+    },
+    {
+      "name": "Version",
+      "role": "**Model (immutable).** id, versionNumber, documentId, content, savedBy (User), message, createdAt. **No setters** — once created, a version never changes. This is the permanent audit trail.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — immutable version snapshot"
+    },
+    {
+      "name": "Snapshot",
+      "role": "**Model (ephemeral).** id, sessionId, documentId, content, updatedAt. One per active session — overwritten on each edit. Discarded when session closes. **Key distinction from Version:** mutable, temporary, tied to a session.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — ephemeral auto-save"
+    },
+    {
+      "name": "EditSession",
+      "role": "**Model + state machine.** id, documentId, user, accessLevel, state (ACTIVE/CLOSED), currentSnapshot, openedAt, closedAt. **Methods:** `isActive()`, `close()`, `canEdit()`, `canComment()`. The session owns the Snapshot and enforces access within its scope.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — first-class lifecycle"
+    },
+    {
+      "name": "Share",
+      "role": "**Model.** id, documentId, sharedBy (User), sharedWith (User), accessLevel (ENUM), sharedOn. The link between a Document and a non-owner User's permissions.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — permission link"
+    },
+    {
+      "name": "Comment",
+      "role": "**Model.** id, documentId, author (User), content, positionStart, positionEnd, resolved (boolean), createdAt. Positioned on document text. **Methods:** `resolve()`. Without this entity, COMMENT access level would be meaningless.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — gives COMMENT access meaning"
+    },
+    {
+      "name": "AccessPolicy (Strategy interface)",
+      "role": "**Strategy Pattern interface.** `canView()`, `canComment()`, `canEdit()`, `canDelete()`, `canShare()`. Four implementations: **ViewPolicy** (view only), **CommentPolicy** (view + comment), **EditPolicy** (view + comment + edit), **OwnerPolicy** (all). Eliminates if-else chains in every service method.",
+      "verdict": "yes",
+      "verdict_label": "✓ Strategy — OCP in action"
+    },
+    {
+      "name": "AccessPolicyFactory",
+      "role": "**Factory.** Maps `AccessLevel` enum → concrete `AccessPolicy` implementation. Single responsibility. `getPolicy(AccessLevel.EDIT) → new EditPolicy()`.",
+      "verdict": "yes",
+      "verdict_label": "✓ Factory — policy creation"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "Document", "owns": "owner (User), `List<Version>` versionHistory, content, currentVersionNum", "rel": "N→1 User (owner), 1→N Versions"},
+    {"entity": "EditSession", "owns": "documentId, user, accessLevel, state, Snapshot", "rel": "N→1 Document, N→1 User, 1→1 Snapshot"},
+    {"entity": "Share", "owns": "documentId, sharedBy, sharedWith, accessLevel", "rel": "N→1 Document, N→1 User (sharedBy), N→1 User (sharedWith)"},
+    {"entity": "Comment", "owns": "documentId, author, content, position range, resolved flag", "rel": "N→1 Document, N→1 User (author)"},
+    {"entity": "Version", "owns": "documentId, versionNumber, content, savedBy, message", "rel": "N→1 Document, N→1 User (savedBy)"},
+    {"entity": "Snapshot", "owns": "sessionId, documentId, content, updatedAt", "rel": "1→1 EditSession"}
+  ],
+
+  "mvc_note": "**Full MVC separation.** **Model** = User, Document, Version, Snapshot, EditSession, Share, Comment, AccessLevel/SessionState enums. **Service** = DocumentService (CRUD + versioning), SessionService (session lifecycle + editing), ShareService (sharing + access resolution), CommentService (comment CRUD), AccessPolicy implementations. **Controller** = DocumentController, SessionController, ShareController, CommentController — each delegates to its service. **Access checks happen in services, not controllers.**",
+
+  "classes": [
+    {
+      "name": "AccessPolicy", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "canView()", "returns": "boolean"},
+        {"name": "canComment()", "returns": "boolean"},
+        {"name": "canEdit()", "returns": "boolean"},
+        {"name": "canDelete()", "returns": "boolean"},
+        {"name": "canShare()", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "ViewPolicy / CommentPolicy / EditPolicy / OwnerPolicy", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "(each implements AccessPolicy with different true/false combos)", "returns": ""}
+      ]
+    },
+    {
+      "name": "AccessPolicyFactory", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "getPolicy(AccessLevel level)", "returns": "AccessPolicy (static factory)"}
+      ]
+    },
+    {
+      "name": "Document", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "id", "type": "String"},
+        {"name": "name", "type": "String"},
+        {"name": "content", "type": "String"},
+        {"name": "owner", "type": "User"},
+        {"name": "currentVersionNum", "type": "int"},
+        {"name": "versionHistory", "type": "List<Version>"},
+        {"name": "createdAt", "type": "LocalDateTime"},
+        {"name": "updatedAt", "type": "LocalDateTime"}
+      ],
+      "methods": [
+        {"name": "applyEdit(newContent)", "returns": "void"},
+        {"name": "incrementVersion()", "returns": "int"},
+        {"name": "revertTo(version)", "returns": "void"},
+        {"name": "isOwnedBy(user)", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "Version", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "id", "type": "String"},
+        {"name": "versionNumber", "type": "int"},
+        {"name": "documentId", "type": "String"},
+        {"name": "content", "type": "String"},
+        {"name": "savedBy", "type": "User"},
+        {"name": "message", "type": "String"},
+        {"name": "createdAt", "type": "LocalDateTime"}
+      ],
+      "methods": [
+        {"name": "(immutable — no setters)", "returns": ""}
+      ]
+    },
+    {
+      "name": "Snapshot", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "id", "type": "String"},
+        {"name": "sessionId", "type": "String"},
+        {"name": "documentId", "type": "String"},
+        {"name": "content", "type": "String"},
+        {"name": "updatedAt", "type": "LocalDateTime"}
+      ],
+      "methods": [
+        {"name": "updateContent(content)", "returns": "void"}
+      ]
+    },
+    {
+      "name": "EditSession", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "id", "type": "String"},
+        {"name": "documentId", "type": "String"},
+        {"name": "user", "type": "User"},
+        {"name": "accessLevel", "type": "AccessLevel"},
+        {"name": "state", "type": "SessionState"},
+        {"name": "currentSnapshot", "type": "Snapshot"},
+        {"name": "openedAt", "type": "LocalDateTime"},
+        {"name": "closedAt", "type": "LocalDateTime"}
+      ],
+      "methods": [
+        {"name": "isActive()", "returns": "boolean"},
+        {"name": "close()", "returns": "void"},
+        {"name": "canEdit()", "returns": "boolean"},
+        {"name": "canComment()", "returns": "boolean"}
+      ]
+    },
+    {
+      "name": "Share", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "id", "type": "String"},
+        {"name": "documentId", "type": "String"},
+        {"name": "sharedBy", "type": "User"},
+        {"name": "sharedWith", "type": "User"},
+        {"name": "accessLevel", "type": "AccessLevel"},
+        {"name": "sharedOn", "type": "LocalDateTime"}
+      ],
+      "methods": []
+    },
+    {
+      "name": "Comment", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "id", "type": "String"},
+        {"name": "documentId", "type": "String"},
+        {"name": "author", "type": "User"},
+        {"name": "content", "type": "String"},
+        {"name": "positionStart", "type": "int"},
+        {"name": "positionEnd", "type": "int"},
+        {"name": "resolved", "type": "boolean"},
+        {"name": "createdAt", "type": "LocalDateTime"}
+      ],
+      "methods": [
+        {"name": "resolve()", "returns": "void"}
+      ]
+    },
+    {
+      "name": "DocumentService", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "documentStore", "type": "Map<String, Document>"},
+        {"name": "shareService", "type": "ShareService"},
+        {"name": "sessionService", "type": "SessionService"}
+      ],
+      "methods": [
+        {"name": "createDocument(owner, name, content)", "returns": "Document"},
+        {"name": "getDocument(requester, docId)", "returns": "Document"},
+        {"name": "saveDocument(requester, sessionId, message)", "returns": "Version"},
+        {"name": "deleteDocument(requester, docId)", "returns": "void"},
+        {"name": "revertToVersion(requester, docId, versionNum)", "returns": "Document"},
+        {"name": "getVersionHistory(requester, docId)", "returns": "List<Version>"}
+      ]
+    },
+    {
+      "name": "SessionService", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "sessionStore", "type": "Map<String, EditSession>"},
+        {"name": "shareService", "type": "ShareService"}
+      ],
+      "methods": [
+        {"name": "openSession(user, docId)", "returns": "EditSession"},
+        {"name": "editDocument(user, sessionId, newContent)", "returns": "Snapshot"},
+        {"name": "closeSession(user, sessionId)", "returns": "void"},
+        {"name": "getSession(sessionId)", "returns": "EditSession"}
+      ]
+    },
+    {
+      "name": "ShareService", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "documentSharesMap", "type": "Map<String, List<Share>>"}
+      ],
+      "methods": [
+        {"name": "shareDocument(owner, docId, target, level)", "returns": "Share"},
+        {"name": "revokeShare(owner, docId, target)", "returns": "void"},
+        {"name": "updateAccess(owner, docId, target, newLevel)", "returns": "void"},
+        {"name": "resolveAccess(user, document)", "returns": "AccessPolicy"},
+        {"name": "getSharesForDocument(docId)", "returns": "List<Share>"}
+      ]
+    },
+    {
+      "name": "CommentService", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "documentCommentsMap", "type": "Map<String, List<Comment>>"},
+        {"name": "shareService", "type": "ShareService"}
+      ],
+      "methods": [
+        {"name": "addComment(user, docId, content, start, end)", "returns": "Comment"},
+        {"name": "resolveComment(user, commentId)", "returns": "void"},
+        {"name": "getComments(user, docId)", "returns": "List<Comment>"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "documents",
+      "columns": [
+        {"name": "id", "type": "UUID", "pk": true},
+        {"name": "name", "type": "VARCHAR"},
+        {"name": "content", "type": "TEXT"},
+        {"name": "owner_id", "type": "UUID", "fk": true},
+        {"name": "current_version_num", "type": "INT"},
+        {"name": "created_at", "type": "TIMESTAMP"},
+        {"name": "updated_at", "type": "TIMESTAMP"}
+      ]
+    },
+    {
+      "table": "versions",
+      "columns": [
+        {"name": "id", "type": "UUID", "pk": true},
+        {"name": "document_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "version_number", "type": "INT"},
+        {"name": "content", "type": "TEXT"},
+        {"name": "saved_by_user_id", "type": "UUID", "fk": true},
+        {"name": "message", "type": "VARCHAR"},
+        {"name": "created_at", "type": "TIMESTAMP"}
+      ]
+    },
+    {
+      "table": "edit_sessions",
+      "columns": [
+        {"name": "id", "type": "UUID", "pk": true},
+        {"name": "document_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "user_id", "type": "UUID", "fk": true},
+        {"name": "access_level", "type": "ENUM(VIEW,COMMENT,EDIT)"},
+        {"name": "state", "type": "ENUM(ACTIVE,CLOSED)", "idx": true},
+        {"name": "opened_at", "type": "TIMESTAMP"},
+        {"name": "closed_at", "type": "TIMESTAMP"}
+      ]
+    },
+    {
+      "table": "snapshots",
+      "columns": [
+        {"name": "id", "type": "UUID", "pk": true},
+        {"name": "session_id", "type": "UUID", "fk": true},
+        {"name": "document_id", "type": "UUID", "fk": true},
+        {"name": "content", "type": "TEXT"},
+        {"name": "updated_at", "type": "TIMESTAMP"}
+      ]
+    },
+    {
+      "table": "shares",
+      "columns": [
+        {"name": "id", "type": "UUID", "pk": true},
+        {"name": "document_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "shared_by_user_id", "type": "UUID", "fk": true},
+        {"name": "shared_with_user_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "access_level", "type": "ENUM(VIEW,COMMENT,EDIT)"},
+        {"name": "shared_on", "type": "TIMESTAMP"}
+      ]
+    },
+    {
+      "table": "comments",
+      "columns": [
+        {"name": "id", "type": "UUID", "pk": true},
+        {"name": "document_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "author_id", "type": "UUID", "fk": true},
+        {"name": "content", "type": "TEXT"},
+        {"name": "position_start", "type": "INT"},
+        {"name": "position_end", "type": "INT"},
+        {"name": "resolved", "type": "BOOLEAN"},
+        {"name": "created_at", "type": "TIMESTAMP"}
+      ]
+    }
+  ],
+  "schema_note": "**Unique constraint** on `shares(document_id, shared_with_user_id)` prevents duplicate shares. **Index** on `(document_id, version_number)` for fast version lookup. Snapshots are ephemeral — in production, these could be in Redis rather than SQL. Sessions with `state=ACTIVE` are indexed for 'find active sessions for this document' queries.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Enums + AccessPolicy Strategy Pattern",
+      "flow": "**AccessLevel** enum → fed to **AccessPolicyFactory** → returns the correct **AccessPolicy** implementation. Every service method calls `ShareService.resolveAccess(user, doc)` → gets an AccessPolicy → checks `policy.canEdit()` or `policy.canComment()` before proceeding. **No if-else chains** in service code — OCP enforced.",
+      "code": "enum AccessLevel { VIEW, COMMENT, EDIT }\nenum SessionState { ACTIVE, CLOSED }\n\n// ── Strategy Pattern: one interface, four implementations ──\ninterface AccessPolicy {\n    boolean canView();\n    boolean canComment();\n    boolean canEdit();\n    boolean canDelete();\n    boolean canShare();\n}\n\nclass ViewPolicy implements AccessPolicy {\n    public boolean canView()    { return true;  }\n    public boolean canComment() { return false; }\n    public boolean canEdit()    { return false; }\n    public boolean canDelete()  { return false; }\n    public boolean canShare()   { return false; }\n}\n\nclass CommentPolicy implements AccessPolicy {\n    public boolean canView()    { return true;  }\n    public boolean canComment() { return true;  }\n    public boolean canEdit()    { return false; }\n    public boolean canDelete()  { return false; }\n    public boolean canShare()   { return false; }\n}\n\nclass EditPolicy implements AccessPolicy {\n    public boolean canView()    { return true;  }\n    public boolean canComment() { return true;  }\n    public boolean canEdit()    { return true;  }\n    public boolean canDelete()  { return false; }\n    public boolean canShare()   { return false; }\n}\n\nclass OwnerPolicy implements AccessPolicy {\n    public boolean canView()    { return true;  }\n    public boolean canComment() { return true;  }\n    public boolean canEdit()    { return true;  }\n    public boolean canDelete()  { return true;  }\n    public boolean canShare()   { return true;  }\n}\n\n// ── Factory: enum → policy ──\nclass AccessPolicyFactory {\n    public static AccessPolicy getPolicy(AccessLevel level) {\n        return switch (level) {\n            case VIEW    -> new ViewPolicy();\n            case COMMENT -> new CommentPolicy();\n            case EDIT    -> new EditPolicy();\n        };\n    }\n}"
+    },
+    {
+      "label": "Model — Document (rich, not anemic) + Version + Snapshot + EditSession",
+      "flow": "**Document** has real behavior: `applyEdit()` updates content + timestamp. `revertTo(v)` copies version content. `incrementVersion()` returns next versionNum. **Version** is immutable — no setters, final fields, created once. **Snapshot** is mutable — overwritten on each edit within a session. **EditSession** has state machine: ACTIVE → CLOSED.",
+      "code": "import java.time.LocalDateTime;\nimport java.util.*;\n\nclass User {\n    final String id, name, email;\n    final LocalDateTime createdAt;\n    public User(String id, String name, String email) {\n        this.id = id; this.name = name; this.email = email;\n        this.createdAt = LocalDateTime.now();\n    }\n}\n\nclass Document {\n    final String id;\n    String name;\n    String content;\n    final User owner;\n    int currentVersionNum = 0;\n    final List<Version> versionHistory = new ArrayList<>();\n    final LocalDateTime createdAt;\n    LocalDateTime updatedAt;\n\n    public Document(String id, String name, String content, User owner) {\n        this.id = id; this.name = name; this.content = content;\n        this.owner = owner;\n        this.createdAt = LocalDateTime.now();\n        this.updatedAt = this.createdAt;\n    }\n\n    public void applyEdit(String newContent) {\n        this.content = newContent;\n        this.updatedAt = LocalDateTime.now();\n    }\n\n    public int incrementVersion() {\n        return ++currentVersionNum;\n    }\n\n    public void revertTo(Version v) {\n        this.content = v.content;\n        this.updatedAt = LocalDateTime.now();\n    }\n\n    public boolean isOwnedBy(User u) {\n        return owner.id.equals(u.id);\n    }\n}\n\n// Immutable — no setters, all final\nclass Version {\n    final String id;\n    final int versionNumber;\n    final String documentId;\n    final String content;\n    final User savedBy;\n    final String message;\n    final LocalDateTime createdAt;\n\n    public Version(String documentId, int versionNumber,\n                   String content, User savedBy, String message) {\n        this.id = UUID.randomUUID().toString();\n        this.versionNumber = versionNumber;\n        this.documentId = documentId;\n        this.content = content;\n        this.savedBy = savedBy;\n        this.message = message;\n        this.createdAt = LocalDateTime.now();\n    }\n}\n\n// Ephemeral — overwritten on every edit, discarded on session close\nclass Snapshot {\n    final String id;\n    final String sessionId;\n    final String documentId;\n    String content;\n    LocalDateTime updatedAt;\n\n    public Snapshot(String sessionId, String documentId, String content) {\n        this.id = UUID.randomUUID().toString();\n        this.sessionId = sessionId;\n        this.documentId = documentId;\n        this.content = content;\n        this.updatedAt = LocalDateTime.now();\n    }\n\n    public void updateContent(String c) {\n        this.content = c;\n        this.updatedAt = LocalDateTime.now();\n    }\n}\n\nclass EditSession {\n    final String id;\n    final String documentId;\n    final User user;\n    final AccessLevel accessLevel;\n    SessionState state;\n    Snapshot currentSnapshot;\n    final LocalDateTime openedAt;\n    LocalDateTime closedAt;\n\n    public EditSession(String documentId, User user, AccessLevel level) {\n        this.id = UUID.randomUUID().toString();\n        this.documentId = documentId;\n        this.user = user;\n        this.accessLevel = level;\n        this.state = SessionState.ACTIVE;\n        this.openedAt = LocalDateTime.now();\n    }\n\n    public boolean isActive() { return state == SessionState.ACTIVE; }\n\n    public void close() {\n        this.state = SessionState.CLOSED;\n        this.closedAt = LocalDateTime.now();\n        this.currentSnapshot = null; // discard\n    }\n\n    public boolean canEdit() {\n        return AccessPolicyFactory.getPolicy(accessLevel).canEdit();\n    }\n\n    public boolean canComment() {\n        return AccessPolicyFactory.getPolicy(accessLevel).canComment();\n    }\n}\n\nclass Share {\n    final String id;\n    final String documentId;\n    final User sharedBy;\n    final User sharedWith;\n    AccessLevel accessLevel;\n    final LocalDateTime sharedOn;\n\n    public Share(String documentId, User sharedBy, User sharedWith, AccessLevel level) {\n        this.id = UUID.randomUUID().toString();\n        this.documentId = documentId;\n        this.sharedBy = sharedBy;\n        this.sharedWith = sharedWith;\n        this.accessLevel = level;\n        this.sharedOn = LocalDateTime.now();\n    }\n}\n\nclass Comment {\n    final String id;\n    final String documentId;\n    final User author;\n    final String content;\n    final int positionStart;\n    final int positionEnd;\n    boolean resolved = false;\n    final LocalDateTime createdAt;\n\n    public Comment(String documentId, User author, String content, int start, int end) {\n        this.id = UUID.randomUUID().toString();\n        this.documentId = documentId;\n        this.author = author;\n        this.content = content;\n        this.positionStart = start;\n        this.positionEnd = end;\n        this.createdAt = LocalDateTime.now();\n    }\n\n    public void resolve() { this.resolved = true; }\n}"
+    },
+    {
+      "label": "Service — ShareService (access resolution is the core)",
+      "flow": "**`resolveAccess(user, document)`** is the single most important method. Every other service calls it before doing anything. Logic: if user is owner → `OwnerPolicy`. Else: find Share for this user+document → `AccessPolicyFactory.getPolicy(share.accessLevel)`. No share found → throw `UserNotHaveAccessException`.",
+      "edge_cases": "Sharing with yourself → reject. Sharing when you're not the owner → reject. Duplicate share → `UserAlreadyHasAccessException`. Revoke → also closes any active sessions the target has.",
+      "code": "class ShareService {\n    // documentId → list of shares\n    private final Map<String, List<Share>> documentSharesMap = new ConcurrentHashMap<>();\n    private final Map<String, Document> documentStore; // injected\n\n    public ShareService(Map<String, Document> documentStore) {\n        this.documentStore = documentStore;\n    }\n\n    // ── The most important method in the entire system ──\n    public AccessPolicy resolveAccess(User user, Document document) {\n        if (document.isOwnedBy(user)) return new OwnerPolicy();\n\n        List<Share> shares = documentSharesMap.getOrDefault(document.id, List.of());\n        return shares.stream()\n            .filter(s -> s.sharedWith.id.equals(user.id))\n            .findFirst()\n            .map(s -> AccessPolicyFactory.getPolicy(s.accessLevel))\n            .orElseThrow(() -> new UserNotHaveAccessException(\n                user.id + \" has no access to document \" + document.id));\n    }\n\n    public Share shareDocument(User owner, String documentId,\n                                User target, AccessLevel level) {\n        Document doc = documentStore.get(documentId);\n        if (doc == null) throw new DocumentNotFoundException(documentId);\n        if (!doc.isOwnedBy(owner))\n            throw new UserNotHaveAccessException(\"Only owner can share\");\n        if (owner.id.equals(target.id))\n            throw new IllegalArgumentException(\"Cannot share with yourself\");\n\n        List<Share> shares = documentSharesMap\n            .computeIfAbsent(documentId, k -> new CopyOnWriteArrayList<>());\n\n        boolean exists = shares.stream()\n            .anyMatch(s -> s.sharedWith.id.equals(target.id));\n        if (exists) throw new UserAlreadyHasAccessException(\n            target.id + \" already has access\");\n\n        Share share = new Share(documentId, owner, target, level);\n        shares.add(share);\n        return share;\n    }\n\n    public void revokeShare(User owner, String documentId, User target) {\n        Document doc = documentStore.get(documentId);\n        if (doc == null) throw new DocumentNotFoundException(documentId);\n        if (!doc.isOwnedBy(owner))\n            throw new UserNotHaveAccessException(\"Only owner can revoke\");\n\n        List<Share> shares = documentSharesMap.getOrDefault(documentId, List.of());\n        shares.removeIf(s -> s.sharedWith.id.equals(target.id));\n    }\n\n    public void updateAccess(User owner, String documentId,\n                              User target, AccessLevel newLevel) {\n        Document doc = documentStore.get(documentId);\n        if (!doc.isOwnedBy(owner))\n            throw new UserNotHaveAccessException(\"Only owner\");\n\n        List<Share> shares = documentSharesMap.getOrDefault(documentId, List.of());\n        Share share = shares.stream()\n            .filter(s -> s.sharedWith.id.equals(target.id))\n            .findFirst()\n            .orElseThrow(() -> new UserNotHaveAccessException(\"No existing share\"));\n        share.accessLevel = newLevel;\n    }\n\n    public List<Share> getSharesForDocument(String documentId) {\n        return documentSharesMap.getOrDefault(documentId, List.of());\n    }\n}"
+    },
+    {
+      "label": "Service — SessionService (session lifecycle + editing)",
+      "flow": "**`openSession()`:** resolveAccess → create EditSession → create initial Snapshot from document's current content. **`editDocument()`:** validate session ACTIVE + canEdit() → overwrite snapshot content → return snapshot. **`closeSession()`:** set state=CLOSED, discard snapshot. Each edit within a session just updates the ephemeral snapshot — **not the document**. Only `saveDocument` (in DocumentService) commits snapshot content to the document.",
+      "edge_cases": "Opening a session with VIEW access → allowed (user can view, just can't edit). Editing with VIEW/COMMENT → throw `DocumentNotEditableException`. Editing a CLOSED session → throw `SessionNotActiveException`. Session owner mismatch → throw.",
+      "code": "class SessionService {\n    private final Map<String, EditSession> sessionStore = new ConcurrentHashMap<>();\n    private final Map<String, Document> documentStore; // injected\n    private final ShareService shareService;\n\n    public SessionService(Map<String, Document> docs, ShareService shareService) {\n        this.documentStore = docs;\n        this.shareService = shareService;\n    }\n\n    public EditSession openSession(User user, String documentId) {\n        Document doc = documentStore.get(documentId);\n        if (doc == null) throw new DocumentNotFoundException(documentId);\n\n        // Resolve access — throws if no access\n        AccessPolicy policy = shareService.resolveAccess(user, doc);\n        if (!policy.canView())\n            throw new UserNotHaveAccessException(\"No view access\");\n\n        // Determine the user's access level for the session\n        AccessLevel level;\n        if (doc.isOwnedBy(user)) level = AccessLevel.EDIT; // owner gets EDIT\n        else {\n            Share share = shareService.getSharesForDocument(documentId).stream()\n                .filter(s -> s.sharedWith.id.equals(user.id))\n                .findFirst().orElseThrow();\n            level = share.accessLevel;\n        }\n\n        EditSession session = new EditSession(documentId, user, level);\n        // Create initial snapshot from current document content\n        Snapshot snapshot = new Snapshot(session.id, documentId, doc.content);\n        session.currentSnapshot = snapshot;\n\n        sessionStore.put(session.id, session);\n        return session;\n    }\n\n    public Snapshot editDocument(User user, String sessionId, String newContent) {\n        EditSession session = getSession(sessionId);\n\n        if (!session.isActive())\n            throw new SessionNotActiveException(sessionId);\n        if (!session.user.id.equals(user.id))\n            throw new UserNotHaveAccessException(\"Not your session\");\n        if (!session.canEdit())\n            throw new DocumentNotEditableException(\n                \"Access level \" + session.accessLevel + \" cannot edit\");\n\n        // Overwrite the ephemeral snapshot — NOT the document\n        session.currentSnapshot.updateContent(newContent);\n        return session.currentSnapshot;\n    }\n\n    public void closeSession(User user, String sessionId) {\n        EditSession session = getSession(sessionId);\n        if (!session.user.id.equals(user.id))\n            throw new UserNotHaveAccessException(\"Not your session\");\n        session.close(); // state=CLOSED, snapshot=null\n    }\n\n    public EditSession getSession(String sessionId) {\n        EditSession session = sessionStore.get(sessionId);\n        if (session == null)\n            throw new SessionNotFoundException(sessionId);\n        return session;\n    }\n\n    // Used by DocumentService on delete — close all sessions for a document\n    public void closeAllSessionsForDocument(String documentId) {\n        sessionStore.values().stream()\n            .filter(s -> s.documentId.equals(documentId) && s.isActive())\n            .forEach(EditSession::close);\n    }\n}"
+    },
+    {
+      "label": "Service — DocumentService (CRUD + versioning + save)",
+      "flow": "**`createDocument()`:** create Document → create initial Version (v1) → store. **`saveDocument(sessionId)`:** get session → get snapshot content → create new Version → increment versionNum → apply edit to document → return Version. **`revertToVersion()`:** find version → `document.revertTo(v)` → create NEW version capturing the revert → append-only history. **`deleteDocument()`:** owner only → close all sessions → remove all shares → remove document.",
+      "edge_cases": "Save on a CLOSED session → throw. Save when version has changed (optimistic locking) → throw `ConflictException`. Revert to non-existent version → throw. Delete by non-owner → throw.",
+      "code": "class DocumentService {\n    private final Map<String, Document> documentStore = new ConcurrentHashMap<>();\n    private final ShareService shareService;\n    private final SessionService sessionService;\n\n    public DocumentService(ShareService shareService, SessionService sessionService) {\n        this.shareService = shareService;\n        this.sessionService = sessionService;\n    }\n\n    public Document createDocument(User owner, String name, String content) {\n        Document doc = new Document(UUID.randomUUID().toString(), name, content, owner);\n        // Create initial version (v1)\n        int vNum = doc.incrementVersion();\n        Version v1 = new Version(doc.id, vNum, content, owner, \"Initial version\");\n        doc.versionHistory.add(v1);\n        documentStore.put(doc.id, doc);\n        return doc;\n    }\n\n    public Document getDocument(User requester, String documentId) {\n        Document doc = documentStore.get(documentId);\n        if (doc == null) throw new DocumentNotFoundException(documentId);\n        AccessPolicy policy = shareService.resolveAccess(requester, doc);\n        if (!policy.canView())\n            throw new UserNotHaveAccessException(\"No view access\");\n        return doc;\n    }\n\n    // ── Save: snapshot content → new Version → update document ──\n    public Version saveDocument(User requester, String sessionId, String message) {\n        EditSession session = sessionService.getSession(sessionId);\n\n        if (!session.isActive())\n            throw new SessionNotActiveException(sessionId);\n        if (!session.user.id.equals(requester.id))\n            throw new UserNotHaveAccessException(\"Not your session\");\n        if (!session.canEdit())\n            throw new DocumentNotEditableException(\"Cannot save with \" + session.accessLevel);\n\n        Document doc = documentStore.get(session.documentId);\n\n        // ── Optimistic locking: check version hasn't changed ──\n        // (In a real system, session would store the versionNum at open time)\n        // For now, we just proceed — mention the pattern\n\n        String snapshotContent = session.currentSnapshot.content;\n        int newVersionNum = doc.incrementVersion();\n\n        Version version = new Version(\n            doc.id, newVersionNum, snapshotContent, requester,\n            message != null ? message : \"Version \" + newVersionNum);\n        doc.versionHistory.add(version);\n        doc.applyEdit(snapshotContent); // commit to document\n\n        return version;\n    }\n\n    public void deleteDocument(User requester, String documentId) {\n        Document doc = documentStore.get(documentId);\n        if (doc == null) throw new DocumentNotFoundException(documentId);\n        if (!doc.isOwnedBy(requester))\n            throw new UserNotHaveAccessException(\"Only owner can delete\");\n\n        // Cascade: close all sessions, remove shares, remove doc\n        sessionService.closeAllSessionsForDocument(documentId);\n        // shareService would also remove all shares (omitted for brevity)\n        documentStore.remove(documentId);\n    }\n\n    // ── Revert: find old version → create NEW version with old content ──\n    public Document revertToVersion(User requester, String documentId, int versionNumber) {\n        Document doc = getDocument(requester, documentId);\n        AccessPolicy policy = shareService.resolveAccess(requester, doc);\n        if (!policy.canEdit())\n            throw new DocumentNotEditableException(\"Cannot revert without EDIT access\");\n\n        Version targetVersion = doc.versionHistory.stream()\n            .filter(v -> v.versionNumber == versionNumber)\n            .findFirst()\n            .orElseThrow(() -> new VersionNotFoundException(\n                \"Version \" + versionNumber + \" not found\"));\n\n        // Append-only: revert creates a NEW version with old content\n        doc.revertTo(targetVersion);\n        int newNum = doc.incrementVersion();\n        Version revertVersion = new Version(\n            doc.id, newNum, targetVersion.content, requester,\n            \"Reverted to version \" + versionNumber);\n        doc.versionHistory.add(revertVersion);\n\n        return doc;\n    }\n\n    public List<Version> getVersionHistory(User requester, String documentId) {\n        Document doc = getDocument(requester, documentId);\n        return Collections.unmodifiableList(doc.versionHistory);\n    }\n\n    // Expose store for SessionService/ShareService\n    public Map<String, Document> getDocumentStore() { return documentStore; }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Strategy Pattern → AccessPolicy",
+      "why": "**The single biggest design win.** Four access levels, each defining a different set of permissions. Instead of `if (level == EDIT) { ... } else if (level == COMMENT) { ... }` scattered through every service method, we encapsulate each level's permissions in one class. Services call `policy.canEdit()` — they don't know or care which policy is behind it. **Adding SUGGEST access level = one new class, zero changes to services.** This is OCP in action.",
+      "where": "`AccessPolicy` interface → `ViewPolicy`, `CommentPolicy`, `EditPolicy`, `OwnerPolicy`"
+    },
+    {
+      "name": "Factory Pattern → AccessPolicyFactory",
+      "why": "Maps `AccessLevel` enum to the correct `AccessPolicy` implementation. Single responsibility — the factory knows how to construct policies; the services know how to use them. If policy construction becomes complex (e.g., requires config), the factory handles it.",
+      "where": "`AccessPolicyFactory.getPolicy(AccessLevel)` — static factory method"
+    },
+    {
+      "name": "Memento Pattern (implicit) → Version History",
+      "why": "Each Version is an immutable snapshot of the document at a point in time. The version history is an **append-only log of mementos**. Revert doesn't destroy history — it creates a new memento from an old one. This is the Memento Pattern applied to document versioning. Same principle as Git commits.",
+      "where": "`Document.versionHistory` list of immutable `Version` objects"
+    },
+    {
+      "name": "Observer Pattern (extension)",
+      "why": "When a document is shared, the target user should be notified. When someone comments, the document owner should be notified. When a version is saved, active viewers might want to refresh. These are all natural Observer events — decouple with a listener/event bus. Not implemented but mentioned as extension.",
+      "where": "Would add `DocumentEventListener` with `onShared`, `onCommented`, `onVersionSaved` callbacks"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two EDIT users open sessions and save concurrently — last-write-wins data loss",
+      "fix": "**Optimistic locking.** When a session opens, record the document's `currentVersionNum`. On save, check: 'is the document's current version still what I saw at session open?' If yes → save succeeds, version increments. If no → `ConflictException` — user must refresh their session, see the new version, merge manually, and retry. **Alternative: pessimistic locking** — only one EDIT session active per document. Simpler but less concurrent."
+    },
+    {
+      "issue": "Edit and delete race — user editing while owner deletes the document",
+      "fix": "`deleteDocument()` calls `sessionService.closeAllSessionsForDocument()` first — all active sessions are closed. The next edit attempt by the editing user hits `SessionNotActiveException`. The document is then removed from the store."
+    },
+    {
+      "issue": "Revoke share while user has active session",
+      "fix": "`revokeShare()` should also close any active sessions the revoked user has. After revoke, their next action will fail with `UserNotHaveAccessException` (no share exists anymore)."
+    },
+    {
+      "issue": "Concurrent snapshot updates within a session",
+      "fix": "Each session is used by one user. Concurrent edits within a single session aren't expected (one user, one browser tab). If they were (e.g., multiple tabs), `Snapshot.updateContent()` could be `synchronized`."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why is AccessPolicy a Strategy Pattern and not just an if-else on the enum?",
+      "answer": "**Open/Closed Principle.** With if-else: adding SUGGEST access level means finding and modifying every service method that checks access. With Strategy: add `SuggestPolicy implements AccessPolicy` — one new class, zero changes to existing code. **Also:** policies can have complex logic (e.g., 'EditPolicy can edit only during business hours'). A class encapsulates that; an if-else can't."
+    },
+    {
+      "question": "Why is Snapshot separate from Version? Can't you just use Versions for everything?",
+      "answer": "**Different lifecycles.** Snapshot is **mutable + ephemeral** — overwritten on every keystroke, discarded on session close. Version is **immutable + permanent** — created only on explicit save, never modified, kept forever for audit. If every keystroke created a Version, the version history would have 10,000 entries for a 10-paragraph document. Snapshot absorbs the noise; Version captures the signal."
+    },
+    {
+      "question": "Why is EditSession a first-class entity and not just a method parameter?",
+      "answer": "**Sessions have state and lifecycle.** An EditSession tracks: which user, which document, what access level, is it active, what's the current snapshot, when was it opened. This is too much state for a method parameter. Making it an entity lets us: (1) validate state on every edit call, (2) close all sessions on document delete, (3) prevent edits on closed sessions, (4) associate snapshots with sessions for cleanup."
+    },
+    {
+      "question": "How does revert work without destroying history?",
+      "answer": "**Append-only.** Reverting to version 3 from version 5 creates version 6 with version 3's content. History: v1, v2, v3, v4, v5, v6(reverted from v3). No destructive rewrite. This means: (1) audit trail is intact — you can see WHO reverted WHEN, (2) you can undo the revert by reverting to v5, (3) concurrent users don't lose their reference to v4/v5. **Same principle as Git** — revert is a new commit, not a force-push."
+    },
+    {
+      "question": "Why enforce access at the service layer, not the controller?",
+      "answer": "**Single enforcement point.** Controllers can be bypassed (internal calls, different endpoints, batch jobs). If access checks live in the service, **every code path** goes through them. The controller is just a thin HTTP adapter — it parses requests and delegates. The service is the authority. This is a fundamental **separation of concerns** that interviewers look for."
+    },
+    {
+      "question": "What if the Comment entity didn't exist — what would COMMENT access level even mean?",
+      "answer": "**Nothing.** If you model COMMENT as an access level but don't model Comment as an entity, you've created a permission that permits... nothing observable. The interviewer will ask 'what can a COMMENT user do?' and you'll have no answer. **Entities and permissions must be aligned.** Every permission must map to at least one entity operation. This is why modeling Comment was essential even though the prompt didn't explicitly describe it."
+    },
+    {
+      "question": "How would you implement real-time collaboration on top of this design?",
+      "answer": "**Two paths.** (1) **Add CRDT/OT layer (P21):** replace the Snapshot text with a CRDT document. Each edit generates an Operation that's broadcast via WebSocket. The session-based model still works — sessions open/close, but the edit flow goes through the CRDT. (2) **Keep it simple:** use the existing session+snapshot model with a shared document lock and a 'refresh' mechanism. User A saves → User B's session detects the version change → B refreshes. Not real-time, but practical for many use cases (like Google Docs before 2010)."
+    },
+    {
+      "question": "How would you add an audit log?",
+      "answer": "**Observer Pattern.** Fire events for every state-changing operation: `DocumentCreated`, `DocumentShared`, `SessionOpened`, `DocumentEdited`, `VersionSaved`, `DocumentReverted`, `ShareRevoked`. An `AuditListener` subscribes and writes each event to an append-only log with: who, what, when, documentId. The services fire events; the audit system consumes them. **Fully decoupled** — adding audit doesn't change any service code."
+    }
+  ]
+}
