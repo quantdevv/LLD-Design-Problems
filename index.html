@@ -378,12 +378,13 @@ body.light-theme .jb  { color: #116329; }       /* built-in   — green         
 <body>
 
 <nav class="topbar">
-  <div class="logo"><em>LLD</em> <span style="color:var(--dim);font-size:12px;font-weight:400;margin-left:8px">/ Interview Mastery — 20 Problems</span></div>
+  <div class="logo"><em>LLD</em> <span style="color:var(--dim);font-size:12px;font-weight:400;margin-left:8px">/ Interview Mastery — 25 Problems</span></div>
   <div class="nav-pills">
     <button class="nav-pill" onclick="scrollToGroup(1)">P1–5</button>
     <button class="nav-pill" onclick="scrollToGroup(6)">P6–10</button>
     <button class="nav-pill" onclick="scrollToGroup(11)">P11–15</button>
     <button class="nav-pill" onclick="scrollToGroup(16)">P16–20</button>
+    <button class="nav-pill" onclick="scrollToGroup(21)">P21–25</button>
     <button class="theme-btn" id="themeToggle">☀️ Light</button>
   </div>
 </nav>
@@ -395,7 +396,7 @@ body.light-theme .jb  { color: #116329; }       /* built-in   — green         
 <!-- HERO -->
 <div class="hero">
   <div class="hero-badge">📚 LLD Interview Mastery — 2026 Edition</div>
-  <div class="hero-title">Ace <span>20 LLD Problems</span><br/>Interview Format</div>
+  <div class="hero-title">Ace <span>25 LLD Problems</span><br/>HelloInterview Format</div>
   <div class="hero-sub">Every problem: Understanding → Clarifying Qs → Requirements (FR/NFR + scope) → Termination Points → Entity Rationale → Class Design (MVC) → DB Schema → Full Java Code (flow + edge cases) → Concurrency → Patterns → Interviewer Deep Dives.</div>
   <div class="hero-pills">
     <span class="hp g">✓ SOLID</span><span class="hp p">✓ Patterns</span><span class="hp a">✓ Concurrency</span>
@@ -403,6 +404,7 @@ body.light-theme .jb  { color: #116329; }       /* built-in   — green         
     <span class="hp g">✓ MVC</span><span class="hp p">✓ Error Handling</span>
   </div>
 </div>
+
 
 <div id="problems-container">
   <div class="loading"><div class="loading-spin"></div><br/>Loading problems…</div>
@@ -435,7 +437,12 @@ const MANIFEST = [
   {file:"topics/p17_notification.json",      group:"New — Mixed Archetypes"},
   {file:"topics/p18_lru_cache.json",         group:"New — Mixed Archetypes"},
   {file:"topics/p19_hotel_booking.json",     group:"New — Mixed Archetypes"},
-  {file:"topics/p20_tictactoe.json",         group:"New — Mixed Archetypes"}
+  {file:"topics/p20_tictactoe.json",         group:"New — Mixed Archetypes"},
+  {file:"topics/p21_collab_doc.json",        group:"System-Style LLD"},
+  {file:"topics/p22_leetcode.json",          group:"System-Style LLD"},
+  {file:"topics/p23_url_shortener.json",     group:"System-Style LLD"},
+  {file:"topics/p24_stackoverflow.json",     group:"System-Style LLD"},
+  {file:"topics/p25_cricket.json",           group:"System-Style LLD"}
 ];
 
 // ═══════════════════════════════════════════════════

@@ -1,0 +1,273 @@
+{
+  "title": "URL Shortener (TinyURL / bit.ly)",
+  "description": "Design a URL shortening service that creates short aliases for long URLs, redirects via the alias, tracks click analytics, and supports custom aliases and expiry. The classic **API design + encoding strategy** problem.",
+  "tags": [
+    {"type": "medium", "label": "Medium"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "pattern", "label": "Factory Pattern"},
+    {"type": "concept", "label": "Hash/Encoding"},
+    {"type": "concept", "label": "Collision Handling"}
+  ],
+  "prompt": "Design a URL shortening service like TinyURL or bit.ly that converts long URLs into short aliases and redirects to the original on access.",
+  "prompt_note": "This is one of the most commonly asked system design problems adapted to LLD scope. The interesting decisions are: (1) **how to generate the short code** — counter-based vs hash-based vs random, (2) **collision handling**, (3) custom alias support, (4) TTL/expiry. Keep it focused on the in-memory engine; don't go into load balancers and CDNs.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"What length for the short code? Fixed or variable?\"",
+      "answer": "Interviewer: \"Fixed 7 characters. Base62 (a-z, A-Z, 0-9).\"",
+      "why": "7 chars of base62 = 62^7 ≈ 3.5 trillion combinations. Plenty for any realistic scale."
+    },
+    {
+      "question": "You: \"Should users be able to pick custom aliases? Like mysite.com/my-brand?\"",
+      "answer": "Interviewer: \"Yes — optional custom alias. Must validate uniqueness.\"",
+      "why": "Two code paths: auto-generated (system picks) and custom (user picks). Both must check uniqueness."
+    },
+    {
+      "question": "You: \"Should shortened URLs expire?\"",
+      "answer": "Interviewer: \"Optional — user can set a TTL. Default = no expiry.\"",
+      "why": "TTL-based cleanup, same pattern as Amazon Locker (P3)."
+    },
+    {
+      "question": "You: \"Click analytics — just a counter, or detailed?\"",
+      "answer": "Interviewer: \"Counter + timestamp of each click (for time-series). Optional: referrer, geo.\"",
+      "why": "Analytics is a write-heavy append-only concern. Decoupled from redirect path."
+    },
+    {
+      "question": "You: \"How do we generate the short code — hash, counter, random?\"",
+      "answer": "Interviewer: \"Pick one, explain tradeoffs of all three.\"",
+      "why": "**Strategy Pattern** for code generation. We'll implement counter-based (simplest, guaranteed unique) and mention hash-based and random."
+    },
+    {
+      "question": "You: \"Should the same long URL always get the same short code, or different each time?\"",
+      "answer": "Interviewer: \"Different each time. Each creation is a new short URL.\"",
+      "why": "Simplifies design — no deduplication lookup needed. Each `shorten()` call creates a new entry."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**`shorten(longUrl, customAlias?, ttl?)`** → returns short URL. Auto-generate code or use custom alias.",
+      "**`redirect(shortCode)`** → returns the original long URL (for HTTP 301/302). Increments click counter.",
+      "**Custom aliases:** user picks a code. Must be unique. Same validation rules (alphanumeric, 3-20 chars).",
+      "**TTL expiry:** optional. Expired URLs return 404. Background cleanup or lazy check.",
+      "**Analytics:** `getStats(shortCode)` → total clicks, creation date, expiry date.",
+      "**Code generation strategies:** counter-based (default), hash-based, random. Pluggable."
+    ],
+    "out_of_scope": [
+      "User accounts, rate limiting, spam detection, preview pages, QR code generation, detailed analytics (geo, referrer, device)."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Redirect latency < 5ms** — lookup must be O(1). This is the hot path.",
+      "**No collisions** — two different long URLs must never get the same short code.",
+      "**Thread-safe** — concurrent shorten + redirect operations.",
+      "**Short codes are human-friendly** — base62 (no special characters)."
+    ],
+    "out_of_scope": [
+      "Distributed ID generation (Snowflake), CDN caching, geographic routing."
+    ]
+  },
+
+  "primary_scope": [
+    "`shorten(longUrl)` → generate code via strategy → store mapping → return short URL",
+    "`redirect(shortCode)` → lookup → if expired, remove + 404 → else return longUrl + increment counter",
+    "`shorten(longUrl, customAlias)` → validate alias → check uniqueness → store",
+    "Background cleanup: remove expired entries periodically",
+    "Code generation strategies: counter-based (AtomicLong + base62 encode)"
+  ],
+  "termination_points": [
+    "`AliasAlreadyExistsException` — custom alias conflicts with an existing code",
+    "`InvalidAliasException` — alias contains invalid characters or is too short/long",
+    "`UrlNotFoundException` — short code doesn't exist or has expired",
+    "`InvalidUrlException` — long URL is malformed (basic validation)"
+  ],
+
+  "entity_intro": "The core data model is simple: a `ShortenedUrl` mapping short code → long URL + metadata. The interesting design is **how we generate the short code** — this is where Strategy Pattern shines.",
+  "entities": [
+    {
+      "name": "ShortenedUrl",
+      "role": "**Model.** shortCode, longUrl, createdAt, expiresAt (nullable), clickCount. The stored mapping. Immutable except for clickCount (which is an AtomicLong).",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — the stored mapping"
+    },
+    {
+      "name": "CodeGenerator (Strategy)",
+      "role": "**Strategy interface.** `generate()` → String (unique short code). Implementations: CounterBasedGenerator (AtomicLong + base62), HashBasedGenerator (MD5/SHA of URL, take first 7 chars), RandomGenerator (SecureRandom + base62).",
+      "verdict": "yes",
+      "verdict_label": "✓ Strategy — code generation algorithm"
+    },
+    {
+      "name": "UrlShortenerService",
+      "role": "**Controller.** Public API: `shorten`, `redirect`, `getStats`. Owns the mapping store + code generator.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    },
+    {
+      "name": "AnalyticsEvent",
+      "role": "**Model.** Optional: timestamp, referrer, IP for detailed analytics. Appended on each redirect. For our scope, a simple AtomicLong counter on ShortenedUrl suffices.",
+      "verdict": "maybe",
+      "verdict_label": "? Optional — simple counter is enough for LLD"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "UrlShortenerService", "owns": "`ConcurrentHashMap<shortCode, ShortenedUrl>`, CodeGenerator, cleanup scheduler", "rel": "1→N ShortenedUrls, 1→1 CodeGenerator"},
+    {"entity": "ShortenedUrl", "owns": "shortCode, longUrl, createdAt, expiresAt, clickCount", "rel": "Standalone mapping entry"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = ShortenedUrl, AnalyticsEvent. **Service** = CodeGenerator strategies (code gen logic). **Controller** = UrlShortenerService (public API). This problem is **lightweight on entities but rich on strategy choices** — the interesting discussion is in the code generation, not the entity modeling.",
+
+  "classes": [
+    {
+      "name": "CodeGenerator", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "generate()", "returns": "String (7-char code)"}
+      ]
+    },
+    {
+      "name": "CounterBasedGenerator", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "counter", "type": "AtomicLong"}
+      ],
+      "methods": [
+        {"name": "generate()", "returns": "String (base62 encode of counter++)"}
+      ]
+    },
+    {
+      "name": "ShortenedUrl", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "shortCode", "type": "String"},
+        {"name": "longUrl", "type": "String"},
+        {"name": "createdAt", "type": "Instant"},
+        {"name": "expiresAt", "type": "Instant (nullable)"},
+        {"name": "clickCount", "type": "AtomicLong"}
+      ],
+      "methods": [
+        {"name": "isExpired()", "returns": "boolean"},
+        {"name": "incrementClicks()", "returns": "void"},
+        {"name": "getClickCount()", "returns": "long"}
+      ]
+    },
+    {
+      "name": "UrlShortenerService", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "urlMap", "type": "ConcurrentHashMap<String, ShortenedUrl>"},
+        {"name": "codeGenerator", "type": "CodeGenerator"},
+        {"name": "baseUrl", "type": "String (e.g., https://short.ly/)"},
+        {"name": "cleanupScheduler", "type": "ScheduledExecutorService"}
+      ],
+      "methods": [
+        {"name": "shorten(longUrl, customAlias?, ttl?)", "returns": "String (full short URL)"},
+        {"name": "redirect(shortCode)", "returns": "String (long URL)"},
+        {"name": "getStats(shortCode)", "returns": "UrlStats"},
+        {"name": "delete(shortCode)", "returns": "void"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "shortened_urls",
+      "columns": [
+        {"name": "short_code", "type": "VARCHAR(20)", "pk": true},
+        {"name": "long_url", "type": "TEXT"},
+        {"name": "created_at", "type": "TIMESTAMP"},
+        {"name": "expires_at", "type": "TIMESTAMP", "idx": true},
+        {"name": "click_count", "type": "BIGINT"}
+      ]
+    },
+    {
+      "table": "click_events (optional analytics)",
+      "columns": [
+        {"name": "event_id", "type": "BIGSERIAL", "pk": true},
+        {"name": "short_code", "type": "VARCHAR(20)", "fk": true, "idx": true},
+        {"name": "clicked_at", "type": "TIMESTAMP", "idx": true},
+        {"name": "referrer", "type": "VARCHAR"},
+        {"name": "user_agent", "type": "VARCHAR"}
+      ]
+    }
+  ],
+  "schema_note": "**Redirect is the hot path** — `short_code` as PK gives O(1) lookup. The `click_events` table is append-only and write-heavy — consider a time-series DB (TimescaleDB) or Kafka + ClickHouse for real analytics at scale. Index `expires_at` for cleanup query: `DELETE WHERE expires_at < NOW()`.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Strategy — Three Code Generation Approaches",
+      "flow": "**Counter-based (default):** AtomicLong increments → base62 encode → guaranteed unique, no collisions. **Hash-based:** MD5/SHA256 of the long URL → take first 7 chars → collisions possible, needs retry. **Random:** SecureRandom → base62 → collisions possible, needs uniqueness check.",
+      "edge_cases": "Counter-based with initial value 0 → first codes are short (\"0000001\") — pad to 7 chars with leading zeros or start counter at 62^6. Hash collision → retry with salt. Random collision → retry (up to N times).",
+      "code": "interface CodeGenerator {\n    String generate();\n}\n\n// Approach 1: Counter-based (recommended — zero collisions)\nclass CounterBasedGenerator implements CodeGenerator {\n    private static final String BASE62 = \"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\";\n    private final AtomicLong counter;\n\n    public CounterBasedGenerator(long startValue) {\n        this.counter = new AtomicLong(startValue);\n    }\n\n    @Override\n    public String generate() {\n        long num = counter.incrementAndGet();\n        return toBase62(num);\n    }\n\n    private String toBase62(long num) {\n        StringBuilder sb = new StringBuilder();\n        while (num > 0) {\n            sb.insert(0, BASE62.charAt((int)(num % 62)));\n            num /= 62;\n        }\n        // Pad to 7 characters\n        while (sb.length() < 7) sb.insert(0, '0');\n        return sb.toString();\n    }\n}\n\n// Approach 2: Hash-based (collision-possible)\nclass HashBasedGenerator implements CodeGenerator {\n    private static final String BASE62 = \"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\";\n    private final AtomicLong salt = new AtomicLong();\n\n    @Override\n    public String generate() {\n        try {\n            String input = UUID.randomUUID() + \":\" + salt.incrementAndGet();\n            byte[] hash = MessageDigest.getInstance(\"MD5\").digest(input.getBytes());\n            // Take first 7 base62 chars from hash bytes\n            long num = Math.abs(ByteBuffer.wrap(hash).getLong());\n            StringBuilder sb = new StringBuilder();\n            for (int i = 0; i < 7; i++) {\n                sb.append(BASE62.charAt((int)(num % 62)));\n                num /= 62;\n            }\n            return sb.toString();\n        } catch (Exception e) {\n            throw new RuntimeException(e);\n        }\n    }\n}\n\n// Approach 3: Random (collision-possible)\nclass RandomGenerator implements CodeGenerator {\n    private static final String BASE62 = \"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\";\n    private final SecureRandom random = new SecureRandom();\n\n    @Override\n    public String generate() {\n        StringBuilder sb = new StringBuilder(7);\n        for (int i = 0; i < 7; i++) {\n            sb.append(BASE62.charAt(random.nextInt(62)));\n        }\n        return sb.toString();\n    }\n}"
+    },
+    {
+      "label": "Model — ShortenedUrl",
+      "code": "class ShortenedUrl {\n    private final String shortCode;\n    private final String longUrl;\n    private final Instant createdAt;\n    private final Instant expiresAt;   // null = no expiry\n    private final AtomicLong clickCount = new AtomicLong();\n\n    public ShortenedUrl(String shortCode, String longUrl, Duration ttl) {\n        this.shortCode = shortCode;\n        this.longUrl = longUrl;\n        this.createdAt = Instant.now();\n        this.expiresAt = (ttl != null) ? createdAt.plus(ttl) : null;\n    }\n\n    public boolean isExpired() {\n        return expiresAt != null && Instant.now().isAfter(expiresAt);\n    }\n\n    public void incrementClicks() { clickCount.incrementAndGet(); }\n\n    public String getShortCode()  { return shortCode; }\n    public String getLongUrl()    { return longUrl; }\n    public Instant getCreatedAt() { return createdAt; }\n    public Instant getExpiresAt() { return expiresAt; }\n    public long getClickCount()   { return clickCount.get(); }\n}\n\nrecord UrlStats(String shortCode, String longUrl, long clicks,\n                Instant createdAt, Instant expiresAt) {}"
+    },
+    {
+      "label": "Controller — UrlShortenerService",
+      "flow": "**`shorten()`:** validate URL → if custom alias: validate + check uniqueness → else: generate code (retry on collision for hash/random strategies) → create ShortenedUrl → store → return. **`redirect()`:** lookup → check expired → increment clicks → return long URL. **Atomic click counter** via `AtomicLong` — no lock needed on the hot redirect path.",
+      "edge_cases": "Custom alias that looks like an auto-generated code → allowed (no reserved namespace). Shortening the same URL twice → two different codes (by design). Redirecting expired URL → lazy delete + throw. Null/empty URL → `InvalidUrlException`.",
+      "code": "class UrlShortenerService {\n    private static final int MAX_COLLISION_RETRIES = 5;\n\n    private final ConcurrentHashMap<String, ShortenedUrl> urlMap = new ConcurrentHashMap<>();\n    private final CodeGenerator codeGenerator;\n    private final String baseUrl;\n    private final ScheduledExecutorService cleanupScheduler;\n\n    public UrlShortenerService(CodeGenerator generator, String baseUrl) {\n        this.codeGenerator = generator;\n        this.baseUrl = baseUrl;\n        this.cleanupScheduler = Executors.newSingleThreadScheduledExecutor();\n        cleanupScheduler.scheduleAtFixedRate(\n            this::cleanupExpired, 1, 1, TimeUnit.HOURS);\n    }\n\n    // ── shorten ─────────────────────────\n    public String shorten(String longUrl, String customAlias, Duration ttl) {\n        validateUrl(longUrl);\n\n        String code;\n        if (customAlias != null && !customAlias.isBlank()) {\n            // Custom alias path\n            validateAlias(customAlias);\n            if (urlMap.containsKey(customAlias))\n                throw new AliasAlreadyExistsException(customAlias);\n            code = customAlias;\n        } else {\n            // Auto-generate with collision handling\n            code = generateUniqueCode();\n        }\n\n        ShortenedUrl entry = new ShortenedUrl(code, longUrl, ttl);\n\n        // Atomic put-if-absent for thread safety\n        ShortenedUrl existing = urlMap.putIfAbsent(code, entry);\n        if (existing != null) {\n            // Race condition: another thread beat us with this code\n            throw new AliasAlreadyExistsException(code);\n        }\n\n        return baseUrl + code;\n    }\n\n    // ── redirect (the hot path) ─────────\n    public String redirect(String shortCode) {\n        ShortenedUrl entry = urlMap.get(shortCode);\n        if (entry == null)\n            throw new UrlNotFoundException(shortCode);\n\n        // Lazy expiry check\n        if (entry.isExpired()) {\n            urlMap.remove(shortCode);\n            throw new UrlNotFoundException(shortCode + \" (expired)\");\n        }\n\n        // Atomic click increment — no lock needed\n        entry.incrementClicks();\n        return entry.getLongUrl();\n    }\n\n    // ── Stats ───────────────────────────\n    public UrlStats getStats(String shortCode) {\n        ShortenedUrl entry = urlMap.get(shortCode);\n        if (entry == null)\n            throw new UrlNotFoundException(shortCode);\n        return new UrlStats(entry.getShortCode(), entry.getLongUrl(),\n            entry.getClickCount(), entry.getCreatedAt(), entry.getExpiresAt());\n    }\n\n    // ── Delete ──────────────────────────\n    public void delete(String shortCode) {\n        if (urlMap.remove(shortCode) == null)\n            throw new UrlNotFoundException(shortCode);\n    }\n\n    // ── Code generation with retry ──────\n    private String generateUniqueCode() {\n        for (int i = 0; i < MAX_COLLISION_RETRIES; i++) {\n            String code = codeGenerator.generate();\n            if (!urlMap.containsKey(code)) return code;\n        }\n        throw new RuntimeException(\n            \"Failed to generate unique code after \" + MAX_COLLISION_RETRIES + \" attempts\");\n    }\n\n    // ── Validation ──────────────────────\n    private void validateUrl(String url) {\n        if (url == null || url.isBlank())\n            throw new InvalidUrlException(\"URL is empty\");\n        if (!url.startsWith(\"http://\") && !url.startsWith(\"https://\"))\n            throw new InvalidUrlException(\"URL must start with http(s)://\");\n    }\n\n    private void validateAlias(String alias) {\n        if (alias.length() < 3 || alias.length() > 20)\n            throw new InvalidAliasException(\"Alias must be 3-20 characters\");\n        if (!alias.matches(\"^[a-zA-Z0-9_-]+$\"))\n            throw new InvalidAliasException(\"Alias must be alphanumeric, _, or -\");\n    }\n\n    // ── Background cleanup ──────────────\n    private void cleanupExpired() {\n        urlMap.entrySet().removeIf(e -> e.getValue().isExpired());\n    }\n\n    public void shutdown() {\n        cleanupScheduler.shutdown();\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Strategy Pattern → CodeGenerator",
+      "why": "Three algorithms for short-code generation, each with different tradeoffs. Counter = zero collisions but predictable/sequential. Hash = deterministic per URL but collisions possible. Random = unpredictable but collisions possible. The service doesn't know which algorithm is in use — it calls `codeGenerator.generate()` and handles collisions generically.",
+      "where": "`CodeGenerator` interface + `CounterBasedGenerator`, `HashBasedGenerator`, `RandomGenerator`"
+    },
+    {
+      "name": "Lock-free Hot Path",
+      "why": "`redirect()` is the **hot path** — called for every URL click. It uses `ConcurrentHashMap.get()` (lock-free read) + `AtomicLong.incrementAndGet()` (lock-free CAS). **Zero locking on the read path.** This is a deliberate design choice: writes (shorten) can tolerate slightly higher latency; reads (redirect) must be fast.",
+      "where": "`redirect()` — CHM.get() + AtomicLong — both lock-free"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two threads generate the same random code simultaneously",
+      "fix": "`urlMap.putIfAbsent()` is atomic. Even if both threads generate the same code, only one succeeds. The other gets a non-null return → retries with a new code. For counter-based: `AtomicLong.incrementAndGet()` guarantees unique values per thread — no collision by construction."
+    },
+    {
+      "issue": "Custom alias race — two users pick the same alias simultaneously",
+      "fix": "Same fix: `putIfAbsent()`. One succeeds, the other sees the existing entry and throws `AliasAlreadyExistsException`. The 'check then put' TOCTOU race is eliminated by the atomic `putIfAbsent`."
+    },
+    {
+      "issue": "Click counter race — thousands of concurrent redirects for a viral URL",
+      "fix": "`AtomicLong.incrementAndGet()` is lock-free CAS. Even under extreme contention (10K concurrent clicks), it works correctly with at most a few CAS retries. No global lock, no bottleneck. This is why we use AtomicLong instead of `synchronized` on the ShortenedUrl."
+    },
+    {
+      "issue": "Redirect during cleanup — entry removed after lookup but before click increment",
+      "fix": "The `redirect` method reads the entry from the map. Even if cleanup removes it from the map during the method, our local reference is still valid — we can still read `longUrl` and increment `clickCount`. The stale click won't be recorded against a deleted entry. Acceptable — the URL was about to expire anyway."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Counter-based vs Hash-based vs Random — which should you pick?",
+      "answer": "**Counter-based** (our default): guaranteed unique, O(1), no collision check needed. **Downside:** sequential/predictable (users can guess adjacent URLs). Fix: encode with a bijective mapping (XOR with a secret). **Hash-based:** deterministic for the same URL input, but 7 chars = 62^7 namespace; birthday problem means collisions become likely around √(62^7) ≈ 5.9 million URLs. **Random:** same collision math as hash, unpredictable. **Recommendation:** counter for uniqueness + XOR shuffle for unpredictability. This is what real URL shorteners do."
+    },
+    {
+      "question": "Why base62 instead of base64?",
+      "answer": "**URL-safety.** Base64 uses `+`, `/`, `=` which have special meaning in URLs and must be percent-encoded. Base62 (a-z, A-Z, 0-9) is URL-safe without encoding. The short URL `short.ly/aBcD123` works directly in browsers, emails, and SMS without escaping. **Some services use base58** (drops confusable characters like 0/O, l/1, I) — Bitcoin addresses use this."
+    },
+    {
+      "question": "How do you prevent abuse — shortening malicious URLs?",
+      "answer": "**Layered defenses.** (1) URL validation — reject non-HTTP(S) URLs. (2) **Google Safe Browsing API** — check if the long URL is known malware/phishing. (3) **Rate limiting** per IP/user — prevent mass creation. (4) **Human review queue** for flagged domains. (5) **Click-time scanning** — check the destination on redirect (slows the hot path — use for flagged URLs only). Mention these layers; don't implement in LLD."
+    },
+    {
+      "question": "What if the counter wraps around or the server restarts?",
+      "answer": "**Counter persistence.** On startup, load the last counter value from DB. Or: use a Redis `INCR` command (atomic + persistent). For in-memory only: the counter resets on restart and could reuse codes. **Fix:** persist the counter to a file on every 1000 increments (batched writes). Or use epoch-based starting: `counter = System.currentTimeMillis() * 10000 + sequenceWithinMs`. This gives a monotonically increasing counter that survives restarts."
+    },
+    {
+      "question": "How do you handle 301 vs 302 redirects?",
+      "answer": "**301 (Moved Permanently):** browser caches the redirect — subsequent clicks never hit our server. **Pro:** less load. **Con:** we lose click tracking (cached redirects bypass us). **302 (Found/Temporary):** browser doesn't cache — every click hits our server. **Pro:** accurate click tracking. **Con:** more load. **Most URL shorteners use 302** because analytics matter more than saving a redirect lookup. Some (like bit.ly) use 301 for SEO use cases and 302 for analytics use cases — configurable per link."
+    },
+    {
+      "question": "How would you scale this to billions of URLs?",
+      "answer": "**Shard by short code.** Hash the short code to a partition (e.g., first char → 62 partitions). Each partition is a separate DB/cache shard. Redirect: hash the code → route to shard → lookup. **Cache hot URLs** in Redis (LRU eviction) — redirect latency drops to <1ms. **Counter sharding:** each server gets a counter range (e.g., server-1 gets 1M–2M, server-2 gets 2M–3M) — no coordination needed. **Read/write split:** writes go to primary → replicated to read replicas for redirects."
+    }
+  ]
+}

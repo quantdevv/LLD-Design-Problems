@@ -1,0 +1,346 @@
+{
+  "title": "LeetCode / Online Judge Platform",
+  "description": "Design an online judge that accepts code submissions, runs them against test cases in a sandboxed environment, and returns verdicts (Accepted, Wrong Answer, TLE, MLE, Runtime Error). The core is an **async pipeline**: submit → queue → sandbox execute → judge → verdict. Tests pipeline design, isolation, and timeout handling.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "Command Pattern"},
+    {"type": "pattern", "label": "Producer-Consumer"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "concept", "label": "Sandboxing"},
+    {"type": "concept", "label": "Async Pipeline"}
+  ],
+  "prompt": "Design a LeetCode-style online judge that accepts code submissions, evaluates them against test cases, and returns pass/fail verdicts with execution metrics.",
+  "prompt_note": "The interesting LLD challenge here isn't the web frontend — it's the **execution pipeline**. How do you safely run untrusted user code? How do you enforce time and memory limits? How do you parallelize thousands of concurrent submissions? This is a producer-consumer pipeline with strict isolation between stages.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Which languages should we support — and how do we compile/run them?\"",
+      "answer": "Interviewer: \"Java, Python, C++. Assume we have a compiler/interpreter binary per language. Focus on the pipeline, not the compilers.\"",
+      "why": "Each language has a different compile+run flow. **Strategy Pattern** — one executor per language."
+    },
+    {
+      "question": "You: \"How are test cases structured — public/private? Input/output strings?\"",
+      "answer": "Interviewer: \"Each problem has multiple test cases: input string + expected output string. Some are visible to the user (sample), some are hidden.\"",
+      "why": "Test cases are immutable per-problem data. The judge compares user output to expected output."
+    },
+    {
+      "question": "You: \"Time limit, memory limit — per test case or total?\"",
+      "answer": "Interviewer: \"Per test case. E.g., 2 seconds and 256 MB per test case.\"",
+      "why": "Each test case runs independently with its own resource limits."
+    },
+    {
+      "question": "You: \"Should execution happen synchronously (user waits) or asynchronously (submit and poll)?\"",
+      "answer": "Interviewer: \"Asynchronous. User submits, gets a submission ID, polls for result.\"",
+      "why": "Execution can take seconds — don't block the HTTP thread. Standard async job pattern."
+    },
+    {
+      "question": "You: \"How do we sandbox user code? Docker containers, separate processes, VMs?\"",
+      "answer": "Interviewer: \"Model it as a separate process with resource limits. Don't implement the OS-level sandbox — just the interface for it.\"",
+      "why": "LLD scope: design the `CodeExecutor` interface. Real sandboxing uses cgroups/seccomp/Docker — that's infra, not LLD."
+    },
+    {
+      "question": "You: \"Concurrency — how many submissions run in parallel?\"",
+      "answer": "Interviewer: \"Worker pool of N executors. Submissions queue when all workers are busy.\"",
+      "why": "Classic bounded producer-consumer. Worker count = available sandbox slots."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Submit code:** user submits (problemId, language, code) → gets submissionId.",
+      "**Async evaluation:** submission enters a queue → worker picks it → compiles → runs against all test cases → produces verdict.",
+      "**Verdicts per test case:** ACCEPTED, WRONG_ANSWER, TIME_LIMIT_EXCEEDED (TLE), MEMORY_LIMIT_EXCEEDED (MLE), RUNTIME_ERROR, COMPILE_ERROR.",
+      "**Overall verdict:** first non-ACCEPTED verdict is the overall result. If all pass → ACCEPTED.",
+      "**Execution metrics:** runtime (ms), memory used (KB) per test case.",
+      "**Poll result:** user queries `getResult(submissionId)` → returns status (QUEUED, RUNNING, COMPLETED) + verdicts.",
+      "**Language support via Strategy:** per-language compile+run commands. Adding Go = one new strategy class."
+    ],
+    "out_of_scope": [
+      "Problem CRUD, user auth, leaderboards/ranking, contest timers, code plagiarism detection, interactive problems (stdin/stdout), special judges (custom comparison logic)."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Isolation:** one user's submission must not affect another's (process-level isolation per execution).",
+      "**Enforced limits:** TLE and MLE must be reliably detected — user code can't escape the resource budget.",
+      "**Deterministic evaluation:** same code + same test cases → same verdict every time.",
+      "**Bounded queue:** when workers are saturated, submissions wait. Queue overflow → reject with QUEUE_FULL."
+    ],
+    "out_of_scope": [
+      "Distributed worker fleet, auto-scaling, multi-datacenter, anti-cheat."
+    ]
+  },
+
+  "primary_scope": [
+    "`submit(problemId, language, code)` → create Submission → enqueue → return submissionId",
+    "Worker loop: dequeue → compile (if needed) → run against each test case → collect verdicts",
+    "Per test case: spawn sandboxed process → feed input → capture output → enforce time/memory → compare",
+    "`getResult(submissionId)` → return current status + verdicts",
+    "Language executor Strategy: compile command + run command per language"
+  ],
+  "termination_points": [
+    "COMPILE_ERROR — code doesn't compile → no test cases run, immediate verdict",
+    "TIME_LIMIT_EXCEEDED — process exceeds per-test-case time limit → kill process",
+    "MEMORY_LIMIT_EXCEEDED — process exceeds memory limit → kill process",
+    "RUNTIME_ERROR — process exits with non-zero code (NPE, segfault, exception)",
+    "WRONG_ANSWER — output doesn't match expected",
+    "QUEUE_FULL — too many pending submissions → reject",
+    "INTERNAL_ERROR — sandbox crashed → mark submission as ERROR, alert ops"
+  ],
+
+  "entity_intro": "The pipeline has clear stages: **Submit → Queue → Compile → Execute per test case → Judge → Store result.** Each stage is an entity or service. The Submission object flows through stages, accumulating state (compiled binary, per-test verdicts, final result).",
+  "entities": [
+    {
+      "name": "Submission",
+      "role": "**Model.** submissionId, userId, problemId, language, sourceCode, status (QUEUED→COMPILING→RUNNING→COMPLETED), list of TestCaseResult, overallVerdict, timestamps. The data object that flows through the pipeline.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — pipeline data"
+    },
+    {
+      "name": "Problem",
+      "role": "**Model.** problemId, title, description, `List<TestCase>`, timeLimitMs, memoryLimitKb. Reference data — immutable per problem version.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — reference data"
+    },
+    {
+      "name": "TestCase",
+      "role": "**Model.** testCaseId, input (String), expectedOutput (String), isSample (visible to user or hidden).",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — immutable test data"
+    },
+    {
+      "name": "TestCaseResult",
+      "role": "**Model.** testCaseId, verdict, runtimeMs, memoryKb, actualOutput (for WRONG_ANSWER debugging). One per test case per submission.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — per-test-case outcome"
+    },
+    {
+      "name": "LanguageExecutor (Strategy)",
+      "role": "**Strategy interface.** `compile(code)` → Optional<CompileError>. `run(binary, input, timeLimit, memLimit)` → ExecutionResult. One implementation per language (JavaExecutor, PythonExecutor, CppExecutor).",
+      "verdict": "yes",
+      "verdict_label": "✓ Strategy — per-language execution"
+    },
+    {
+      "name": "JudgeService",
+      "role": "**Service.** Compares actual output to expected output. Returns ACCEPTED or WRONG_ANSWER. Could be extended with custom comparators (floating-point tolerance, unordered output).",
+      "verdict": "yes",
+      "verdict_label": "✓ Service — comparison logic"
+    },
+    {
+      "name": "SubmissionService",
+      "role": "**Controller.** Public API: `submit()`, `getResult()`. Owns the queue + worker pool. Orchestrates the pipeline stages.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "SubmissionService", "owns": "`BlockingQueue<Submission>`, `ExecutorService workerPool`, `Map<String, Submission>`, `Map<String, LanguageExecutor>`, JudgeService", "rel": "1→1 queue, 1→N workers, 1→N submissions"},
+    {"entity": "Submission", "owns": "userId, problemId, language, code, status, `List<TestCaseResult>`, overallVerdict", "rel": "N→1 Problem, N→1 User"},
+    {"entity": "Problem", "owns": "title, `List<TestCase>`, timeLimitMs, memLimitKb", "rel": "1→N TestCases"},
+    {"entity": "LanguageExecutor", "owns": "compile command template, run command template, file extensions", "rel": "Standalone Strategy per language"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Submission, Problem, TestCase, TestCaseResult, Verdict enum. **Service** = LanguageExecutor strategies, JudgeService (comparison), pipeline evaluation logic. **Controller** = SubmissionService (public API, queue, worker dispatch). The pipeline structure is **Producer-Consumer** with the queue as the buffer between submit (producer) and evaluate (consumer).",
+
+  "classes": [
+    {
+      "name": "LanguageExecutor", "type": "interface", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "compile(code, workDir)", "returns": "CompileResult"},
+        {"name": "execute(workDir, input, timeLimitMs, memLimitKb)", "returns": "ExecutionResult"},
+        {"name": "getLanguage()", "returns": "Language enum"}
+      ]
+    },
+    {
+      "name": "JudgeService", "type": "class", "layer": "Service",
+      "fields": [],
+      "methods": [
+        {"name": "judge(actual, expected)", "returns": "Verdict"},
+        {"name": "normalizeOutput(output)", "returns": "String (trim, trailing newline)"}
+      ]
+    },
+    {
+      "name": "Submission", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "submissionId", "type": "String"},
+        {"name": "userId", "type": "String"},
+        {"name": "problemId", "type": "String"},
+        {"name": "language", "type": "Language"},
+        {"name": "sourceCode", "type": "String"},
+        {"name": "status", "type": "volatile SubmissionStatus"},
+        {"name": "testCaseResults", "type": "List<TestCaseResult>"},
+        {"name": "overallVerdict", "type": "Verdict"},
+        {"name": "submittedAt", "type": "Instant"}
+      ],
+      "methods": [
+        {"name": "addTestResult(result)", "returns": "void"},
+        {"name": "setOverallVerdict(verdict)", "returns": "void"}
+      ]
+    },
+    {
+      "name": "SubmissionService", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "queue", "type": "BlockingQueue<Submission>"},
+        {"name": "workerPool", "type": "ExecutorService"},
+        {"name": "submissions", "type": "ConcurrentHashMap<String, Submission>"},
+        {"name": "problems", "type": "Map<String, Problem>"},
+        {"name": "executors", "type": "Map<Language, LanguageExecutor>"},
+        {"name": "judgeService", "type": "JudgeService"}
+      ],
+      "methods": [
+        {"name": "submit(userId, problemId, language, code)", "returns": "String (submissionId)"},
+        {"name": "getResult(submissionId)", "returns": "Submission (snapshot)"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "problems",
+      "columns": [
+        {"name": "problem_id", "type": "UUID", "pk": true},
+        {"name": "title", "type": "VARCHAR"},
+        {"name": "time_limit_ms", "type": "INT"},
+        {"name": "memory_limit_kb", "type": "INT"}
+      ]
+    },
+    {
+      "table": "test_cases",
+      "columns": [
+        {"name": "test_case_id", "type": "UUID", "pk": true},
+        {"name": "problem_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "input", "type": "TEXT"},
+        {"name": "expected_output", "type": "TEXT"},
+        {"name": "is_sample", "type": "BOOLEAN"},
+        {"name": "order_index", "type": "INT"}
+      ]
+    },
+    {
+      "table": "submissions",
+      "columns": [
+        {"name": "submission_id", "type": "UUID", "pk": true},
+        {"name": "user_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "problem_id", "type": "UUID", "fk": true, "idx": true},
+        {"name": "language", "type": "ENUM(JAVA,PYTHON,CPP)"},
+        {"name": "source_code", "type": "TEXT"},
+        {"name": "status", "type": "ENUM(QUEUED,COMPILING,RUNNING,COMPLETED)", "idx": true},
+        {"name": "overall_verdict", "type": "ENUM(AC,WA,TLE,MLE,RE,CE,PENDING)"},
+        {"name": "submitted_at", "type": "TIMESTAMP", "idx": true}
+      ]
+    },
+    {
+      "table": "test_case_results",
+      "columns": [
+        {"name": "submission_id", "type": "UUID", "pk": true, "fk": true},
+        {"name": "test_case_id", "type": "UUID", "pk": true, "fk": true},
+        {"name": "verdict", "type": "ENUM(AC,WA,TLE,MLE,RE)"},
+        {"name": "runtime_ms", "type": "INT"},
+        {"name": "memory_kb", "type": "INT"},
+        {"name": "actual_output", "type": "TEXT"}
+      ]
+    }
+  ],
+  "schema_note": "Index `(user_id, problem_id, submitted_at)` for 'show my submissions for this problem' queries. Index `(problem_id, overall_verdict)` for acceptance rate statistics. Source code is stored as TEXT — for large-scale systems, store in object storage (S3) and keep a reference.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Enums + Problem + TestCase + Submission",
+      "code": "enum Language { JAVA, PYTHON, CPP }\nenum Verdict { ACCEPTED, WRONG_ANSWER, TIME_LIMIT_EXCEEDED, MEMORY_LIMIT_EXCEEDED, RUNTIME_ERROR, COMPILE_ERROR, INTERNAL_ERROR, PENDING }\nenum SubmissionStatus { QUEUED, COMPILING, RUNNING, COMPLETED }\n\nrecord Problem(String problemId, String title,\n               List<TestCase> testCases,\n               int timeLimitMs, int memoryLimitKb) {}\n\nrecord TestCase(String testCaseId, String input,\n                String expectedOutput, boolean isSample, int orderIndex) {}\n\nrecord TestCaseResult(String testCaseId, Verdict verdict,\n                      int runtimeMs, int memoryKb, String actualOutput) {}\n\nrecord CompileResult(boolean success, String errorMessage, String binaryPath) {\n    public static CompileResult success(String binary) {\n        return new CompileResult(true, null, binary);\n    }\n    public static CompileResult failure(String error) {\n        return new CompileResult(false, error, null);\n    }\n}\n\nrecord ExecutionResult(int exitCode, String stdout, String stderr,\n                        int runtimeMs, int memoryKb, boolean timedOut, boolean memExceeded) {}\n\nclass Submission {\n    private final String submissionId;\n    private final String userId;\n    private final String problemId;\n    private final Language language;\n    private final String sourceCode;\n    private volatile SubmissionStatus status = SubmissionStatus.QUEUED;\n    private final List<TestCaseResult> testCaseResults =\n        Collections.synchronizedList(new ArrayList<>());\n    private volatile Verdict overallVerdict = Verdict.PENDING;\n    private final Instant submittedAt = Instant.now();\n\n    public Submission(String userId, String problemId,\n                      Language language, String code) {\n        this.submissionId = UUID.randomUUID().toString();\n        this.userId = userId;\n        this.problemId = problemId;\n        this.language = language;\n        this.sourceCode = code;\n    }\n\n    public void setStatus(SubmissionStatus s)   { this.status = s; }\n    public void setOverallVerdict(Verdict v)     { this.overallVerdict = v; }\n    public void addTestResult(TestCaseResult r)  { testCaseResults.add(r); }\n\n    public String getSubmissionId()     { return submissionId; }\n    public String getUserId()           { return userId; }\n    public String getProblemId()        { return problemId; }\n    public Language getLanguage()       { return language; }\n    public String getSourceCode()       { return sourceCode; }\n    public SubmissionStatus getStatus() { return status; }\n    public Verdict getOverallVerdict()  { return overallVerdict; }\n    public List<TestCaseResult> getTestCaseResults() { return testCaseResults; }\n}"
+    },
+    {
+      "label": "Strategy — LanguageExecutor (per-language compile + run)",
+      "flow": "**`compile()`:** writes source to a temp file → runs compiler command → returns success/failure + binary path. **`execute()`:** runs the binary with stdin piped from test input → captures stdout, stderr → enforces timeout via `Process.waitFor(timeout)` → captures memory via `/proc` or jcmd. The `ProcessBuilder` API gives us process-level isolation for LLD scope.",
+      "edge_cases": "Python has no compile step → compile() returns success with the source file as 'binary'. C++ compilation failure → returns CompileResult.failure with compiler output. Process hangs → `waitFor(timeout)` returns false → `destroyForcibly()` → TLE verdict.",
+      "code": "interface LanguageExecutor {\n    CompileResult compile(String sourceCode, String workDir);\n    ExecutionResult execute(String workDir, String input,\n                            int timeLimitMs, int memLimitKb);\n    Language getLanguage();\n}\n\nclass JavaExecutor implements LanguageExecutor {\n    @Override\n    public CompileResult compile(String code, String workDir) {\n        try {\n            // Write source to Main.java\n            Path source = Path.of(workDir, \"Main.java\");\n            Files.writeString(source, code);\n\n            // javac Main.java\n            ProcessBuilder pb = new ProcessBuilder(\"javac\", \"Main.java\")\n                .directory(new File(workDir))\n                .redirectErrorStream(true);\n            Process proc = pb.start();\n            String output = new String(proc.getInputStream().readAllBytes());\n            int exit = proc.waitFor();\n\n            if (exit != 0) return CompileResult.failure(output);\n            return CompileResult.success(workDir + \"/Main.class\");\n        } catch (Exception e) {\n            return CompileResult.failure(\"Compiler crashed: \" + e.getMessage());\n        }\n    }\n\n    @Override\n    public ExecutionResult execute(String workDir, String input,\n                                    int timeLimitMs, int memLimitKb) {\n        try {\n            ProcessBuilder pb = new ProcessBuilder(\n                    \"java\", \"-Xmx\" + memLimitKb + \"k\", \"-cp\", workDir, \"Main\")\n                .directory(new File(workDir));\n            long startTime = System.currentTimeMillis();\n            Process proc = pb.start();\n\n            // Feed input\n            proc.getOutputStream().write(input.getBytes());\n            proc.getOutputStream().close();\n\n            // Wait with timeout\n            boolean finished = proc.waitFor(timeLimitMs, TimeUnit.MILLISECONDS);\n            long elapsed = System.currentTimeMillis() - startTime;\n\n            if (!finished) {\n                proc.destroyForcibly();\n                return new ExecutionResult(-1, \"\", \"TLE\",\n                    (int) elapsed, 0, true, false);\n            }\n\n            String stdout = new String(proc.getInputStream().readAllBytes());\n            String stderr = new String(proc.getErrorStream().readAllBytes());\n            int exit = proc.exitValue();\n\n            // Memory tracking is OS-level; simplified here\n            int memoryUsed = 0; // Would read /proc/pid/status in production\n\n            return new ExecutionResult(exit, stdout, stderr,\n                (int) elapsed, memoryUsed, false, false);\n        } catch (Exception e) {\n            return new ExecutionResult(-1, \"\", e.getMessage(),\n                0, 0, false, false);\n        }\n    }\n\n    @Override\n    public Language getLanguage() { return Language.JAVA; }\n}\n\nclass PythonExecutor implements LanguageExecutor {\n    @Override\n    public CompileResult compile(String code, String workDir) {\n        try {\n            // Python: syntax check only (no separate binary)\n            Path source = Path.of(workDir, \"solution.py\");\n            Files.writeString(source, code);\n\n            ProcessBuilder pb = new ProcessBuilder(\n                    \"python3\", \"-m\", \"py_compile\", \"solution.py\")\n                .directory(new File(workDir))\n                .redirectErrorStream(true);\n            Process proc = pb.start();\n            String output = new String(proc.getInputStream().readAllBytes());\n            int exit = proc.waitFor();\n\n            if (exit != 0) return CompileResult.failure(output);\n            return CompileResult.success(workDir + \"/solution.py\");\n        } catch (Exception e) {\n            return CompileResult.failure(e.getMessage());\n        }\n    }\n\n    @Override\n    public ExecutionResult execute(String workDir, String input,\n                                    int timeLimitMs, int memLimitKb) {\n        // Similar to Java but: python3 solution.py\n        // ... same pattern, different command\n        return new ExecutionResult(0, \"\", \"\", 0, 0, false, false); // stub\n    }\n\n    @Override\n    public Language getLanguage() { return Language.PYTHON; }\n}"
+    },
+    {
+      "label": "Service — JudgeService (output comparison)",
+      "flow": "`judge(actual, expected)` — normalize both (trim trailing whitespace/newline), then string-compare. ACCEPTED if identical, WRONG_ANSWER otherwise. **Normalization matters** — contestants often add a trailing newline that shouldn't affect the verdict.",
+      "edge_cases": "Trailing whitespace differences → normalize to ignore. Floating-point comparison (for geometry/math problems) → requires custom comparator with epsilon. Multi-line output with mixed line endings → normalize to \\n.",
+      "code": "class JudgeService {\n\n    public Verdict judge(String actual, String expected) {\n        String normActual = normalizeOutput(actual);\n        String normExpected = normalizeOutput(expected);\n\n        if (normActual.equals(normExpected)) return Verdict.ACCEPTED;\n        return Verdict.WRONG_ANSWER;\n    }\n\n    // Strip trailing whitespace per line + trailing empty lines\n    String normalizeOutput(String output) {\n        if (output == null) return \"\";\n        return Arrays.stream(output.split(\"\\n\", -1))\n            .map(String::stripTrailing)\n            .collect(Collectors.joining(\"\\n\"))\n            .stripTrailing();\n    }\n}"
+    },
+    {
+      "label": "Controller — SubmissionService (pipeline orchestration)",
+      "flow": "**`submit()`:** create Submission → put in queue → return submissionId. **Worker loop:** take from queue → compile (if language needs it) → for each test case: execute → judge → collect result → set overall verdict → mark COMPLETED. **Overall verdict:** first non-ACCEPTED result determines the verdict (short-circuit).",
+      "edge_cases": "Compile error → skip all test cases, overall = COMPILE_ERROR. Worker crash → catch all exceptions, mark INTERNAL_ERROR. Queue full → throw immediately. Problem not found → reject at submit time.",
+      "code": "class SubmissionService {\n    private final BlockingQueue<Submission> queue;\n    private final ExecutorService workerPool;\n    private final ConcurrentHashMap<String, Submission> submissions = new ConcurrentHashMap<>();\n    private final Map<String, Problem> problems;\n    private final Map<Language, LanguageExecutor> executors;\n    private final JudgeService judgeService = new JudgeService();\n    private volatile boolean running = true;\n\n    public SubmissionService(int queueSize, int numWorkers,\n                              Map<String, Problem> problems,\n                              Map<Language, LanguageExecutor> executors) {\n        this.queue = new ArrayBlockingQueue<>(queueSize);\n        this.problems = problems;\n        this.executors = executors;\n        this.workerPool = Executors.newFixedThreadPool(numWorkers);\n        for (int i = 0; i < numWorkers; i++) {\n            workerPool.submit(this::workerLoop);\n        }\n    }\n\n    // ── Submit ────────────────────────────\n    public String submit(String userId, String problemId,\n                          Language language, String code) {\n        if (!problems.containsKey(problemId))\n            throw new ProblemNotFoundException(problemId);\n        if (!executors.containsKey(language))\n            throw new UnsupportedLanguageException(language.name());\n\n        Submission sub = new Submission(userId, problemId, language, code);\n        submissions.put(sub.getSubmissionId(), sub);\n\n        if (!queue.offer(sub)) {\n            sub.setStatus(SubmissionStatus.COMPLETED);\n            sub.setOverallVerdict(Verdict.INTERNAL_ERROR);\n            throw new QueueFullException(\"Judge queue is full, try again later\");\n        }\n        return sub.getSubmissionId();\n    }\n\n    // ── Poll result ──────────────────────\n    public Submission getResult(String submissionId) {\n        Submission sub = submissions.get(submissionId);\n        if (sub == null)\n            throw new SubmissionNotFoundException(submissionId);\n        return sub;\n    }\n\n    // ── Worker loop ──────────────────────\n    private void workerLoop() {\n        while (running) {\n            try {\n                Submission sub = queue.poll(1, TimeUnit.SECONDS);\n                if (sub == null) continue;\n                evaluate(sub);\n            } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n                break;\n            }\n        }\n    }\n\n    // ── Evaluation pipeline ──────────────\n    private void evaluate(Submission sub) {\n        try {\n            Problem problem = problems.get(sub.getProblemId());\n            LanguageExecutor executor = executors.get(sub.getLanguage());\n\n            // Create isolated work directory\n            String workDir = createTempDir(sub.getSubmissionId());\n\n            // Phase 1: Compile\n            sub.setStatus(SubmissionStatus.COMPILING);\n            CompileResult compileResult = executor.compile(sub.getSourceCode(), workDir);\n\n            if (!compileResult.success()) {\n                sub.setOverallVerdict(Verdict.COMPILE_ERROR);\n                sub.setStatus(SubmissionStatus.COMPLETED);\n                return;\n            }\n\n            // Phase 2: Run against each test case\n            sub.setStatus(SubmissionStatus.RUNNING);\n            Verdict overallVerdict = Verdict.ACCEPTED;\n\n            for (TestCase tc : problem.testCases()) {\n                ExecutionResult execResult = executor.execute(\n                    workDir, tc.input(),\n                    problem.timeLimitMs(), problem.memoryLimitKb());\n\n                Verdict testVerdict;\n                if (execResult.timedOut()) {\n                    testVerdict = Verdict.TIME_LIMIT_EXCEEDED;\n                } else if (execResult.memExceeded()) {\n                    testVerdict = Verdict.MEMORY_LIMIT_EXCEEDED;\n                } else if (execResult.exitCode() != 0) {\n                    testVerdict = Verdict.RUNTIME_ERROR;\n                } else {\n                    testVerdict = judgeService.judge(\n                        execResult.stdout(), tc.expectedOutput());\n                }\n\n                sub.addTestResult(new TestCaseResult(\n                    tc.testCaseId(), testVerdict,\n                    execResult.runtimeMs(), execResult.memoryKb(),\n                    testVerdict == Verdict.WRONG_ANSWER ? execResult.stdout() : null));\n\n                // Short-circuit on first failure (optimization)\n                if (testVerdict != Verdict.ACCEPTED && overallVerdict == Verdict.ACCEPTED) {\n                    overallVerdict = testVerdict;\n                    // Continue running remaining tests for full feedback\n                    // (or break here for competitive judge — configurable)\n                }\n            }\n\n            sub.setOverallVerdict(overallVerdict);\n            sub.setStatus(SubmissionStatus.COMPLETED);\n\n            // Cleanup temp directory\n            cleanupTempDir(workDir);\n\n        } catch (Exception e) {\n            sub.setOverallVerdict(Verdict.INTERNAL_ERROR);\n            sub.setStatus(SubmissionStatus.COMPLETED);\n        }\n    }\n\n    private String createTempDir(String subId) {\n        try {\n            return Files.createTempDirectory(\"judge-\" + subId).toString();\n        } catch (IOException e) {\n            throw new RuntimeException(\"Failed to create temp dir\", e);\n        }\n    }\n\n    private void cleanupTempDir(String workDir) {\n        try {\n            // rm -rf workDir\n            Path path = Path.of(workDir);\n            Files.walk(path).sorted(Comparator.reverseOrder())\n                .map(Path::toFile).forEach(File::delete);\n        } catch (IOException ignored) {}\n    }\n\n    public void shutdown() {\n        running = false;\n        workerPool.shutdown();\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Strategy Pattern → LanguageExecutor",
+      "why": "Each language has fundamentally different compile and run semantics. Java: `javac` → `java`. Python: `py_compile` → `python3`. C++: `g++` → `./a.out`. The `SubmissionService` doesn't know these details — it calls `executor.compile()` and `executor.execute()`. **Adding Go support = one new class** implementing LanguageExecutor.",
+      "where": "`LanguageExecutor` interface + `JavaExecutor`, `PythonExecutor`, `CppExecutor`"
+    },
+    {
+      "name": "Command Pattern → Submission",
+      "why": "A Submission encapsulates a unit of work: the code to run, the problem it targets, the language to use. The worker picks it from the queue and 'executes' it (compiles + runs). The Submission is a command object that can be queued, prioritized, and retried.",
+      "where": "`Submission` flows through the queue as a command to evaluate"
+    },
+    {
+      "name": "Producer-Consumer → Queue + Worker Pool",
+      "why": "Users (producers) submit code. Workers (consumers) pick from the bounded queue and evaluate. Decouples submission latency from evaluation latency. The queue provides backpressure (rejects on overflow). Same architecture as the Task Scheduler (P7) and Notification Service (P17).",
+      "where": "`BlockingQueue<Submission>` + `workerPool`"
+    },
+    {
+      "name": "Pipeline Pattern — Stage-based processing",
+      "why": "The evaluation follows a strict pipeline: Compile → Execute per test case → Judge. Each stage transforms data: code→binary, binary→output, output→verdict. Failures at early stages (compile error) skip later stages. This is the **Pipeline Pattern** — a sequence of processing stages where each stage transforms or filters data.",
+      "where": "`evaluate()` method — sequential stages with early termination"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Multiple workers modifying the same Submission's test results",
+      "fix": "Each Submission is processed by **exactly one worker** (dequeued once). Within that worker, test cases run sequentially (not parallelized across workers). `testCaseResults` is a `Collections.synchronizedList` for safety, but in practice only one thread writes to it. The `volatile` on `status` and `overallVerdict` ensures reads from `getResult()` see up-to-date values."
+    },
+    {
+      "issue": "User code runs malicious code — fork bomb, infinite loop, network access",
+      "fix": "**Process-level isolation.** Each execution runs in a separate OS process (`ProcessBuilder`). The process has: (1) time limit via `waitFor(timeout)` + `destroyForcibly()`, (2) memory limit via JVM flag (`-Xmx`) or OS cgroups, (3) in production: seccomp (syscall filtering), read-only filesystem, no network. **Our LLD models the interface** — real sandboxing is infrastructure."
+    },
+    {
+      "issue": "Queue overflow under contest load (thousands of simultaneous submissions)",
+      "fix": "Bounded `ArrayBlockingQueue`. `offer()` returns false when full → we throw `QueueFullException` immediately. The caller (HTTP handler) returns 429 Too Many Requests. For production: separate queues per priority (contest vs practice), auto-scale workers based on queue depth."
+    },
+    {
+      "issue": "Worker thread dies due to uncaught exception",
+      "fix": "The entire `evaluate()` call is wrapped in try-catch. Exceptions mark the submission as `INTERNAL_ERROR`, don't crash the worker. The worker loop continues processing the next submission. For extra safety: use `Executors.newFixedThreadPool` with an uncaught exception handler that logs and restarts."
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why run test cases sequentially within a submission instead of in parallel?",
+      "answer": "**Determinism and resource control.** If all test cases run in parallel, the total memory = N × per-test-case memory — could exhaust the machine. Sequential execution means one process at a time per submission, predictable resource usage. **Also:** some problems have dependent test cases (rare), and the short-circuit optimization (stop on first failure) only works sequentially. For throughput, parallelize **across submissions** (multiple workers), not within one."
+    },
+    {
+      "question": "How do you reliably detect memory limit exceeded?",
+      "answer": "**Tricky in practice.** For Java: `-Xmx256m` is an approximation (JVM overhead adds ~50–100MB). For C++: `ulimit -v` or cgroups limit the process's virtual memory. Read `/proc/[pid]/status` field `VmPeak` after the process exits for peak memory. **Cgroups (Linux control groups)** are the production answer — they cap memory precisely and OOM-kill the process. Our LLD models this as a flag in `ExecutionResult`."
+    },
+    {
+      "question": "What about special judges — problems with multiple valid outputs?",
+      "answer": "**Extract a JudgeStrategy interface.** Default: exact string match (our JudgeService). For floating-point: `DoubleJudge` that parses numbers and checks `|actual - expected| < epsilon`. For unordered output: `SetJudge` that compares sorted lines. For custom: `CustomJudge` that runs a checker program with the user's output + expected output as inputs, the checker returns AC/WA. **Each problem stores which judge type to use.**"
+    },
+    {
+      "question": "How would you support interactive problems (like game simulations)?",
+      "answer": "**Interactive judge:** the user's process and the judge process run simultaneously, exchanging I/O. The judge sends a query → the user reads it, computes an answer, writes it → the judge validates. This replaces the simple stdin→stdout model with a **two-process pipe**. Implementation: connect user's stdout to judge's stdin and vice versa. Add a turn limit and total time limit. **Significant complexity** — worth mentioning but not implementing."
+    },
+    {
+      "question": "How do you prevent code plagiarism?",
+      "answer": "**Post-hoc analysis, not real-time.** After a contest ends, run a plagiarism detector (MOSS — Measure of Software Similarity) across all submissions for the same problem. MOSS tokenizes code (removing variable names, whitespace) and uses document fingerprinting (k-gram hashing + Winnowing) to detect structural similarity. **Not an LLD concern** — it's a batch processing job. Mention it as an extension."
+    },
+    {
+      "question": "How would you scale to handle 10,000 concurrent submissions during a contest?",
+      "answer": "**Horizontal scaling of workers.** Workers are stateless (they pull from the queue, execute, and write results). Add more worker machines behind a shared queue (Redis, SQS, Kafka). Each machine runs N workers = N sandbox slots. **Queue sharding:** one queue per language or per difficulty (separate compile and run infra). **Pre-warm sandboxes:** keep warm containers ready to reduce cold start. Real platforms (Codeforces, LeetCode) use AWS ECS/Fargate or Kubernetes for elastic worker fleets."
+    },
+    {
+      "question": "How do you ensure deterministic timing for competitive programming?",
+      "answer": "**Dedicated hardware per judge.** In production: dedicated physical machines with fixed CPU frequency (no turbo boost), no other processes competing for resources. Run each test case on an isolated core with `taskset` (CPU pinning). Compare against a **reference solution** (solution runs on the same machine, same conditions). If reference takes 500ms, time limit = 3× reference = 1500ms. **This is why competitive programming sites often have different time limits per language** (Python gets 3×)."
+    }
+  ]
+}

@@ -1,0 +1,211 @@
+{
+  "title": "Stack Overflow / Q&A Platform",
+  "description": "Design a Q&A platform where users post questions, write answers, vote on content, earn reputation, and tag questions. A **domain-modeling-heavy** problem that tests your ability to handle complex entity relationships and business rules (reputation thresholds, vote mechanics, accept answers).",
+  "tags": [
+    {"type": "medium", "label": "Medium"},
+    {"type": "pattern", "label": "Observer Pattern"},
+    {"type": "pattern", "label": "Strategy Pattern"},
+    {"type": "concept", "label": "Domain Modeling"},
+    {"type": "concept", "label": "Reputation System"}
+  ],
+  "prompt": "Design a Stack Overflow-like Q&A platform where users post questions, write answers, vote, and earn reputation.",
+  "prompt_note": "This problem is **domain-heavy, not algorithm-heavy.** The challenge isn't concurrency or data structures — it's modeling the rich entity relationships (User → Question → Answer → Vote → Comment → Tag) and the business rules that connect them (reputation thresholds, vote karma, accept answer bonus, badge criteria). Keep the design clean — resist the urge to put all logic in a single service class.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Core features — questions, answers, votes, comments, tags. Anything else?\"",
+      "answer": "Interviewer: \"Add reputation system. Users earn rep from upvotes, bounties, accepted answers. Reputation unlocks privileges (e.g., 15 rep to upvote, 125 to downvote, 2000 to edit others' posts).\"",
+      "why": "Reputation is the most interesting design element — it's a stateful computed value derived from user activity."
+    },
+    {
+      "question": "You: \"Voting mechanics — upvote/downvote on both questions and answers?\"",
+      "answer": "Interviewer: \"Yes. Upvote = +10 rep for author (+5 for question). Downvote = -2 rep for author, -1 for the voter (anti-abuse). A user can change their vote.\"",
+      "why": "Vote-change means a vote is mutable state — not just an append-only event."
+    },
+    {
+      "question": "You: \"Can the question asker accept one answer? What's the rep bonus?\"",
+      "answer": "Interviewer: \"Yes — only the asker can accept. +15 rep for the answer author, +2 for the asker.\"",
+      "why": "Accept is a special relationship: one accepted answer per question."
+    },
+    {
+      "question": "You: \"Search by tags, title, or content?\"",
+      "answer": "Interviewer: \"Tag-based filtering is core. Full-text search is out of scope.\"",
+      "why": "Tag filtering = simple map lookup. Full-text search = Elasticsearch territory — HLD, not LLD."
+    },
+    {
+      "question": "You: \"Comments on questions and answers?\"",
+      "answer": "Interviewer: \"Yes, threaded comments. Keep them simple — no nested comments.\"",
+      "why": "Comments are flat per post (question or answer). No deep nesting."
+    },
+    {
+      "question": "You: \"Close / delete / edit questions?\"",
+      "answer": "Interviewer: \"Edit yes (with reputation check). Close/delete are moderation features — mention but don't implement.\"",
+      "why": "Keeps scope focused on CRUD + reputation."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Users:** register, login (simplified), view profile with reputation and activity.",
+      "**Questions:** create (with tags), view, edit (rep check), list by tag / by date.",
+      "**Answers:** post answer to a question, edit, accept (by question author only).",
+      "**Votes:** upvote/downvote on questions and answers. Change vote. Undo vote.",
+      "**Comments:** add flat comments to questions or answers.",
+      "**Tags:** create tags, assign to questions, filter questions by tag.",
+      "**Reputation:** computed from votes + accepted answers + bounties. Unlocks privileges at thresholds.",
+      "**Privileges:** 15 rep to upvote, 125 to downvote, 2000 to edit others' posts."
+    ],
+    "out_of_scope": [
+      "Full-text search, bounty system (beyond basic mention), moderation/close votes, badges, notification system, markdown rendering."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Consistent reputation:** rep must always reflect the sum of all rep events. Recomputable from history.",
+      "**Vote integrity:** a user can only vote once per post. Changing a vote reverses the old one first.",
+      "**Thread-safe vote operations:** concurrent votes on the same post must not corrupt counts."
+    ],
+    "out_of_scope": [
+      "Distributed deployment, full-text indexing, real-time notifications, caching layer."
+    ]
+  },
+
+  "primary_scope": [
+    "`askQuestion(userId, title, body, tags)` → create Question → return questionId",
+    "`postAnswer(userId, questionId, body)` → create Answer → link to Question → return answerId",
+    "`vote(userId, postId, voteType)` → validate rep threshold → record vote → update author rep",
+    "`acceptAnswer(userId, answerId)` → validate asker → mark accepted → update rep",
+    "`addComment(userId, postId, body)` → create Comment → link to post",
+    "`getQuestionsByTag(tag)` → filter → return sorted by votes/date"
+  ],
+  "termination_points": [
+    "`InsufficientReputationException` — user lacks rep to perform action (vote, edit)",
+    "`DuplicateVoteException` — user already voted on this post (offer change instead)",
+    "`SelfVoteException` — user tries to vote on own post",
+    "`NotQuestionAuthorException` — non-asker tries to accept an answer",
+    "`PostNotFoundException` — question/answer doesn't exist",
+    "`AlreadyAcceptedException` — question already has an accepted answer (allow changing)"
+  ],
+
+  "entity_intro": "This is the most entity-rich problem in the set. The entities are: User, Question, Answer, Vote, Comment, Tag. The interesting business rules live in the **relationships** between them — voting affects reputation, accepting affects reputation, reputation gates privileges.",
+  "entities": [
+    {
+      "name": "User",
+      "role": "**Model.** userId, displayName, email, reputation (long), createdAt. Reputation is recomputable from rep events but cached for fast privilege checks.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — central actor"
+    },
+    {
+      "name": "Post (abstract)",
+      "role": "**Abstract base.** Shared by Question and Answer: postId, authorId, body, createdAt, voteScore. Questions and Answers both have votes and comments — shared via Post.",
+      "verdict": "yes",
+      "verdict_label": "✓ Abstract — shared by Question and Answer"
+    },
+    {
+      "name": "Question (extends Post)",
+      "role": "**Model.** title, tags, acceptedAnswerId, answerCount, viewCount. A Question 'has many' Answers and 'has many' Tags.",
+      "verdict": "yes",
+      "verdict_label": "✓ Subclass of Post"
+    },
+    {
+      "name": "Answer (extends Post)",
+      "role": "**Model.** questionId, isAccepted. An Answer belongs to one Question.",
+      "verdict": "yes",
+      "verdict_label": "✓ Subclass of Post"
+    },
+    {
+      "name": "Vote",
+      "role": "**Model.** voteId, userId, postId, voteType (UP/DOWN), createdAt. Unique constraint: (userId, postId) — one vote per user per post. Mutable: user can change or undo.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — mutable vote record"
+    },
+    {
+      "name": "Comment",
+      "role": "**Model.** commentId, userId, postId, body, createdAt. Flat — not nested.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — flat comment"
+    },
+    {
+      "name": "Tag",
+      "role": "**Model.** tagName (PK), description, usageCount. Tags are reusable across questions. Many-to-many with Question.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — label taxonomy"
+    },
+    {
+      "name": "ReputationService",
+      "role": "**Service.** Centralizes rep calculations. `addRep(userId, amount, reason)`. Checks privilege thresholds. Maintains the running rep total.",
+      "verdict": "yes",
+      "verdict_label": "✓ Service — rep logic centralized"
+    },
+    {
+      "name": "QnAService",
+      "role": "**Controller.** Public API: ask, answer, vote, accept, comment. Orchestrates all entities.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — Orchestrator"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "User", "owns": "userId, displayName, reputation", "rel": "1→N Questions, 1→N Answers, 1→N Votes, 1→N Comments"},
+    {"entity": "Question (Post)", "owns": "title, body, tags, acceptedAnswerId, voteScore", "rel": "1→N Answers, 1→N Votes, 1→N Comments, N→N Tags"},
+    {"entity": "Answer (Post)", "owns": "body, isAccepted, voteScore", "rel": "N→1 Question, 1→N Votes, 1→N Comments"},
+    {"entity": "Vote", "owns": "userId, postId, voteType", "rel": "N→1 User, N→1 Post. Unique: (userId, postId)"},
+    {"entity": "Tag", "owns": "tagName, description, usageCount", "rel": "N→N with Questions"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = User, Post, Question, Answer, Vote, Comment, Tag, VoteType enum, Privilege enum. **Service** = ReputationService (rep calculation + privilege checks), VoteService (vote mechanics + score updates). **Controller** = QnAService (the public API facade). The abstract Post base saves duplication — voting, commenting, and scoring work identically for Questions and Answers.",
+
+  "classes": [
+    {"name": "Post (abstract)", "type": "abstract", "layer": "Model", "fields": [{"name": "postId", "type": "String"}, {"name": "authorId", "type": "String"}, {"name": "body", "type": "String"}, {"name": "voteScore", "type": "AtomicInteger"}, {"name": "createdAt", "type": "Instant"}, {"name": "comments", "type": "CopyOnWriteArrayList<Comment>"}], "methods": [{"name": "addComment(comment)", "returns": "void"}, {"name": "updateVoteScore(delta)", "returns": "void"}]},
+    {"name": "Question", "type": "class", "layer": "Model", "fields": [{"name": "title", "type": "String"}, {"name": "tags", "type": "Set<String>"}, {"name": "acceptedAnswerId", "type": "volatile String"}, {"name": "answerIds", "type": "CopyOnWriteArrayList<String>"}, {"name": "viewCount", "type": "AtomicInteger"}], "methods": [{"name": "acceptAnswer(answerId)", "returns": "void"}, {"name": "addAnswerId(id)", "returns": "void"}, {"name": "incrementViews()", "returns": "void"}]},
+    {"name": "Answer", "type": "class", "layer": "Model", "fields": [{"name": "questionId", "type": "String"}, {"name": "isAccepted", "type": "volatile boolean"}], "methods": [{"name": "markAccepted()", "returns": "void"}, {"name": "unmarkAccepted()", "returns": "void"}]},
+    {"name": "Vote", "type": "class", "layer": "Model", "fields": [{"name": "voteId", "type": "String"}, {"name": "userId", "type": "String"}, {"name": "postId", "type": "String"}, {"name": "voteType", "type": "VoteType"}, {"name": "createdAt", "type": "Instant"}], "methods": []},
+    {"name": "Comment", "type": "class", "layer": "Model", "fields": [{"name": "commentId", "type": "String"}, {"name": "userId", "type": "String"}, {"name": "body", "type": "String"}, {"name": "createdAt", "type": "Instant"}], "methods": []},
+    {"name": "Tag", "type": "class", "layer": "Model", "fields": [{"name": "tagName", "type": "String"}, {"name": "description", "type": "String"}, {"name": "usageCount", "type": "AtomicInteger"}], "methods": [{"name": "incrementUsage()", "returns": "void"}]},
+    {"name": "ReputationService", "type": "class", "layer": "Service", "fields": [{"name": "users", "type": "Map<String, User>"}], "methods": [{"name": "addReputation(userId, delta, reason)", "returns": "void"}, {"name": "hasPrivilege(userId, privilege)", "returns": "boolean"}]},
+    {"name": "QnAService", "type": "class", "layer": "Controller", "fields": [{"name": "questions", "type": "ConcurrentHashMap"}, {"name": "answers", "type": "ConcurrentHashMap"}, {"name": "votes", "type": "ConcurrentHashMap (userId:postId → Vote)"}, {"name": "tags", "type": "ConcurrentHashMap"}, {"name": "tagIndex", "type": "Map<tagName, Set<questionId>>"}, {"name": "repService", "type": "ReputationService"}], "methods": [{"name": "askQuestion(userId, title, body, tags)", "returns": "String"}, {"name": "postAnswer(userId, questionId, body)", "returns": "String"}, {"name": "vote(userId, postId, voteType)", "returns": "void"}, {"name": "acceptAnswer(userId, answerId)", "returns": "void"}, {"name": "addComment(userId, postId, body)", "returns": "void"}, {"name": "getQuestionsByTag(tagName)", "returns": "List<Question>"}]}
+  ],
+
+  "db_schema": [
+    {"table": "users", "columns": [{"name": "user_id", "type": "UUID", "pk": true}, {"name": "display_name", "type": "VARCHAR"}, {"name": "email", "type": "VARCHAR", "idx": true}, {"name": "reputation", "type": "BIGINT"}, {"name": "created_at", "type": "TIMESTAMP"}]},
+    {"table": "posts", "columns": [{"name": "post_id", "type": "UUID", "pk": true}, {"name": "post_type", "type": "ENUM(QUESTION,ANSWER)"}, {"name": "author_id", "type": "UUID", "fk": true, "idx": true}, {"name": "parent_id", "type": "UUID", "fk": true, "idx": true}, {"name": "title", "type": "VARCHAR"}, {"name": "body", "type": "TEXT"}, {"name": "vote_score", "type": "INT", "idx": true}, {"name": "is_accepted", "type": "BOOLEAN"}, {"name": "accepted_answer_id", "type": "UUID"}, {"name": "view_count", "type": "INT"}, {"name": "created_at", "type": "TIMESTAMP", "idx": true}]},
+    {"table": "votes", "columns": [{"name": "user_id", "type": "UUID", "pk": true, "fk": true}, {"name": "post_id", "type": "UUID", "pk": true, "fk": true}, {"name": "vote_type", "type": "ENUM(UP,DOWN)"}, {"name": "created_at", "type": "TIMESTAMP"}]},
+    {"table": "comments", "columns": [{"name": "comment_id", "type": "UUID", "pk": true}, {"name": "post_id", "type": "UUID", "fk": true, "idx": true}, {"name": "user_id", "type": "UUID", "fk": true}, {"name": "body", "type": "TEXT"}, {"name": "created_at", "type": "TIMESTAMP"}]},
+    {"table": "post_tags", "columns": [{"name": "post_id", "type": "UUID", "pk": true, "fk": true}, {"name": "tag_name", "type": "VARCHAR", "pk": true, "fk": true}]},
+    {"table": "tags", "columns": [{"name": "tag_name", "type": "VARCHAR", "pk": true}, {"name": "description", "type": "TEXT"}, {"name": "usage_count", "type": "INT"}]},
+    {"table": "reputation_events", "columns": [{"name": "event_id", "type": "BIGSERIAL", "pk": true}, {"name": "user_id", "type": "UUID", "fk": true, "idx": true}, {"name": "delta", "type": "INT"}, {"name": "reason", "type": "VARCHAR"}, {"name": "source_post_id", "type": "UUID"}, {"name": "created_at", "type": "TIMESTAMP"}]}
+  ],
+  "schema_note": "**Single-table inheritance for Posts:** questions and answers in one `posts` table differentiated by `post_type`. Answers point to their question via `parent_id`. `votes` has composite PK `(user_id, post_id)` enforcing one-vote-per-user-per-post at the DB level. `reputation_events` is the audit log — user.reputation is a cached sum, recomputable via `SUM(delta) GROUP BY user_id`.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Full Implementation — Model + Service + Controller (concise)",
+      "flow": "**Vote flow:** check rep threshold → check not self-vote → check existing vote → if changing vote, reverse old delta first → apply new vote → update post score + author rep.\n**Accept answer flow:** check user is question author → if already accepted, unmark old → mark new → update rep for both authors.",
+      "edge_cases": "Self-vote → rejected. Downvote costs the voter 1 rep. Changing upvote to downvote → reverse +10, apply -2 = net -12 for author, +1-1=0 for voter. Accepting a different answer → un-accept old (reverse +15), accept new (+15). User deletes account → votes remain but rep frozen.",
+      "code": "enum VoteType { UP, DOWN }\nenum Privilege {\n    UPVOTE(15), DOWNVOTE(125), COMMENT(50),\n    EDIT_OTHERS(2000), CLOSE_VOTE(3000);\n    final int requiredRep;\n    Privilege(int rep) { this.requiredRep = rep; }\n}\n\nclass User {\n    final String userId, displayName;\n    private long reputation = 1; // start with 1\n\n    public User(String id, String name) { this.userId = id; this.displayName = name; }\n    public synchronized void addReputation(long delta) {\n        reputation = Math.max(1, reputation + delta); // rep floor = 1\n    }\n    public synchronized long getReputation() { return reputation; }\n}\n\nclass ReputationService {\n    private final Map<String, User> users;\n    private static final Map<Privilege, Integer> THRESHOLDS = Map.of(\n        Privilege.UPVOTE, 15, Privilege.DOWNVOTE, 125,\n        Privilege.COMMENT, 50, Privilege.EDIT_OTHERS, 2000\n    );\n\n    public ReputationService(Map<String, User> users) { this.users = users; }\n\n    public void addReputation(String userId, long delta, String reason) {\n        User u = users.get(userId);\n        if (u != null) u.addReputation(delta);\n    }\n\n    public boolean hasPrivilege(String userId, Privilege p) {\n        User u = users.get(userId);\n        return u != null && u.getReputation() >= THRESHOLDS.getOrDefault(p, 0);\n    }\n\n    public void requirePrivilege(String userId, Privilege p) {\n        if (!hasPrivilege(userId, p))\n            throw new InsufficientReputationException(\n                \"Need \" + THRESHOLDS.get(p) + \" rep for \" + p);\n    }\n}\n\nclass QnAService {\n    private final ConcurrentHashMap<String, Question> questions = new ConcurrentHashMap<>();\n    private final ConcurrentHashMap<String, Answer> answers = new ConcurrentHashMap<>();\n    private final ConcurrentHashMap<String, Vote> votes = new ConcurrentHashMap<>(); // key=userId:postId\n    private final ConcurrentHashMap<String, Set<String>> tagIndex = new ConcurrentHashMap<>();\n    private final Map<String, User> users = new ConcurrentHashMap<>();\n    private final ReputationService repService;\n\n    public QnAService() { this.repService = new ReputationService(users); }\n\n    // ── Ask a question ──\n    public String askQuestion(String userId, String title, String body, Set<String> tags) {\n        Question q = new Question(userId, title, body, tags);\n        questions.put(q.postId, q);\n        for (String tag : tags) {\n            tagIndex.computeIfAbsent(tag, k -> ConcurrentHashMap.newKeySet()).add(q.postId);\n        }\n        return q.postId;\n    }\n\n    // ── Post an answer ──\n    public String postAnswer(String userId, String questionId, String body) {\n        Question q = questions.get(questionId);\n        if (q == null) throw new PostNotFoundException(questionId);\n        Answer a = new Answer(userId, questionId, body);\n        answers.put(a.postId, a);\n        q.addAnswerId(a.postId);\n        return a.postId;\n    }\n\n    // ── Vote (the complex one) ──\n    public void vote(String userId, String postId, VoteType voteType) {\n        // Privilege check\n        Privilege needed = (voteType == VoteType.UP) ? Privilege.UPVOTE : Privilege.DOWNVOTE;\n        repService.requirePrivilege(userId, needed);\n\n        // Find post (could be question or answer)\n        Post post = findPost(postId);\n        if (post.authorId.equals(userId))\n            throw new SelfVoteException(\"Cannot vote on own post\");\n\n        String voteKey = userId + \":\" + postId;\n        Vote existing = votes.get(voteKey);\n\n        if (existing != null) {\n            if (existing.voteType == voteType) return; // already voted same way → no-op\n            // Changing vote — reverse old\n            reverseVote(existing, post);\n            votes.remove(voteKey);\n        }\n\n        // Apply new vote\n        Vote newVote = new Vote(UUID.randomUUID().toString(), userId, postId, voteType, Instant.now());\n        votes.put(voteKey, newVote);\n        applyVote(newVote, post);\n    }\n\n    private void applyVote(Vote vote, Post post) {\n        boolean isQuestion = (post instanceof Question);\n        if (vote.voteType == VoteType.UP) {\n            post.updateVoteScore(1);\n            repService.addReputation(post.authorId, isQuestion ? 5 : 10, \"upvote\");\n        } else {\n            post.updateVoteScore(-1);\n            repService.addReputation(post.authorId, -2, \"downvote\");\n            repService.addReputation(vote.userId, -1, \"downvote_cost\"); // costs the voter\n        }\n    }\n\n    private void reverseVote(Vote vote, Post post) {\n        boolean isQuestion = (post instanceof Question);\n        if (vote.voteType == VoteType.UP) {\n            post.updateVoteScore(-1);\n            repService.addReputation(post.authorId, isQuestion ? -5 : -10, \"upvote_reversed\");\n        } else {\n            post.updateVoteScore(1);\n            repService.addReputation(post.authorId, 2, \"downvote_reversed\");\n            repService.addReputation(vote.userId, 1, \"downvote_cost_reversed\");\n        }\n    }\n\n    // ── Accept answer ──\n    public void acceptAnswer(String userId, String answerId) {\n        Answer answer = answers.get(answerId);\n        if (answer == null) throw new PostNotFoundException(answerId);\n        Question question = questions.get(answer.questionId);\n        if (question == null) throw new PostNotFoundException(answer.questionId);\n        if (!question.authorId.equals(userId))\n            throw new NotQuestionAuthorException(\"Only the asker can accept\");\n\n        // Un-accept previous if exists\n        if (question.acceptedAnswerId != null) {\n            Answer old = answers.get(question.acceptedAnswerId);\n            if (old != null) {\n                old.unmarkAccepted();\n                repService.addReputation(old.authorId, -15, \"unaccepted\");\n                repService.addReputation(userId, -2, \"unaccepted_asker\");\n            }\n        }\n\n        // Accept new\n        answer.markAccepted();\n        question.acceptAnswer(answerId);\n        repService.addReputation(answer.authorId, 15, \"accepted_answer\");\n        repService.addReputation(userId, 2, \"accepted_asker_bonus\");\n    }\n\n    // ── Comment ──\n    public void addComment(String userId, String postId, String body) {\n        repService.requirePrivilege(userId, Privilege.COMMENT);\n        Post post = findPost(postId);\n        post.addComment(new Comment(UUID.randomUUID().toString(), userId, body, Instant.now()));\n    }\n\n    // ── Query ──\n    public List<Question> getQuestionsByTag(String tag) {\n        Set<String> ids = tagIndex.getOrDefault(tag, Set.of());\n        return ids.stream().map(questions::get).filter(Objects::nonNull)\n            .sorted(Comparator.comparingInt((Question q) -> q.voteScore.get()).reversed())\n            .toList();\n    }\n\n    private Post findPost(String postId) {\n        Post p = questions.get(postId);\n        if (p == null) p = answers.get(postId);\n        if (p == null) throw new PostNotFoundException(postId);\n        return p;\n    }\n}"
+    }
+  ],
+
+  "patterns": [
+    {"name": "Abstract Base → Post (Question + Answer)", "why": "Questions and Answers both have: author, body, voteScore, comments, createdAt. Extracting a `Post` abstract class eliminates duplication. `vote()` and `addComment()` work on any Post — they don't need to know if it's a Question or Answer. Classic polymorphism.", "where": "`Post` abstract class + `Question`, `Answer` subclasses"},
+    {"name": "Observer Pattern (natural extension)", "why": "When someone answers a question, the asker should be notified. When someone comments, the post author should be notified. Votes trigger reputation changes that could unlock badges. These are all event-driven — Observer Pattern (or an event bus) is the clean way to decouple. Not implemented but mentioned.", "where": "Would add `EventBus` that fires on vote/answer/accept/comment events"},
+    {"name": "Reputation as Event Sourcing", "why": "The `reputation_events` table logs every rep change with delta + reason. `User.reputation` is a cached sum. If it drifts, recompute from events. This is Event Sourcing at a micro scale — the events are the truth, the current value is a projection.", "where": "`ReputationService.addReputation()` + `reputation_events` table"}
+  ],
+
+  "concurrency": [
+    {"issue": "Concurrent votes on the same post corrupting voteScore", "fix": "`voteScore` is an `AtomicInteger`. `updateVoteScore(+1)` and `updateVoteScore(-1)` are lock-free CAS operations. Two concurrent upvotes both succeed, score increments correctly by 2."},
+    {"issue": "Two users accept different answers on the same question simultaneously", "fix": "The `acceptAnswer` method accesses `question.acceptedAnswerId` — which is `volatile`. But the read-check-write pattern isn't atomic. **Fix:** synchronize on the question instance inside `acceptAnswer`. Or use `compareAndSet` on an `AtomicReference<String>`."},
+    {"issue": "Vote change race — user rapidly changes vote", "fix": "`votes.put(voteKey, newVote)` is atomic on ConcurrentHashMap. Rapid changes: each change reverses the previous and applies the new. In the worst case (two concurrent change requests), one reverse+apply pair might interleave, but AtomicInteger on voteScore and synchronized reputation updates keep each individual operation correct."}
+  ],
+
+  "deep_dives": [
+    {"question": "Why use an abstract Post class instead of two separate Question and Answer classes?", "answer": "**DRY + polymorphism.** Without Post: voting code duplicated (one for questions, one for answers). Comment code duplicated. Score tracking duplicated. With Post: `vote(postId)` works on any post. `findPost` returns a Post. The caller doesn't need to know the type. This is the **Liskov Substitution Principle** in practice."},
+    {"question": "How do you prevent a user from gaming the reputation system?", "answer": "**Voting ring detection:** if user A and user B consistently upvote each other, flag for review. **Daily rep cap:** Stack Overflow caps rep at 200/day from votes (accepted answers are uncapped). **Sockpuppet detection:** same IP, similar usernames, always voting for each other → automatic flag. These are all **moderation features** — mention as extensions."},
+    {"question": "Why is the downvote cost (-1 to voter) important?", "answer": "**Anti-abuse mechanism.** Without cost, users would mass-downvote competitors. The -1 rep cost means downvoting is a **costly signal** — you only downvote when you genuinely think the content is bad. Stack Overflow found this dramatically reduced revenge downvoting. **Game theory** applied to community moderation."},
+    {"question": "How would you implement tag autocomplete?", "answer": "**Trie (prefix tree)** on tag names. As the user types, traverse the trie to find all tags matching the prefix. Return top N by usage count. For LLD: a simple `TreeMap<tagName, Tag>` with `subMap(prefix, prefix + Character.MAX_VALUE)` gives prefix search. For production: Elasticsearch `completion` suggester."},
+    {"question": "How does Stack Overflow handle deleted users' content?", "answer": "**Content is anonymized, not deleted.** Posts by a deleted user remain with author shown as 'user12345'. Votes remain. Reputation impact on others remains. The user's profile page returns 404. This preserves the Q&A knowledge base while respecting the user's right to leave. In our model: set `authorId` to a tombstone ID, don't cascade-delete posts."},
+    {"question": "How would you add a bounty system?", "answer": "**Bounty entity:** asker deducts N rep from their own account (escrow) and attaches it to a question. After 7 days, the bounty auto-awards to the highest-voted answer (or is returned if no answers). The bounty creates two rep events: -N for the asker immediately, +N for the winner at resolution. Add a `BountyService` with a scheduled resolution job. The `Question` gets a `bountyAmount` field and `bountyExpiresAt` timestamp."}
+  ]
+}

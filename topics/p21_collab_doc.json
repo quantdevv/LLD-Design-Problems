@@ -1,0 +1,353 @@
+{
+  "title": "Collaborative Document Editor (Google Docs)",
+  "description": "Design an in-process engine for a collaborative text editor: multiple users editing the same document simultaneously, seeing each other's changes in real time. The defining challenge is **semantic concurrency** — merging concurrent edits without losing data or creating garbled output. Introduces CRDTs and Operational Transformation.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "CRDT"},
+    {"type": "pattern", "label": "Operational Transformation"},
+    {"type": "pattern", "label": "Observer Pattern"},
+    {"type": "concept", "label": "Distributed Consistency"}
+  ],
+  "prompt": "Design an in-process engine for a collaborative text editor where multiple users can edit the same document simultaneously and see each other's changes in real time.",
+  "prompt_note": "This problem is fundamentally different from every other LLD problem. **Concurrency here isn't about mutex — it's about merging.** Two users can both insert a character at position 5 simultaneously, and both inserts must be preserved and ordered consistently on every replica. The solutions are either **CRDTs** (conflict-free data structures that merge automatically) or **Operational Transformation** (transform operations against each other to preserve intent). Mention both; implement one.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Single document or multi-document system? Real-time sync or eventual consistency?\"",
+      "answer": "Interviewer: \"Start with one document. Real-time sync — users see each other's edits within ~100ms.\"",
+      "why": "Keeps scope focused. One document at a time is the core problem; multi-doc is just a map."
+    },
+    {
+      "question": "You: \"What operations are supported — just insert and delete, or formatting too?\"",
+      "answer": "Interviewer: \"Insert and delete characters. Formatting (bold, italic) is a nice-to-have.\"",
+      "why": "Text insert/delete is the core of OT/CRDT. Formatting adds complexity but doesn't change the algorithm fundamentally."
+    },
+    {
+      "question": "You: \"How is concurrency handled? What if two users type at the same position simultaneously?\"",
+      "answer": "Interviewer: \"Both characters must be preserved. The system picks a consistent order across all replicas — no data loss.\"",
+      "why": "**This is the crux.** The answer 'both preserved, consistent order' means CRDT or OT. Clarify which one the interviewer prefers."
+    },
+    {
+      "question": "You: \"Are we building the in-memory engine only, or the full client-server with WebSocket?\"",
+      "answer": "Interviewer: \"In-memory engine. Assume some transport layer delivers operations.\"",
+      "why": "LLD scope. The engine produces and consumes operations; transport is someone else's problem."
+    },
+    {
+      "question": "You: \"Cursor positions, selections, user presence?\"",
+      "answer": "Interviewer: \"Cursor broadcasting is optional — useful but not core. Presence is out of scope.\"",
+      "why": "Cursor tracking is fun but adds surface area. Nice to mention; don't over-invest."
+    },
+    {
+      "question": "You: \"Undo support? Per-user undo or global undo?\"",
+      "answer": "Interviewer: \"Per-user undo. Each user undoes their own changes.\"",
+      "why": "Per-user undo is harder than global undo — you can't just pop the last operation from a shared stack. Mention it as an extension."
+    },
+    {
+      "question": "You: \"CRDT or Operational Transformation?\"",
+      "answer": "Interviewer: \"Pick one. Explain why.\"",
+      "why": "**Both work.** CRDTs are simpler to reason about (no central server needed). OT (Google Docs' approach) requires a central transformation server but produces cleaner document history. We'll implement **CRDT** because it's conceptually cleaner for LLD."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Multiple users** edit a shared text document concurrently.",
+      "**Insert** at position / **Delete** at position — the two primitive operations.",
+      "**Real-time sync:** each user's operations propagate to all other replicas within ~100ms.",
+      "**Convergence:** all replicas that have received the same set of operations display the **same final text**, regardless of delivery order.",
+      "**No data loss:** concurrent inserts at the same position both end up in the final document.",
+      "**Intent preservation:** if Alice types 'hello' after 'world' and Bob types 'bye' before 'world', both edits appear in correct relative positions after merge."
+    ],
+    "out_of_scope": [
+      "Transport layer (WebSocket, HTTP long-polling), authentication, access control, persistence format, rich text formatting, collaborative cursors visualization, export to PDF/DOCX."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Convergence:** commutative, associative, idempotent merge — the three CRDT guarantees.",
+      "**Low-latency local edits:** a user's own typing appears immediately, without waiting for server round-trip (optimistic UI).",
+      "**Bounded metadata growth:** CRDT IDs don't grow proportionally to document size in practice (with tombstone garbage collection).",
+      "**Causality preserved:** if op A was created knowing op B's effect, A is applied after B on all replicas (happens-before)."
+    ],
+    "out_of_scope": [
+      "Cross-datacenter replication, end-to-end encryption, exactly-once delivery, byzantine fault tolerance."
+    ]
+  },
+
+  "primary_scope": [
+    "User types → local replica generates an Operation with unique ID → applies locally → broadcasts",
+    "Remote replica receives Operation → applies using CRDT merge rules → all replicas converge",
+    "**Insert:** new character gets a unique position ID (fractional index or Logoot/LSEQ style)",
+    "**Delete:** marks the character as tombstoned (not physically removed)",
+    "Periodic tombstone garbage collection (mentioned; not core)"
+  ],
+  "termination_points": [
+    "`InvalidOperationException` — operation references a position that doesn't exist",
+    "`OperationNotIdempotentException` — applying the same op twice would corrupt state (CRDT should prevent this via op ID)",
+    "Malformed position ID → ignored (replica may be stale)",
+    "Unknown replica ID → still processed (no validation of authorship)"
+  ],
+
+  "entity_intro": "The critical design decision: **what represents a character's position?** Simple integer indices break under concurrency (two users insert at index 5 — now what does index 5 mean?). CRDTs use **position identifiers that are totally ordered and dense** — between any two positions, you can always create a new one. Common approaches: fractional indices (doubles between 0 and 1), logoot-style paths, or Yjs's structured IDs.",
+  "entities": [
+    {
+      "name": "Document",
+      "role": "**Controller.** Holds the character list, replica ID, local clock. Public API: `insert(pos, char)`, `delete(pos)`, `apply(op)`, `getText()`. Manages the CRDT invariants.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — the CRDT itself"
+    },
+    {
+      "name": "CharNode",
+      "role": "**Model.** A character in the document: `{value, positionId, replicaId, deleted}`. The `deleted` flag is the tombstone. `positionId` uniquely and permanently identifies this character's position.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — the atomic unit"
+    },
+    {
+      "name": "Operation",
+      "role": "**Model (immutable).** Represents an edit: `{type: INSERT|DELETE, positionId, value?, originReplica, lamportClock}`. Broadcast to other replicas. Idempotent when replayed.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — the message"
+    },
+    {
+      "name": "PositionId",
+      "role": "**Value object.** A sortable, densely orderable identifier. Implementation: a sequence of (path, replicaId) pairs — the replicaId breaks ties when two replicas generate positions between the same neighbors.",
+      "verdict": "yes",
+      "verdict_label": "✓ Value object — the position mechanism"
+    },
+    {
+      "name": "ReplicaSession",
+      "role": "**Service.** Owns one user's view of the document. Subscribes to remote operations, applies them, broadcasts local ones. Observer of the document state.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — per-user coordinator"
+    },
+    {
+      "name": "OperationRouter",
+      "role": "**Service — Observer subject.** In-memory hub that receives ops from any replica and fans them out to all others. The transport abstraction boundary.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — broadcast hub"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "Document", "owns": "`List<CharNode>` (sorted by PositionId), replicaId, lamportClock, seenOps Set", "rel": "1 → N CharNodes"},
+    {"entity": "CharNode", "owns": "value, PositionId, replicaId, deleted flag", "rel": "N → 1 Document"},
+    {"entity": "Operation", "owns": "type, positionId, value, originReplica, clock", "rel": "Broadcast to all replicas"},
+    {"entity": "ReplicaSession", "owns": "Document instance, reference to OperationRouter", "rel": "N → 1 OperationRouter"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = CharNode, Operation, PositionId (pure data). **Service** = Document (the CRDT implementation with merge logic), OperationRouter (fan-out). **Controller** = ReplicaSession (user-facing API). **This problem is more 'data-oriented' than 'service-oriented'** — the CRDT algorithm lives in Document.apply() and positionId generation.",
+
+  "classes": [
+    {
+      "name": "PositionId", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "path", "type": "List<Segment>"},
+        {"name": "replicaId", "type": "String (tiebreaker)"}
+      ],
+      "methods": [
+        {"name": "compareTo(other)", "returns": "int (total order)"},
+        {"name": "between(before, after, replicaId)", "returns": "PositionId (static factory)"}
+      ]
+    },
+    {
+      "name": "CharNode", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "value", "type": "char"},
+        {"name": "positionId", "type": "PositionId"},
+        {"name": "originReplica", "type": "String"},
+        {"name": "deleted", "type": "boolean (tombstone)"}
+      ],
+      "methods": []
+    },
+    {
+      "name": "Operation", "type": "class", "layer": "Model",
+      "fields": [
+        {"name": "opId", "type": "String (replicaId + counter)"},
+        {"name": "type", "type": "INSERT | DELETE"},
+        {"name": "positionId", "type": "PositionId"},
+        {"name": "value", "type": "char (for INSERT)"},
+        {"name": "originReplica", "type": "String"},
+        {"name": "lamportClock", "type": "long"}
+      ],
+      "methods": []
+    },
+    {
+      "name": "Document", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "chars", "type": "TreeMap<PositionId, CharNode> (sorted)"},
+        {"name": "replicaId", "type": "String"},
+        {"name": "lamportClock", "type": "AtomicLong"},
+        {"name": "seenOps", "type": "Set<String> (idempotence)"}
+      ],
+      "methods": [
+        {"name": "insertLocal(index, char)", "returns": "Operation"},
+        {"name": "deleteLocal(index)", "returns": "Operation"},
+        {"name": "apply(operation)", "returns": "void"},
+        {"name": "getText()", "returns": "String (skips tombstones)"},
+        {"name": "getLength()", "returns": "int"}
+      ]
+    },
+    {
+      "name": "OperationRouter", "type": "class", "layer": "Service",
+      "fields": [
+        {"name": "replicas", "type": "Map<String, ReplicaSession>"}
+      ],
+      "methods": [
+        {"name": "register(session)", "returns": "void"},
+        {"name": "broadcast(operation)", "returns": "void"},
+        {"name": "unregister(replicaId)", "returns": "void"}
+      ]
+    },
+    {
+      "name": "ReplicaSession", "type": "class", "layer": "Controller",
+      "fields": [
+        {"name": "document", "type": "Document"},
+        {"name": "router", "type": "OperationRouter"},
+        {"name": "replicaId", "type": "String"}
+      ],
+      "methods": [
+        {"name": "type(index, char)", "returns": "void"},
+        {"name": "delete(index)", "returns": "void"},
+        {"name": "receiveRemote(operation)", "returns": "void"},
+        {"name": "getText()", "returns": "String"}
+      ]
+    }
+  ],
+
+  "db_schema": [
+    {
+      "table": "document_operations (append-only log)",
+      "columns": [
+        {"name": "op_id", "type": "VARCHAR", "pk": true},
+        {"name": "document_id", "type": "UUID", "idx": true},
+        {"name": "op_type", "type": "ENUM(INSERT,DELETE)"},
+        {"name": "position_id", "type": "TEXT (serialized)"},
+        {"name": "value", "type": "CHAR"},
+        {"name": "origin_replica", "type": "VARCHAR"},
+        {"name": "lamport_clock", "type": "BIGINT", "idx": true},
+        {"name": "created_at", "type": "TIMESTAMP"}
+      ]
+    },
+    {
+      "table": "document_snapshots (periodic materialized state)",
+      "columns": [
+        {"name": "document_id", "type": "UUID", "pk": true},
+        {"name": "snapshot_at_clock", "type": "BIGINT"},
+        {"name": "content", "type": "TEXT"},
+        {"name": "char_positions", "type": "JSONB"}
+      ]
+    }
+  ],
+  "schema_note": "**Event sourcing is the natural fit.** The document is defined by its operation log. New replicas bootstrap by replaying operations from the last snapshot. Snapshots are periodic (every 1000 ops) to avoid full replay on every load.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — PositionId (the densely-orderable position identifier)",
+      "flow": "**The core CRDT primitive.** Each character has a PositionId that is **total-ordered** and **densely orderable** — between any two positions, we can always create a new one. Implementation: a list of segments, where each segment is an integer path + replicaId. Comparison is lexicographic on segments. `between(p1, p2, replicaId)` picks a new path that sorts between p1 and p2 — using the replicaId as a tiebreaker if needed.",
+      "edge_cases": "Inserting at the start → `between(null, firstPos, rid)`. Inserting at the end → `between(lastPos, null, rid)`. Two replicas inserting between the same two chars → both generate positions, both are valid, order decided by replicaId tiebreaker.",
+      "code": "import java.util.*;\n\n// Path segment: (integer, replicaId) pair\nrecord Segment(int path, String replicaId) implements Comparable<Segment> {\n    @Override\n    public int compareTo(Segment other) {\n        int pathCompare = Integer.compare(this.path, other.path);\n        if (pathCompare != 0) return pathCompare;\n        return this.replicaId.compareTo(other.replicaId);\n    }\n}\n\nfinal class PositionId implements Comparable<PositionId> {\n    private final List<Segment> segments;\n\n    public PositionId(List<Segment> segments) {\n        this.segments = List.copyOf(segments);\n    }\n\n    public List<Segment> segments() { return segments; }\n\n    @Override\n    public int compareTo(PositionId other) {\n        int minLen = Math.min(segments.size(), other.segments.size());\n        for (int i = 0; i < minLen; i++) {\n            int cmp = segments.get(i).compareTo(other.segments.get(i));\n            if (cmp != 0) return cmp;\n        }\n        return Integer.compare(segments.size(), other.segments.size());\n    }\n\n    // Generate a position ID strictly between `before` and `after`.\n    // Uses a simple strategy: if there's room at the same depth, pick a middle int.\n    // Otherwise extend by one level with this replicaId.\n    public static PositionId between(PositionId before, PositionId after, String replicaId) {\n        List<Segment> pathBefore = (before == null) ? List.of(new Segment(0, replicaId)) : before.segments;\n        List<Segment> pathAfter = (after == null)  ? List.of(new Segment(Integer.MAX_VALUE, replicaId)) : after.segments;\n\n        List<Segment> result = new ArrayList<>();\n        int depth = 0;\n        while (true) {\n            int b = depth < pathBefore.size() ? pathBefore.get(depth).path() : 0;\n            int a = depth < pathAfter.size()  ? pathAfter.get(depth).path()  : Integer.MAX_VALUE;\n\n            if (a - b > 1) {\n                // Room at this depth — pick a middle value\n                result.add(new Segment((b + a) / 2, replicaId));\n                return new PositionId(result);\n            }\n            // No room — copy the `before` segment and descend\n            result.add(new Segment(b, depth < pathBefore.size() ? pathBefore.get(depth).replicaId() : replicaId));\n            depth++;\n            // Safety: prevent infinite recursion (unlikely in practice)\n            if (depth > 100) {\n                result.add(new Segment(Integer.MAX_VALUE / 2, replicaId));\n                return new PositionId(result);\n            }\n        }\n    }\n\n    @Override\n    public boolean equals(Object o) {\n        return o instanceof PositionId p && segments.equals(p.segments);\n    }\n\n    @Override\n    public int hashCode() { return segments.hashCode(); }\n}"
+    },
+    {
+      "label": "Model — CharNode + Operation",
+      "code": "// A single character in the CRDT document.\n// `deleted = true` means it's a tombstone — kept for ordering but not rendered.\nfinal class CharNode {\n    final char value;\n    final PositionId positionId;\n    final String originReplica;\n    boolean deleted = false;\n\n    public CharNode(char value, PositionId positionId, String originReplica) {\n        this.value = value;\n        this.positionId = positionId;\n        this.originReplica = originReplica;\n    }\n}\n\nenum OpType { INSERT, DELETE }\n\n// Immutable operation broadcast to all replicas.\nrecord Operation(\n    String opId,              // replicaId + counter — globally unique\n    OpType type,\n    PositionId positionId,\n    char value,               // ignored for DELETE\n    String originReplica,\n    long lamportClock\n) {}"
+    },
+    {
+      "label": "Service — Document (the CRDT core)",
+      "flow": "**Local edit:** user calls `insertLocal(index, char)` → find positions of chars at `index` and `index-1` → generate new PositionId between them → create CharNode → insert into TreeMap → return Operation for broadcast.\n\n**Remote edit:** `apply(op)` → check if we've seen this opId (idempotence) → for INSERT, add CharNode at its PositionId → for DELETE, find CharNode and mark deleted. Commutative, idempotent.",
+      "edge_cases": "Applying the same op twice → `seenOps` set makes it a no-op. Inserting at an index equal to document length → use `between(lastPos, null)`. Deleting a position that doesn't exist → no-op (remote delete might arrive before insert in rare cases; the insert will create it later — but tombstones should never be created for a char that hasn't been inserted yet, so this is actually an invalid state we log and skip).",
+      "code": "import java.util.concurrent.atomic.AtomicLong;\nimport java.util.concurrent.ConcurrentHashMap;\n\nclass Document {\n    private final TreeMap<PositionId, CharNode> chars = new TreeMap<>();\n    private final String replicaId;\n    private final AtomicLong opCounter = new AtomicLong();\n    private final AtomicLong lamportClock = new AtomicLong();\n    private final Set<String> seenOps = ConcurrentHashMap.newKeySet();\n\n    public Document(String replicaId) {\n        this.replicaId = replicaId;\n    }\n\n    // ── Local insert at visible index ────\n    // Returns the Operation to broadcast to other replicas.\n    public synchronized Operation insertLocal(int visibleIndex, char c) {\n        if (visibleIndex < 0 || visibleIndex > getLength())\n            throw new InvalidOperationException(\"Index out of range: \" + visibleIndex);\n\n        // Find the PositionIds of the neighbors at `visibleIndex - 1` and `visibleIndex`\n        // (skipping tombstones)\n        PositionId before = findVisibleAt(visibleIndex - 1);\n        PositionId after  = findVisibleAt(visibleIndex);\n\n        PositionId newPos = PositionId.between(before, after, replicaId);\n        CharNode node = new CharNode(c, newPos, replicaId);\n        chars.put(newPos, node);\n\n        long clock = lamportClock.incrementAndGet();\n        String opId = replicaId + \":\" + opCounter.incrementAndGet();\n        Operation op = new Operation(opId, OpType.INSERT, newPos, c, replicaId, clock);\n        seenOps.add(opId);\n        return op;\n    }\n\n    // ── Local delete at visible index ────\n    public synchronized Operation deleteLocal(int visibleIndex) {\n        PositionId pos = findVisibleAt(visibleIndex);\n        if (pos == null)\n            throw new InvalidOperationException(\"No char at index \" + visibleIndex);\n\n        CharNode node = chars.get(pos);\n        node.deleted = true;\n\n        long clock = lamportClock.incrementAndGet();\n        String opId = replicaId + \":\" + opCounter.incrementAndGet();\n        Operation op = new Operation(opId, OpType.DELETE, pos, '\\0', replicaId, clock);\n        seenOps.add(opId);\n        return op;\n    }\n\n    // ── Apply a remote operation ─────────\n    // Idempotent: applying the same op twice is a no-op.\n    public synchronized void apply(Operation op) {\n        if (!seenOps.add(op.opId())) return;  // already applied\n\n        // Update lamport clock — max of ours and theirs, plus 1\n        lamportClock.updateAndGet(curr -> Math.max(curr, op.lamportClock()) + 1);\n\n        switch (op.type()) {\n            case INSERT -> {\n                // If two replicas generate the same PositionId concurrently (extremely unlikely\n                // with replicaId tiebreaker), first-write-wins via TreeMap semantics.\n                chars.putIfAbsent(op.positionId(),\n                    new CharNode(op.value(), op.positionId(), op.originReplica()));\n            }\n            case DELETE -> {\n                CharNode node = chars.get(op.positionId());\n                if (node != null) node.deleted = true;\n                // If the char doesn't exist yet, we log but accept —\n                // in a correct system with causal delivery, this shouldn't happen.\n            }\n        }\n    }\n\n    // ── Render visible text (skipping tombstones) ──\n    public synchronized String getText() {\n        StringBuilder sb = new StringBuilder();\n        for (CharNode n : chars.values()) {\n            if (!n.deleted) sb.append(n.value);\n        }\n        return sb.toString();\n    }\n\n    public synchronized int getLength() {\n        int count = 0;\n        for (CharNode n : chars.values()) {\n            if (!n.deleted) count++;\n        }\n        return count;\n    }\n\n    // Find the PositionId of the Nth visible character (-1 = before start, length = after end)\n    private PositionId findVisibleAt(int visibleIndex) {\n        if (visibleIndex < 0) return null;\n        int count = 0;\n        for (CharNode n : chars.values()) {\n            if (n.deleted) continue;\n            if (count == visibleIndex) return n.positionId;\n            count++;\n        }\n        return null; // index >= length\n    }\n}"
+    },
+    {
+      "label": "Service — OperationRouter + Controller — ReplicaSession",
+      "flow": "**ReplicaSession** is the user-facing API. A user calls `type()` — the session asks the Document to apply locally, gets back an Operation, and broadcasts via the Router. Remote ops come back through `receiveRemote()` and are applied to the local Document.",
+      "code": "class OperationRouter {\n    private final Map<String, ReplicaSession> replicas = new ConcurrentHashMap<>();\n\n    public void register(ReplicaSession session) {\n        replicas.put(session.getReplicaId(), session);\n    }\n\n    public void unregister(String replicaId) {\n        replicas.remove(replicaId);\n    }\n\n    // Fan out an op to all replicas except the origin\n    public void broadcast(Operation op) {\n        for (Map.Entry<String, ReplicaSession> e : replicas.entrySet()) {\n            if (!e.getKey().equals(op.originReplica())) {\n                e.getValue().receiveRemote(op);\n            }\n        }\n    }\n}\n\nclass ReplicaSession {\n    private final String replicaId;\n    private final Document document;\n    private final OperationRouter router;\n    private final List<DocumentListener> listeners = new CopyOnWriteArrayList<>();\n\n    public ReplicaSession(String replicaId, OperationRouter router) {\n        this.replicaId = replicaId;\n        this.document = new Document(replicaId);\n        this.router = router;\n        router.register(this);\n    }\n\n    // ── User types a character ─────────\n    public void type(int index, char c) {\n        Operation op = document.insertLocal(index, c);\n        notifyListeners();\n        router.broadcast(op);\n    }\n\n    // ── User deletes a character ──────\n    public void delete(int index) {\n        Operation op = document.deleteLocal(index);\n        notifyListeners();\n        router.broadcast(op);\n    }\n\n    // ── Remote op arrives from another replica ──\n    public void receiveRemote(Operation op) {\n        document.apply(op);\n        notifyListeners();\n    }\n\n    public String getText() { return document.getText(); }\n    public String getReplicaId() { return replicaId; }\n\n    // Observer for UI updates\n    public void addListener(DocumentListener l) { listeners.add(l); }\n    private void notifyListeners() {\n        String text = document.getText();\n        for (DocumentListener l : listeners) l.onDocumentChanged(text);\n    }\n}\n\ninterface DocumentListener {\n    void onDocumentChanged(String newText);\n}"
+    },
+    {
+      "label": "Usage — two users typing concurrently",
+      "code": "OperationRouter router = new OperationRouter();\nReplicaSession alice = new ReplicaSession(\"alice\", router);\nReplicaSession bob   = new ReplicaSession(\"bob\", router);\n\n// Both start with empty doc\nalice.type(0, 'H');   // Alice: H\n// Broadcast happens — Bob now sees H\nbob.type(1, 'i');     // Bob: Hi (appended to Alice's H)\n// Now both replicas see \"Hi\"\n\nassert alice.getText().equals(\"Hi\");\nassert bob.getText().equals(\"Hi\");\n\n// Concurrent edit at same position — both preserved\nReplicaSession carol = new ReplicaSession(\"carol\", router);\n// All three have \"Hi\"\n\n// Alice types 'A' at position 1 (between H and i)\n// Bob types 'B' at position 1 (also between H and i) — concurrent!\nOperation aliceOp = alice.type(1, 'A');  // Alice's local: HAi\nOperation bobOp = bob.type(1, 'B');      // Bob's local: HBi\n\n// After both ops propagate, all three replicas converge to the same\n// text — either \"HABi\" or \"HBAi\" (decided by replicaId tiebreaker in\n// PositionId.between). The key is: ALL replicas see the same result.\n\n// CRDT guarantee: identical final state regardless of op delivery order"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "CRDT (Conflict-free Replicated Data Type)",
+      "why": "**The defining pattern.** A CRDT is a data structure designed so that concurrent operations on different replicas can be merged automatically without conflicts. The mathematical properties — **commutativity, associativity, idempotence** — guarantee convergence. Our text CRDT uses **RGA-style** (Replicated Growable Array): each character has a permanent unique position ID, deletions are tombstones, inserts are between two existing positions. This is the approach used by Yjs, Automerge, and most modern collaborative editors.",
+      "where": "`Document` class — its `apply()` method satisfies the CRDT properties"
+    },
+    {
+      "name": "Operational Transformation (OT) — mentioned as alternative",
+      "why": "**OT is the other main approach.** Instead of conflict-free data structures, OT transforms operations against each other when they arrive out of order. Example: if Alice inserts at index 5 and Bob inserts at index 3 concurrently, when Alice's op arrives at Bob's replica, it's transformed to 'insert at index 6' (shifted by Bob's earlier insert). **OT requires a central server** to establish op ordering — that's why Google Docs uses it (they have servers). CRDTs work peer-to-peer. Both produce the same correctness guarantees; the architectures differ.",
+      "where": "Not implemented — would replace the CRDT approach entirely"
+    },
+    {
+      "name": "Observer Pattern → DocumentListener",
+      "why": "UI components (editor views) subscribe to document changes. On every local or remote edit, `notifyListeners()` fires and the UI re-renders. Decouples the CRDT engine from any specific rendering technology.",
+      "where": "`ReplicaSession.addListener()` + `notifyListeners()` after edits"
+    },
+    {
+      "name": "Event Sourcing (implicit)",
+      "why": "The document is effectively defined by its operation log. Any replica can be rebuilt by replaying ops from scratch. Snapshots are an optimization. This is why the DB schema has a `document_operations` table as the primary storage — the current text is a projection.",
+      "where": "`Operation` is the immutable event; the log is the source of truth"
+    }
+  ],
+
+  "concurrency": [
+    {
+      "issue": "Two replicas insert at the same visible index simultaneously",
+      "fix": "**This is THE problem CRDTs solve.** Both inserts generate unique `PositionId`s (because replicaId is part of the ID). Both get broadcast; both get applied on every replica. The TreeMap sorts them by PositionId — the `replicaId` tiebreaker gives a consistent total order across all replicas. Both characters appear; relative order is deterministic everywhere."
+    },
+    {
+      "issue": "Operation arrives out of order (e.g., delete before insert of same char)",
+      "fix": "Our delete is idempotent — marking `deleted = true` is safe even if applied to a node that didn't exist yet (we'd create a tombstone-only node in a fuller implementation). In practice, **causal delivery** is assumed — if Alice's delete was produced after her insert, the transport delivers them in that order. Vector clocks or lamport clocks attached to ops enforce this in distributed settings."
+    },
+    {
+      "issue": "Local concurrent modification of the TreeMap",
+      "fix": "All Document methods that touch `chars` are `synchronized`. This serializes local user actions with incoming remote ops. For higher throughput, you'd use a `ConcurrentSkipListMap` + more granular locking, but coarse `synchronized` is correct and simple for an LLD answer."
+    },
+    {
+      "issue": "Duplicate operation broadcast (op arrives twice)",
+      "fix": "`seenOps` set tracks all applied op IDs (`replicaId:counter`). `seenOps.add()` returns false if the op is already present → skip. This makes `apply()` idempotent. Critical for unreliable transports that may retry."
+    },
+    {
+      "issue": "Memory growth — tombstones accumulate",
+      "fix": "Deleted characters stay as tombstones for all time (in the naive version) because we need them to preserve PositionId ordering. For long-lived documents, **tombstone garbage collection** requires coordination: a replica can only drop a tombstone when it knows every other replica has seen it. Implement with vector clocks + periodic prune. **Call this out as a production concern.**"
+    }
+  ],
+
+  "deep_dives": [
+    {
+      "question": "Why use PositionIds instead of integer indices?",
+      "answer": "**Because integer indices aren't stable.** If I say 'insert at index 5' and someone else simultaneously inserts at index 3, my index-5 target now refers to a different character. Operations based on indices require server-side transformation (OT). **PositionIds are permanent** — the PositionId of a character is assigned at insert time and never changes. Every replica agrees on what 'PositionId X' refers to. This is the fundamental insight that makes CRDTs work."
+    },
+    {
+      "question": "How does PositionId.between() guarantee uniqueness when two replicas insert concurrently between the same neighbors?",
+      "answer": "**Replica ID tiebreaker.** When Alice and Bob both compute `between(pos1, pos2, theirReplicaId)`, they produce PositionIds that differ in their replicaId field. Lexicographic comparison uses path first, then replicaId as tiebreaker — so Alice's and Bob's positions are distinct and deterministically ordered. All replicas applying both ops see them in the same order. **Uniqueness is by construction.**"
+    },
+    {
+      "question": "CRDT vs Operational Transformation — when to use which?",
+      "answer": "**CRDT pros:** peer-to-peer (no central server needed), mathematically clean, works offline. **CRDT cons:** metadata overhead (tombstones, position IDs grow), harder to implement custom operations (rich text, tables). **OT pros:** compact representation (no position IDs), natural to extend with new operation types. **OT cons:** requires a central server for op ordering, transformation functions are hard to get right (famous bugs in Google Wave's OT). **Pick OT if you have a trusted server and complex data types. Pick CRDT if you need P2P or offline support.** Modern libraries (Yjs, Automerge) use CRDTs."
+    },
+    {
+      "question": "How do you handle rich text (bold, italic, links)?",
+      "answer": "**Two approaches.** (1) **Attributes on CharNode** — add `formatting` map to each char. Bold range becomes 'every char in range has bold=true'. Concurrent formatting is natural (formatting adds are commutative). (2) **Separate attribute CRDT** — a parallel CRDT indexed by PositionId range, storing formatting spans. Yjs uses approach (1); ProseMirror's collaborative extension uses (2). For an interview, approach (1) is simpler to explain: 'add an attributes map to each CharNode'."
+    },
+    {
+      "question": "What about per-user undo?",
+      "answer": "**Non-trivial in CRDTs.** Global undo is easy — pop the last op. Per-user undo is 'undo only my operations while keeping others'. Standard approach: keep a per-user stack of that user's operations. On undo, apply the **inverse operation** (insert → delete, delete → insert of the same char at the same PositionId). Since all ops are CRDT-compatible, the inverse is too. **Subtle edge case:** undoing an insert when the character has since been deleted by someone else → no-op (it's already gone). **Yjs supports this with an UndoManager.**"
+    },
+    {
+      "question": "How does the server-side design look?",
+      "answer": "**Transport layer:** WebSocket connections per user → each op gets broadcast to all connected clients on the same document. **Persistence:** append ops to a Kafka topic or DB table. **Bootstrap:** new user loads the latest snapshot + replays ops since the snapshot. **Scaling:** shard by document ID — each doc lives on one server (all its ops go through there) + replicated for fault tolerance. **Conflict:** no conflict at the CRDT level — that's the whole point. The 'conflict' is only about transport (who gets which op in what order), and the CRDT merges correctly regardless."
+    },
+    {
+      "question": "How do you test a CRDT?",
+      "answer": "**Property-based testing.** Generate random sequences of operations, apply them in random orders to multiple simulated replicas, assert that all replicas converge to the same text. Libraries like **jqwik** or **QuickCheck** (Haskell) are designed for this. Specific tests: (1) Commutativity — apply ops A, B vs B, A → same result. (2) Idempotence — apply A twice → same as once. (3) Real scenarios — Alice and Bob type simultaneously, inject network delays. **CRDT correctness is provable** — the tests should verify the implementation matches the proof."
+    },
+    {
+      "question": "What's the memory footprint per character?",
+      "answer": "Each CharNode: `char` (2 bytes), `PositionId` reference (8) + path List (16 base + ~24 per segment) + boolean (1) + String replicaId reference (8). For a typical 50-char document with 10 deletions → ~60 CharNodes × ~100 bytes = **6KB for a 40-character visible document.** Tombstones are the memory villain. **After 1M edits**, even with a 10KB visible doc, you'd have 1M tombstones × 100 bytes = 100MB. **Garbage collection of tombstones is essential for production.**"
+    }
+  ]
+}

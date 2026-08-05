@@ -1,0 +1,194 @@
+{
+  "title": "Cricket Scorecard System",
+  "description": "Design a cricket scorecard tracker that manages innings, overs, balls, batsman strike rotation, wicket tracking, and extras. A **rules-heavy state machine** — the state hierarchy (match → innings → over → ball) is deep and each state transition has specific cricket rules governing it. Common in Indian company LLD interviews.",
+  "tags": [
+    {"type": "hard", "label": "Hard"},
+    {"type": "pattern", "label": "State Machine"},
+    {"type": "pattern", "label": "Observer Pattern"},
+    {"type": "concept", "label": "Rules Engine"},
+    {"type": "concept", "label": "Deep State Hierarchy"}
+  ],
+  "prompt": "Design a cricket scorecard system that tracks live match data: innings, overs, runs, wickets, batsman stats, bowler stats, and extras.",
+  "prompt_note": "Cricket has the most complex rule set of any LLD problem. The **state hierarchy** is nested 4 levels deep: Match → Innings → Over → Ball. Each ball delivery triggers: update batsman score, update bowler figures, track extras (wide/no-ball don't count as legal balls), rotate strike (on odd runs or end of over), check for innings end (all out / overs done / target reached). The interviewer is testing whether you can decompose these rules into clean entities without creating a God class.",
+
+  "clarifying_questions": [
+    {
+      "question": "You: \"Format — T20, ODI, or Test? That determines overs limit and innings count.\"",
+      "answer": "Interviewer: \"Support configurable format. Start with T20 (20 overs, 2 innings). The design should work for ODI (50 overs) without changes.\"",
+      "why": "Parameterize format — don't hardcode 20 overs. The state machine is the same regardless."
+    },
+    {
+      "question": "You: \"What's a delivery? What inputs do we receive per ball?\"",
+      "answer": "Interviewer: \"Per ball: runs scored, extra type (WIDE, NO_BALL, BYE, LEG_BYE, NONE), wicket (type + dismissed batsman), and whether it was a boundary (4 or 6).\"",
+      "why": "Each delivery is a rich event with multiple outcomes happening simultaneously."
+    },
+    {
+      "question": "You: \"Strike rotation rules?\"",
+      "answer": "Interviewer: \"Odd runs → swap striker/non-striker. End of over → swap. Wide/no-ball → no strike change unless runs scored off them.\"",
+      "why": "Strike rotation is the most common bug source. Model it explicitly."
+    },
+    {
+      "question": "You: \"Extras — do they count toward the bowler's figures?\"",
+      "answer": "Interviewer: \"Wide and no-ball: bowler concedes the runs + extras don't count as legal deliveries (over doesn't progress). Bye and leg-bye: legal delivery, runs go to extras not batsman, over progresses.\"",
+      "why": "Each extra type has different scoring and legality rules."
+    },
+    {
+      "question": "You: \"Do we need full batsman and bowler stats?\"",
+      "answer": "Interviewer: \"Yes. Batsman: runs, balls faced, 4s, 6s, strike rate. Bowler: overs bowled, runs conceded, wickets, economy rate, maidens.\"",
+      "why": "Two stat aggregation entities maintained in real time."
+    },
+    {
+      "question": "You: \"Winning condition?\"",
+      "answer": "Interviewer: \"Second innings: if batting team exceeds the target, they win. If all out or overs finish below target, bowling team wins. Draw/tie if scores are equal.\"",
+      "why": "Simple comparison, but needs to be checked after every ball in the second innings."
+    }
+  ],
+
+  "functional_requirements": {
+    "core": [
+      "**Match setup:** two teams, toss result (who bats first), overs limit, players per side (11).",
+      "**Ball-by-ball entry:** `recordBall(runs, extraType, wicket?, boundary?)` — the primary input.",
+      "**Over management:** 6 legal deliveries per over. Wide and no-ball don't count as legal. Auto-end over after 6 legal balls.",
+      "**Strike rotation:** swap on odd runs, swap at end of over. No swap on wide (unless runs scored).",
+      "**Wicket handling:** decrement available batsmen, update dismissed batsman stats, bring in next batsman.",
+      "**Innings end:** all out (10 wickets), overs exhausted, or target chased (2nd innings).",
+      "**Real-time stats:** batsman scorecard (runs, balls, 4s, 6s, SR), bowler scorecard (overs, maidens, runs, wickets, ER), team total, required run rate (2nd innings).",
+      "**Match result:** team 1 wins by X runs / team 2 wins by Y wickets / tie."
+    ],
+    "out_of_scope": [
+      "Field placement, DRS (review system), DLS method (rain), player substitution, powerplay rules, free hit after no-ball, detailed wagon wheel, partnership tracking."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "core": [
+      "**Correctness above all:** cricket fans will notice any rule error. Over counting, extra rules, and strike rotation must be exact.",
+      "**Ball-by-ball granularity:** every delivery is recorded. Stats are incrementally updated, not batch-computed.",
+      "**Undo support (optional):** ability to correct the last ball entry if entered incorrectly."
+    ],
+    "out_of_scope": [
+      "Persistence, real-time broadcasting, UI rendering, concurrent access (single scorer inputs data)."
+    ]
+  },
+
+  "primary_scope": [
+    "`recordBall(runs, extra, wicket?, boundary?)` → validate → update batsman → update bowler → update team score → handle extras → rotate strike → check over end → check innings end → check match end",
+    "Strike rotation: `(runs % 2 == 1) XOR (end of over)` → swap striker/non-striker",
+    "Innings end conditions: wickets == 10 || legalBalls == oversLimit * 6 || target chased",
+    "Stats computed incrementally on each ball"
+  ],
+  "termination_points": [
+    "`MatchAlreadyOverException` — recording ball after match ended",
+    "`InningsAlreadyOverException` — recording ball in finished innings",
+    "`NoBatsmanAvailableException` — wicket falls but no batsman left to come in (innings should end)",
+    "`InvalidBallException` — negative runs, invalid extra type"
+  ],
+
+  "entity_intro": "The entity hierarchy mirrors the cricket structure: **Match** contains **Innings** (2 per match). Each Innings contains **Overs** (up to 20/50). Each Over contains **Balls** (up to 6 legal + extras). **Batsman** and **Bowler** scorecards aggregate across balls.",
+  "entities": [
+    {
+      "name": "Match",
+      "role": "**Controller.** Top-level. Holds both teams, innings list, match state (IN_PROGRESS/COMPLETED), result. Delegates `recordBall` to the current innings.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — top-level orchestrator"
+    },
+    {
+      "name": "Team",
+      "role": "**Model.** teamName, `List<Player>` (11 players). Players have names and optional specialization (batsman/bowler/allrounder).",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — player roster"
+    },
+    {
+      "name": "Innings",
+      "role": "**Service.** Owns the current over, batting order (striker + non-striker + waiting list), bowler assignment, team total, wickets fallen, extras. Handles strike rotation and innings end detection.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — the big state manager"
+    },
+    {
+      "name": "Over",
+      "role": "**Model.** overNumber, bowler reference, `List<Ball>`, legalBallCount. Ends when legalBallCount reaches 6. Tracks maiden (0 runs off the bat for the entire over).",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — 6-ball container"
+    },
+    {
+      "name": "Ball",
+      "role": "**Model (immutable).** The atomic event: runs, extraType, wicket info, boundary flag, bowler, striker. One Ball per delivery.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — atomic event"
+    },
+    {
+      "name": "BatsmanScorecard",
+      "role": "**Model.** Per-batsman stats: runs, ballsFaced, fours, sixes, dismissalType. Updated on every ball faced.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — aggregated stats"
+    },
+    {
+      "name": "BowlerScorecard",
+      "role": "**Model.** Per-bowler stats: oversBowled (as decimal, e.g., 3.4), runsConceded, wickets, maidens. Updated on every ball bowled.",
+      "verdict": "yes",
+      "verdict_label": "✓ Entity — aggregated stats"
+    }
+  ],
+
+  "relationships": [
+    {"entity": "Match", "owns": "Team[2], `List<Innings>`, matchState, result", "rel": "1→2 Teams, 1→2 Innings"},
+    {"entity": "Innings", "owns": "battingTeam, bowlingTeam, `List<Over>`, currentOver, striker, nonStriker, `List<BatsmanScorecard>`, `Map<bowlerId, BowlerScorecard>`, totalRuns, totalWickets, totalExtras", "rel": "N→1 Match"},
+    {"entity": "Over", "owns": "overNumber, bowlerId, `List<Ball>`, legalBallCount, runsConceded", "rel": "N→1 Innings"},
+    {"entity": "Ball", "owns": "runs, extraType, wicket, boundary, batsmanId, bowlerId", "rel": "N→1 Over"}
+  ],
+
+  "mvc_note": "**MVC Mapping:** **Model** = Team, Player, Ball, BatsmanScorecard, BowlerScorecard, Over, ExtraType/WicketType/MatchState enums. **Service** = Innings (the complex state manager with strike rotation, over management, end detection). **Controller** = Match (public API: `recordBall`, `getScorecard`, `getResult`). The Innings class does the heavy lifting.",
+
+  "classes": [
+    {"name": "Match", "type": "class", "layer": "Controller", "fields": [{"name": "matchId", "type": "String"}, {"name": "teams", "type": "Team[2]"}, {"name": "innings", "type": "List<Innings>"}, {"name": "currentInningsIndex", "type": "int"}, {"name": "oversLimit", "type": "int"}, {"name": "matchState", "type": "MatchState"}, {"name": "result", "type": "String"}], "methods": [{"name": "recordBall(runs, extra, wicket, boundary)", "returns": "void"}, {"name": "startNextInnings()", "returns": "void"}, {"name": "getScorecard()", "returns": "MatchScorecard"}, {"name": "getResult()", "returns": "String"}]},
+    {"name": "Innings", "type": "class", "layer": "Service", "fields": [{"name": "battingTeam", "type": "Team"}, {"name": "bowlingTeam", "type": "Team"}, {"name": "overs", "type": "List<Over>"}, {"name": "currentOver", "type": "Over"}, {"name": "striker", "type": "BatsmanScorecard"}, {"name": "nonStriker", "type": "BatsmanScorecard"}, {"name": "waitingBatsmen", "type": "Queue<Player>"}, {"name": "batsmanCards", "type": "List<BatsmanScorecard>"}, {"name": "bowlerCards", "type": "Map<String, BowlerScorecard>"}, {"name": "totalRuns", "type": "int"}, {"name": "totalWickets", "type": "int"}, {"name": "totalExtras", "type": "int"}, {"name": "target", "type": "int (0 for 1st innings)"}, {"name": "isComplete", "type": "boolean"}], "methods": [{"name": "recordBall(runs, extra, wicket, boundary)", "returns": "void"}, {"name": "rotateStrike()", "returns": "void"}, {"name": "endOver()", "returns": "void"}, {"name": "handleWicket(wicket)", "returns": "void"}, {"name": "isInningsOver()", "returns": "boolean"}, {"name": "getOversSummary()", "returns": "String (e.g., 12.4)"}]},
+    {"name": "Over", "type": "class", "layer": "Model", "fields": [{"name": "overNumber", "type": "int"}, {"name": "bowlerId", "type": "String"}, {"name": "balls", "type": "List<Ball>"}, {"name": "legalBallCount", "type": "int"}, {"name": "runsConceded", "type": "int"}], "methods": [{"name": "addBall(ball)", "returns": "void"}, {"name": "isComplete()", "returns": "boolean"}, {"name": "isMaiden()", "returns": "boolean"}]},
+    {"name": "Ball", "type": "class", "layer": "Model", "fields": [{"name": "runs", "type": "int"}, {"name": "extraType", "type": "ExtraType"}, {"name": "extraRuns", "type": "int"}, {"name": "wicket", "type": "Wicket (nullable)"}, {"name": "isBoundary", "type": "boolean"}, {"name": "strikerId", "type": "String"}, {"name": "bowlerId", "type": "String"}], "methods": [{"name": "isLegalDelivery()", "returns": "boolean"}, {"name": "totalRuns()", "returns": "int"}]},
+    {"name": "BatsmanScorecard", "type": "class", "layer": "Model", "fields": [{"name": "playerId", "type": "String"}, {"name": "playerName", "type": "String"}, {"name": "runs", "type": "int"}, {"name": "ballsFaced", "type": "int"}, {"name": "fours", "type": "int"}, {"name": "sixes", "type": "int"}, {"name": "dismissalType", "type": "String (nullable)"}, {"name": "isOut", "type": "boolean"}], "methods": [{"name": "addRuns(runs, isBoundary)", "returns": "void"}, {"name": "facedBall()", "returns": "void"}, {"name": "getStrikeRate()", "returns": "double"}, {"name": "dismiss(type)", "returns": "void"}]},
+    {"name": "BowlerScorecard", "type": "class", "layer": "Model", "fields": [{"name": "playerId", "type": "String"}, {"name": "playerName", "type": "String"}, {"name": "ballsBowled", "type": "int"}, {"name": "runsConceded", "type": "int"}, {"name": "wickets", "type": "int"}, {"name": "maidens", "type": "int"}, {"name": "wides", "type": "int"}, {"name": "noBalls", "type": "int"}], "methods": [{"name": "recordDelivery(runs, isLegal, isWicket, extraType)", "returns": "void"}, {"name": "getOvers()", "returns": "String (e.g., 4.0)"}, {"name": "getEconomyRate()", "returns": "double"}]}
+  ],
+
+  "db_schema": [
+    {"table": "matches", "columns": [{"name": "match_id", "type": "UUID", "pk": true}, {"name": "team1_id", "type": "UUID", "fk": true}, {"name": "team2_id", "type": "UUID", "fk": true}, {"name": "overs_limit", "type": "INT"}, {"name": "toss_winner", "type": "UUID"}, {"name": "bat_first", "type": "UUID"}, {"name": "state", "type": "ENUM(IN_PROGRESS,COMPLETED)"}, {"name": "result", "type": "TEXT"}]},
+    {"table": "innings", "columns": [{"name": "innings_id", "type": "UUID", "pk": true}, {"name": "match_id", "type": "UUID", "fk": true, "idx": true}, {"name": "innings_number", "type": "INT"}, {"name": "batting_team_id", "type": "UUID"}, {"name": "total_runs", "type": "INT"}, {"name": "total_wickets", "type": "INT"}, {"name": "total_extras", "type": "INT"}, {"name": "overs_completed", "type": "VARCHAR"}]},
+    {"table": "balls", "columns": [{"name": "ball_id", "type": "BIGSERIAL", "pk": true}, {"name": "innings_id", "type": "UUID", "fk": true, "idx": true}, {"name": "over_number", "type": "INT"}, {"name": "ball_number", "type": "INT"}, {"name": "striker_id", "type": "UUID", "fk": true}, {"name": "bowler_id", "type": "UUID", "fk": true}, {"name": "runs", "type": "INT"}, {"name": "extra_type", "type": "ENUM(NONE,WIDE,NOBALL,BYE,LEGBYE)"}, {"name": "extra_runs", "type": "INT"}, {"name": "is_wicket", "type": "BOOLEAN"}, {"name": "wicket_type", "type": "VARCHAR"}, {"name": "dismissed_id", "type": "UUID"}, {"name": "is_boundary", "type": "BOOLEAN"}, {"name": "is_legal", "type": "BOOLEAN"}]}
+  ],
+  "schema_note": "**The `balls` table is the source of truth** — all stats can be recomputed from it. Scorecards (batsman/bowler) are materialized views updated incrementally. `(innings_id, over_number, ball_number)` gives exact ball-by-ball playback.",
+
+  "code_lang": "Java",
+  "code_sections": [
+    {
+      "label": "Model — Enums + Ball + Scorecards",
+      "code": "enum ExtraType { NONE, WIDE, NO_BALL, BYE, LEG_BYE }\nenum MatchState { NOT_STARTED, IN_PROGRESS, COMPLETED }\n\nrecord Wicket(String dismissedPlayerId, String dismissalType) {}\nrecord Player(String playerId, String name) {}\nrecord Team(String teamId, String teamName, List<Player> players) {}\n\nclass Ball {\n    final int runs;              // runs scored off bat\n    final ExtraType extraType;\n    final int extraRuns;         // extra runs (1 for wide + any additional)\n    final Wicket wicket;         // null if no wicket\n    final boolean isBoundary;\n    final String strikerId;\n    final String bowlerId;\n\n    public Ball(int runs, ExtraType extra, int extraRuns,\n                Wicket wicket, boolean boundary, String striker, String bowler) {\n        this.runs = runs; this.extraType = extra; this.extraRuns = extraRuns;\n        this.wicket = wicket; this.isBoundary = boundary;\n        this.strikerId = striker; this.bowlerId = bowler;\n    }\n\n    public boolean isLegalDelivery() {\n        return extraType != ExtraType.WIDE && extraType != ExtraType.NO_BALL;\n    }\n    public int totalRuns() { return runs + extraRuns; }\n}\n\nclass BatsmanScorecard {\n    final String playerId, playerName;\n    int runs = 0, ballsFaced = 0, fours = 0, sixes = 0;\n    String dismissalType = null;\n    boolean isOut = false;\n\n    public BatsmanScorecard(Player p) {\n        this.playerId = p.playerId(); this.playerName = p.name();\n    }\n\n    public void addRuns(int r, boolean boundary) {\n        runs += r;\n        if (boundary && r == 4) fours++;\n        if (boundary && r == 6) sixes++;\n    }\n    public void facedBall() { ballsFaced++; }\n    public void dismiss(String type) { isOut = true; dismissalType = type; }\n    public double getStrikeRate() {\n        return ballsFaced == 0 ? 0 : (runs * 100.0) / ballsFaced;\n    }\n}\n\nclass BowlerScorecard {\n    final String playerId, playerName;\n    int legalBallsBowled = 0, runsConceded = 0, wickets = 0;\n    int maidens = 0, wides = 0, noBalls = 0;\n\n    public BowlerScorecard(Player p) {\n        this.playerId = p.playerId(); this.playerName = p.name();\n    }\n\n    public void recordDelivery(int runsThisBall, boolean isLegal,\n                               boolean isWicket, ExtraType extra) {\n        runsConceded += runsThisBall;\n        if (isLegal) legalBallsBowled++;\n        if (isWicket) wickets++;\n        if (extra == ExtraType.WIDE) wides++;\n        if (extra == ExtraType.NO_BALL) noBalls++;\n    }\n\n    public void recordMaiden() { maidens++; }\n\n    public String getOvers() {\n        return (legalBallsBowled / 6) + \".\" + (legalBallsBowled % 6);\n    }\n    public double getEconomyRate() {\n        double overs = legalBallsBowled / 6.0;\n        return overs == 0 ? 0 : runsConceded / overs;\n    }\n}"
+    },
+    {
+      "label": "Service — Innings (the rules engine)",
+      "flow": "**`recordBall()` is the central method.** Steps: (1) create Ball object. (2) If WIDE/NO_BALL: add to extras, update bowler, but **don't count as legal ball** and **don't progress the over**. (3) If legal: increment batsman.facedBall(), add batsman runs, update bowler, increment over's legal count. (4) For BYE/LEG_BYE: legal delivery, runs go to extras not batsman. (5) If wicket: dismiss batsman, bring in next, check all-out. (6) Strike rotation: odd runs → swap. (7) Check over complete: if 6 legal balls → end over → swap strike → check maiden → start new over. (8) Check innings end: all out? Overs done? Target chased?",
+      "edge_cases": "Wide + wicket (stumping off a wide) → extra counted, wicket counted, not legal. No-ball + runs → batsman gets the runs, extra runs added too. Last wicket falls → innings ends (no need to bring in a new batsman). 2nd innings target chased mid-over → innings ends immediately. Bowler can't bowl consecutive overs.",
+      "code": "class Innings {\n    private final Team battingTeam;\n    private final Team bowlingTeam;\n    private final int oversLimit;\n    private final int target;           // 0 for 1st innings\n    private final List<Over> overs = new ArrayList<>();\n    private Over currentOver;\n    private BatsmanScorecard striker;\n    private BatsmanScorecard nonStriker;\n    private final Queue<Player> waitingBatsmen = new LinkedList<>();\n    private final List<BatsmanScorecard> batsmanCards = new ArrayList<>();\n    private final Map<String, BowlerScorecard> bowlerCards = new LinkedHashMap<>();\n    int totalRuns = 0, totalWickets = 0, totalExtras = 0;\n    boolean isComplete = false;\n\n    public Innings(Team batting, Team bowling, int oversLimit, int target) {\n        this.battingTeam = batting;\n        this.bowlingTeam = bowling;\n        this.oversLimit = oversLimit;\n        this.target = target;\n\n        // Initialize batting order: first two open, rest in queue\n        List<Player> players = batting.players();\n        striker = createBatsmanCard(players.get(0));\n        nonStriker = createBatsmanCard(players.get(1));\n        for (int i = 2; i < players.size(); i++) waitingBatsmen.add(players.get(i));\n    }\n\n    // ── The core method — called per delivery ──\n    public void recordBall(int runs, ExtraType extra, Wicket wicket, boolean boundary) {\n        if (isComplete)\n            throw new InningsAlreadyOverException(\"Innings is over\");\n\n        // Ensure we have a current over\n        if (currentOver == null || currentOver.isComplete()) {\n            currentOver = new Over(overs.size(), /* bowlerId provided externally */ \"\");\n            overs.add(currentOver);\n        }\n\n        Ball ball = new Ball(runs, extra, computeExtraRuns(extra),\n            wicket, boundary, striker.playerId, currentOver.bowlerId);\n        currentOver.addBall(ball);\n\n        boolean isLegal = ball.isLegalDelivery();\n        int batsmanRuns = runs;          // runs credited to batsman\n        int totalBallRuns = ball.totalRuns();\n\n        // ── Scoring rules per extra type ──\n        switch (extra) {\n            case WIDE -> {\n                totalExtras += 1 + runs;  // 1 penalty + any runs\n                totalRuns += 1 + runs;\n                getBowlerCard(currentOver.bowlerId).recordDelivery(1 + runs, false, wicket != null, extra);\n                // Batsman doesn't face the ball on a wide\n                batsmanRuns = 0;\n            }\n            case NO_BALL -> {\n                totalExtras += 1;         // 1 penalty\n                totalRuns += 1 + runs;    // penalty + any runs scored\n                striker.facedBall();       // batsman faces the ball\n                striker.addRuns(runs, boundary);\n                getBowlerCard(currentOver.bowlerId).recordDelivery(1 + runs, false, wicket != null, extra);\n            }\n            case BYE, LEG_BYE -> {\n                totalExtras += runs;      // runs go to extras, not batsman\n                totalRuns += runs;\n                striker.facedBall();       // legal delivery — batsman faced it\n                getBowlerCard(currentOver.bowlerId).recordDelivery(0, true, wicket != null, extra);\n            }\n            case NONE -> {\n                totalRuns += runs;\n                striker.facedBall();\n                striker.addRuns(runs, boundary);\n                getBowlerCard(currentOver.bowlerId).recordDelivery(runs, true, wicket != null, extra);\n            }\n        }\n\n        // ── Wicket handling ──\n        if (wicket != null) {\n            handleWicket(wicket);\n            if (isComplete) return;\n        }\n\n        // ── Strike rotation ──\n        // Odd runs off bat → swap (except on wide with no bat runs)\n        if (extra != ExtraType.WIDE && runs % 2 == 1) rotateStrike();\n\n        // ── Over end? ──\n        if (isLegal) {\n            currentOver.legalBallCount++;\n            if (currentOver.isComplete()) {\n                endOver();\n            }\n        }\n\n        // ── Innings end check ──\n        checkInningsEnd();\n    }\n\n    private void handleWicket(Wicket wicket) {\n        totalWickets++;\n        // Find and dismiss the batsman\n        BatsmanScorecard dismissed = (wicket.dismissedPlayerId().equals(striker.playerId))\n            ? striker : nonStriker;\n        dismissed.dismiss(wicket.dismissalType());\n\n        // Bring in next batsman (if available)\n        if (waitingBatsmen.isEmpty()) {\n            isComplete = true; // ALL OUT\n            return;\n        }\n        BatsmanScorecard newBatsman = createBatsmanCard(waitingBatsmen.poll());\n        if (dismissed == striker) striker = newBatsman;\n        else nonStriker = newBatsman;\n    }\n\n    private void endOver() {\n        // Maiden check: 0 runs off the bat in the entire over\n        if (currentOver.isMaiden()) {\n            getBowlerCard(currentOver.bowlerId).recordMaiden();\n        }\n        // Swap strike at end of over\n        rotateStrike();\n    }\n\n    private void rotateStrike() {\n        BatsmanScorecard temp = striker;\n        striker = nonStriker;\n        nonStriker = temp;\n    }\n\n    private void checkInningsEnd() {\n        if (isComplete) return;\n        // All out\n        if (totalWickets >= 10) { isComplete = true; return; }\n        // Overs exhausted\n        int legalBalls = overs.stream().mapToInt(o -> o.legalBallCount).sum();\n        if (legalBalls >= oversLimit * 6) { isComplete = true; return; }\n        // Target chased (2nd innings)\n        if (target > 0 && totalRuns >= target) { isComplete = true; }\n    }\n\n    private int computeExtraRuns(ExtraType extra) {\n        return (extra == ExtraType.WIDE || extra == ExtraType.NO_BALL) ? 1 : 0;\n    }\n\n    private BatsmanScorecard createBatsmanCard(Player p) {\n        BatsmanScorecard card = new BatsmanScorecard(p);\n        batsmanCards.add(card);\n        return card;\n    }\n\n    private BowlerScorecard getBowlerCard(String bowlerId) {\n        return bowlerCards.computeIfAbsent(bowlerId,\n            id -> new BowlerScorecard(bowlingTeam.players().stream()\n                .filter(p -> p.playerId().equals(id)).findFirst().orElseThrow()));\n    }\n\n    public String getOversSummary() {\n        int legal = overs.stream().mapToInt(o -> o.legalBallCount).sum();\n        return (legal / 6) + \".\" + (legal % 6);\n    }\n}\n\nclass Over {\n    final int overNumber;\n    final String bowlerId;\n    final List<Ball> balls = new ArrayList<>();\n    int legalBallCount = 0;\n\n    public Over(int overNumber, String bowlerId) {\n        this.overNumber = overNumber; this.bowlerId = bowlerId;\n    }\n\n    public void addBall(Ball b) { balls.add(b); }\n    public boolean isComplete() { return legalBallCount >= 6; }\n\n    public boolean isMaiden() {\n        if (!isComplete()) return false;\n        return balls.stream()\n            .filter(Ball::isLegalDelivery)\n            .allMatch(b -> b.runs == 0 && b.extraType == ExtraType.NONE);\n    }\n}"
+    },
+    {
+      "label": "Controller — Match (top-level orchestration)",
+      "code": "class Match {\n    private final String matchId;\n    private final Team[] teams = new Team[2];\n    private final int oversLimit;\n    private final List<Innings> inningsList = new ArrayList<>();\n    private int currentInningsIndex = -1;\n    private MatchState state = MatchState.NOT_STARTED;\n    private String result;\n\n    public Match(String matchId, Team team1, Team team2, int oversLimit, int batFirstIndex) {\n        this.matchId = matchId;\n        this.teams[0] = team1;\n        this.teams[1] = team2;\n        this.oversLimit = oversLimit;\n        // Start first innings\n        startInnings(batFirstIndex);\n        state = MatchState.IN_PROGRESS;\n    }\n\n    private void startInnings(int battingTeamIndex) {\n        int bowlingIndex = 1 - battingTeamIndex;\n        int target = (inningsList.size() == 1)\n            ? inningsList.get(0).totalRuns + 1 : 0;\n        Innings innings = new Innings(\n            teams[battingTeamIndex], teams[bowlingIndex], oversLimit, target);\n        inningsList.add(innings);\n        currentInningsIndex = inningsList.size() - 1;\n    }\n\n    public void recordBall(int runs, ExtraType extra, Wicket wicket,\n                            boolean boundary, String currentBowlerId) {\n        if (state == MatchState.COMPLETED)\n            throw new MatchAlreadyOverException(\"Match is over: \" + result);\n\n        Innings current = inningsList.get(currentInningsIndex);\n\n        // Set bowler on current over if it's a new over\n        // (In production, bowler selection is a separate action)\n        if (current.currentOver == null || current.currentOver.isComplete()) {\n            // bowlerId would be set via a separate `setBowler` method\n        }\n\n        current.recordBall(runs, extra, wicket, boundary);\n\n        if (current.isComplete) {\n            if (currentInningsIndex == 0) {\n                // First innings done — start second\n                int secondBatIndex = (teams[0] == current.battingTeam) ? 1 : 0;\n                startInnings(secondBatIndex);\n            } else {\n                // Second innings done — determine result\n                state = MatchState.COMPLETED;\n                result = computeResult();\n            }\n        }\n    }\n\n    private String computeResult() {\n        Innings first = inningsList.get(0);\n        Innings second = inningsList.get(1);\n\n        if (second.totalRuns > first.totalRuns) {\n            int wicketsRemaining = 10 - second.totalWickets;\n            return second.battingTeam.teamName() + \" won by \" + wicketsRemaining + \" wickets\";\n        } else if (first.totalRuns > second.totalRuns) {\n            int runMargin = first.totalRuns - second.totalRuns;\n            return first.battingTeam.teamName() + \" won by \" + runMargin + \" runs\";\n        } else {\n            return \"Match tied\";\n        }\n    }\n\n    public MatchState getState() { return state; }\n    public String getResult() { return result; }\n    public List<Innings> getInnings() { return Collections.unmodifiableList(inningsList); }\n}"
+    }
+  ],
+
+  "patterns": [
+    {"name": "Hierarchical State Machine → Match > Innings > Over > Ball", "why": "The state hierarchy mirrors the real cricket structure: a match contains innings, an innings contains overs, an over contains balls. Each level has its own completion rules. Ball completion is trivial (one event). Over completes after 6 legal balls. Innings completes after all out / overs done / target chased. Match completes after both innings. This **nested FSM** is the natural model — don't flatten it.", "where": "`Match.recordBall()` → `Innings.recordBall()` → updates `Over` → checks completion at each level"},
+    {"name": "Observer Pattern (extension) → Live Score Updates", "why": "Every ball is an event that could trigger UI updates, push notifications, commentary, and stat refreshes. In production, `recordBall` would fire an event that multiple listeners consume. Our simplified version computes everything synchronously.", "where": "Would add `MatchEventListener` with `onBall`, `onWicket`, `onOverEnd`, `onInningsEnd`, `onMatchEnd` callbacks"},
+    {"name": "Rules as Data", "why": "The extra-type scoring rules (WIDE = 1 penalty + not legal; BYE = legal + runs to extras) are implemented in a switch statement. For more complex rulesets (Test cricket, DLS), extract a `CricketRules` strategy that computes per-ball impacts. The Innings would call `rules.compute(ball)` and apply the returned state delta.", "where": "Currently inline in `Innings.recordBall()` switch — could be extracted"}
+  ],
+
+  "concurrency": [
+    {"issue": "Not applicable in the core design", "fix": "Cricket scoring is inherently single-threaded — one official scorer enters data ball by ball. No concurrent mutations. For a **live broadcast system** with thousands of readers, the scorecard would be published via an **event stream** (Kafka topic or WebSocket) — readers consume a projection, don't read from the mutable Innings directly."}
+  ],
+
+  "deep_dives": [
+    {"question": "How do you handle the complexity of extras and their different scoring rules?", "answer": "**Centralize in one place.** The switch statement in `recordBall()` handles all four extra types. Each type has exactly three properties: (1) is it a legal delivery? (2) who gets the runs (batsman or extras)? (3) does the bowler get charged? Encode this as a table: `WIDE={legal:false, batsmanRuns:false, bowlerCharged:true}`, `BYE={legal:true, batsmanRuns:false, bowlerCharged:false}`. The code reads the table and applies. If you add more extras (penalty runs, etc.), just add a row."},
+    {"question": "Why is strike rotation tricky?", "answer": "**Odd runs swap striker.** But: (1) Wide with no runs → no swap. (2) Wide + 1 run → swap (batsman ran). (3) End of over → swap (on top of any mid-over swaps). (4) Wicket might affect who's on strike (run-out of non-striker mid-run). Rule: swap happens independently for 'runs off bat' and 'end of over'. In code: `if (runs % 2 == 1) swap(); if (overComplete) swap();` — these compose correctly because XOR. **But on a wicket that's also the last ball of an over, the new batsman takes strike at the non-striker end.** Edge case city."},
+    {"question": "How would you implement undo (correct last ball)?", "answer": "**Memento Pattern.** Before each `recordBall`, snapshot the entire Innings state (totalRuns, totalWickets, striker/nonStriker references, bowler figures, over state). Store in a stack. On undo: pop the snapshot, restore state. **Alternative:** since balls are immutable events, maintain the ball list as the source of truth, and recompute the entire innings from scratch by replaying all balls. Slower but always correct. For T20 (max 240 balls), replay takes microseconds."},
+    {"question": "How would you support Test cricket (5-day, unlimited overs)?", "answer": "**Remove the `oversLimit` constraint.** Test innings end only on: all out, declaration (batting captain voluntarily ends), or follow-on. Add: `declare()` method on Innings. Match has 4 innings (not 2). Result: win by innings, win by runs, draw (not all innings completed in 5 days). The **state machine structure is identical** — just the completion conditions change. This is why parameterizing the format at construction time was important."},
+    {"question": "How would you add DLS (Duckworth-Lewis-Stern) for rain-affected matches?", "answer": "**Separate calculator service.** DLS takes: overs remaining, wickets lost, and uses published resource tables to compute a revised target. Add a `DLSCalculator` service injected into Match. When rain interrupts: `match.rainDelay(oversLost)` → `DLSCalculator.revisedTarget(oversRemaining, wicketsLost, firstInningsTotal)` → update `Innings.target`. **Don't embed DLS in the Innings class** — it's a separate algorithm that reads innings state. Classic Single Responsibility."},
+    {"question": "How would you generate a ball-by-ball commentary from this data?", "answer": "**Observer + Template.** Register a `CommentaryListener` on the match. On each ball event, the listener receives the Ball object + match context (score, overs, batsman). A `CommentaryTemplate` maps ball types to text: `{4 runs, boundary} → 'FOUR! Driven through covers!'`, `{wicket, bowled} → 'BOWLED! The stumps are shattered!'`. Templates can be randomized for variety. The match fires events; the commentary system consumes them. **Fully decoupled.** This is how ESPNcricinfo and Cricbuzz work internally."}
+  ]
+}
