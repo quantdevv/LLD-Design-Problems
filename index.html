@@ -283,12 +283,31 @@ async function renderCurrent() {
   renderRail();
   attachCodeButtons();
   setupTOCObserver();
+  updateClassCardLayout();
   // Scroll to top of content
   window.scrollTo({top: 0, behavior: 'instant'});
   saveStorage();
   // Update URL hash
   history.replaceState(null, '', `#p${State.current + 1}`);
   document.title = `${String(State.current+1).padStart(2,'0')} · ${p.title} — LLD Mastery`;
+}
+
+function updateClassCardLayout() {
+  document.querySelectorAll('.layer-cards').forEach(grid => {
+    const cards = Array.from(grid.children).filter(el => el.classList.contains('cd-card'));
+    if (!cards.length) return;
+    cards.forEach(card => card.style.gridColumn = '');
+    const rows = cards.reduce((acc, card) => {
+      const top = card.offsetTop;
+      (acc[top] = acc[top] || []).push(card);
+      return acc;
+    }, {});
+    const rowTops = Object.keys(rows).map(Number).sort((a, b) => a - b);
+    const lastRow = rows[rowTops[rowTops.length - 1]] || [];
+    if (lastRow.length === 1) {
+      lastRow[0].style.gridColumn = '1 / -1';
+    }
+  });
 }
 
 // ── Code copy/wrap buttons ────────────────────────────
@@ -491,12 +510,14 @@ async function boot() {
   renderRail();   // skeleton with file names
   setupKeys();
   setupProgress();
+  window.addEventListener('resize', updateClassCardLayout);
   // Render current
   await renderCurrent();
   // Background-load all problems for search/index titles
   fetchAllForIndex().then(() => {
     renderRail();
     renderMeta();
+    updateClassCardLayout();
   });
 }
 
