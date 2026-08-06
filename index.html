@@ -6,7 +6,7 @@
 <title>LLD Mastery — 26 Problems</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="css/app.css"/>
 </head>
 <body>
@@ -28,9 +28,6 @@
     <button class="tb-btn" id="themeToggle" title="Toggle theme">
       <span id="themeIcon">◐</span>
       <span class="kbd">T</span>
-    </button>
-    <button class="tb-btn" onclick="window.print()" title="Print / save PDF">
-      Print
     </button>
   </div>
 </nav>
@@ -133,6 +130,7 @@ const State = {
   current: 0,           // current problem index
   studied: new Set(),   // ids of studied problems
   loaded: new Set(),    // indices loaded
+  openGroup: null,      // left rail group open state
   cmdkActive: 0,        // active result idx
   cmdkResults: [],      // current result list
 };
@@ -193,12 +191,16 @@ function renderRail() {
   const el = document.getElementById('railContent');
   let html = '';
   let currentGroup = '';
+  const activeGroup = MANIFEST[State.current]?.group;
+  const openGroup = State.openGroup || activeGroup;
   MANIFEST.forEach((m, i) => {
     if (m.group !== currentGroup) {
       if (currentGroup) html += '</div></div>';
       currentGroup = m.group;
-      html += `<div class="rail-group">`;
-      html += `<div class="rail-group-head" onclick="App.toggleGroup(this)">${LLDRender.esc(m.group)}<span class="chev">▾</span></div>`;
+      const isCollapsed = m.group !== openGroup;
+      const collapsed = isCollapsed ? ' collapsed' : '';
+      html += `<div class="rail-group${collapsed}">`;
+      html += `<div class="rail-group-head" data-group="${LLDRender.esc(m.group)}" onclick="App.toggleGroup(this)">${LLDRender.esc(m.group)}<span class="chev">▾</span></div>`;
       html += `<div class="rail-items">`;
     }
     const p = State.problems[i];
@@ -216,7 +218,11 @@ function renderRail() {
 }
 
 function toggleGroup(headEl) {
-  headEl.parentElement.classList.toggle('collapsed');
+  const group = headEl.dataset.group;
+  if (!group) return;
+  State.openGroup = group;
+  saveStorage();
+  renderRail();
 }
 
 // ── Right rail TOC ────────────────────────────────────
@@ -409,6 +415,7 @@ function cmdKPick(idx) {
 function go(i) {
   if (i < 0 || i >= MANIFEST.length) return;
   State.current = i;
+  State.openGroup = MANIFEST[i]?.group;
   renderCurrent();
 }
 function next() { go(State.current + 1); }
