@@ -2,14 +2,25 @@
   "title": "Elevator Control System",
   "description": "Design an elevator system for a building with multiple elevators. Handle hall calls, destination selection, dispatch algorithm, and concurrent request handling. Classic simulation + state machine problem.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "State Machine"},
-    {"type": "pattern", "label": "SCAN Algorithm"},
-    {"type": "concept", "label": "Simulation"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "State Machine"
+    },
+    {
+      "type": "pattern",
+      "label": "SCAN Algorithm"
+    },
+    {
+      "type": "concept",
+      "label": "Simulation"
+    }
   ],
   "prompt": "Design an elevator control system for a building. The system should handle multiple elevators, floor requests, and move elevators efficiently to service requests.",
   "prompt_note": "This is a simulation problem. The critical first question is whether we're building a discrete-time simulation (with `step()`/`tick()`) or real hardware control software. 9 out of 10 interviews want the simulation — it's deterministic, testable, and lets us focus on object modeling + scheduling.",
-
   "clarifying_questions": [
     {
       "question": "You: \"How many elevators and floors? Configurable or fixed?\"",
@@ -42,7 +53,6 @@
       "why": "Clear error semantics upfront."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "System manages 3 elevators serving 10 floors (0–9), discrete time steps via `step()`.",
@@ -56,7 +66,6 @@
       "Weight capacity, door open/close mechanics, emergency stop, dynamic floor/elevator config, UI/rendering."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Thread-safe:** concurrent `addRequest()` + `step()` must not corrupt elevator state.",
@@ -67,7 +76,6 @@
       "Real-time hardware integration, persistence, distributed deployment."
     ]
   },
-
   "primary_scope": [
     "Hall call → dispatch best elevator via cost heuristic → add to stops",
     "`step()` → move one floor → check for direction-aware stops → handle reversal/idle",
@@ -80,7 +88,6 @@
     "Request for current floor → no-op (already served)",
     "Elevator at floor 0 going DOWN or floor 9 going UP → must reverse (boundary guard)"
   ],
-
   "entity_intro": "Scan requirements for nouns with behavior or state. For simulation problems, there's always a **controller that owns `step()`** to advance time for all actors.",
   "entities": [
     {
@@ -108,70 +115,152 @@
       "verdict_label": "✗ Just an int — not an entity"
     }
   ],
-
   "relationships": [
-    {"entity": "ElevatorController", "owns": "`List<Elevator>`, numFloors", "rel": "1 → N Elevators"},
-    {"entity": "Elevator", "owns": "currentFloor, Direction, `Set<Request>`", "rel": "1 → N Requests (active stops)"},
-    {"entity": "Request", "owns": "floor (int), type (RequestType)", "rel": "Value object — identity = (floor, type)"}
+    {
+      "entity": "ElevatorController",
+      "owns": "`List<Elevator>`, numFloors",
+      "rel": "1 → N Elevators"
+    },
+    {
+      "entity": "Elevator",
+      "owns": "currentFloor, Direction, `Set<Request>`",
+      "rel": "1 → N Requests (active stops)"
+    },
+    {
+      "entity": "Request",
+      "owns": "floor (int), type (RequestType)",
+      "rel": "Value object — identity = (floor, type)"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Request record, Direction enum, RequestType enum. **Service** = Elevator (owns movement logic, SCAN, stop decisions). **Controller** = ElevatorController (dispatch, step orchestration, public API).",
-
   "classes": [
     {
-      "name": "ElevatorController", "type": "class", "layer": "Controller",
+      "name": "ElevatorController",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "elevators", "type": "List<Elevator>"},
-        {"name": "numFloors", "type": "int"}
+        {
+          "name": "elevators",
+          "type": "List<Elevator>"
+        },
+        {
+          "name": "numFloors",
+          "type": "int"
+        }
       ],
       "methods": [
-        {"name": "requestElevator(floor, type)", "returns": "boolean"},
-        {"name": "selectFloor(elevatorId, floor)", "returns": "boolean"},
-        {"name": "step()", "returns": "void"}
+        {
+          "name": "requestElevator(floor, type)",
+          "returns": "boolean"
+        },
+        {
+          "name": "selectFloor(elevatorId, floor)",
+          "returns": "boolean"
+        },
+        {
+          "name": "step()",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "Elevator", "type": "class", "layer": "Service",
+      "name": "Elevator",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "id", "type": "int"},
-        {"name": "currentFloor", "type": "int"},
-        {"name": "direction", "type": "Direction"},
-        {"name": "requests", "type": "Set<Request>"}
+        {
+          "name": "id",
+          "type": "int"
+        },
+        {
+          "name": "currentFloor",
+          "type": "int"
+        },
+        {
+          "name": "direction",
+          "type": "Direction"
+        },
+        {
+          "name": "requests",
+          "type": "Set<Request>"
+        }
       ],
       "methods": [
-        {"name": "addRequest(floor, type)", "returns": "void"},
-        {"name": "step()", "returns": "void"},
-        {"name": "getCost(floor, type)", "returns": "int"},
-        {"name": "isIdle()", "returns": "boolean"}
+        {
+          "name": "addRequest(floor, type)",
+          "returns": "void"
+        },
+        {
+          "name": "step()",
+          "returns": "void"
+        },
+        {
+          "name": "getCost(floor, type)",
+          "returns": "int"
+        },
+        {
+          "name": "isIdle()",
+          "returns": "boolean"
+        }
       ]
     },
     {
-      "name": "Request", "type": "class", "layer": "Model",
+      "name": "Request",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "floor", "type": "int"},
-        {"name": "type", "type": "RequestType"}
+        {
+          "name": "floor",
+          "type": "int"
+        },
+        {
+          "name": "type",
+          "type": "RequestType"
+        }
       ],
       "methods": [
-        {"name": "equals/hashCode", "returns": "based on (floor, type)"}
+        {
+          "name": "equals/hashCode",
+          "returns": "based on (floor, type)"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "elevator_events (audit log)",
       "columns": [
-        {"name": "event_id", "type": "BIGSERIAL", "pk": true},
-        {"name": "elevator_id", "type": "INT", "idx": true},
-        {"name": "event_type", "type": "ENUM(HALL_CALL, DEST, STOP, IDLE)"},
-        {"name": "floor", "type": "INT"},
-        {"name": "direction", "type": "ENUM(UP,DOWN,IDLE)"},
-        {"name": "timestamp", "type": "TIMESTAMP", "idx": true}
+        {
+          "name": "event_id",
+          "type": "BIGSERIAL",
+          "pk": true
+        },
+        {
+          "name": "elevator_id",
+          "type": "INT",
+          "idx": true
+        },
+        {
+          "name": "event_type",
+          "type": "ENUM(HALL_CALL, DEST, STOP, IDLE)"
+        },
+        {
+          "name": "floor",
+          "type": "INT"
+        },
+        {
+          "name": "direction",
+          "type": "ENUM(UP,DOWN,IDLE)"
+        },
+        {
+          "name": "timestamp",
+          "type": "TIMESTAMP",
+          "idx": true
+        }
       ]
     }
   ],
   "schema_note": "Elevator systems are **stateful in-memory** — no DB needed for runtime. This audit log is optional for analytics (avg wait time per floor, peak hour dispatch counts).",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -191,7 +280,6 @@
       "code": "class ElevatorController {\n    private final List<Elevator> elevators;\n    private final int numFloors;\n\n    public ElevatorController(int numElevators, int numFloors) {\n        this.numFloors = numFloors;\n        this.elevators = new ArrayList<>();\n        for (int i = 0; i < numElevators; i++)\n            elevators.add(new Elevator(i));\n    }\n\n    // ── requestElevator (hall call) ─────────\n    public boolean requestElevator(int floor, RequestType type) {\n        if (floor < 0 || floor >= numFloors) return false;\n        if (type == RequestType.DESTINATION) return false; // must use selectFloor\n\n        Elevator best = elevators.stream()\n            .min(Comparator.comparingInt(e -> e.getCost(floor, type)))\n            .orElseThrow();\n        best.addRequest(floor, type);\n        return true;\n    }\n\n    // ── selectFloor (destination button inside) ──\n    public boolean selectFloor(int elevatorId, int floor) {\n        if (floor < 0 || floor >= numFloors) return false;\n        if (elevatorId < 0 || elevatorId >= elevators.size()) return false;\n\n        Elevator e = elevators.get(elevatorId);\n        if (e.getCurrentFloor() == floor) return true; // no-op\n        e.addRequest(floor, RequestType.DESTINATION);\n        return true;\n    }\n\n    // ── step (advance all elevators one tick) ──\n    public void step() {\n        elevators.forEach(Elevator::step);\n    }\n\n    public List<Elevator> getElevators() {\n        return Collections.unmodifiableList(elevators);\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "State Machine → Elevator Direction",
@@ -204,7 +292,6 @@
       "where": "`Elevator.step()` — the `hasAhead`/`hasBehind` logic"
     }
   ],
-
   "concurrency": [
     {
       "issue": "addRequest() vs step() race",
@@ -219,7 +306,6 @@
       "fix": "The controller should guarantee `step()` is called from a single thread (e.g., a `ScheduledExecutorService` with pool size 1). Each `Elevator.step()` is `synchronized`, so they don't interfere with each other even if called concurrently."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why use a Request class instead of just Set<Integer> for floors?",
@@ -245,5 +331,9 @@
       "question": "How do you test this design?",
       "answer": "Simulation model is **deterministic** — same request sequence + same step calls → same behavior. Write unit tests: (1) Single elevator, single request → verify floor-by-floor movement. (2) Two requests in opposite directions → verify SCAN reversal. (3) Direction-aware: add PICKUP_DOWN while going UP → verify it's not served until reversal. (4) `getCost()` for dispatch accuracy."
     }
+  ],
+  "companies": [
+    "Google",
+    "Microsoft"
   ]
 }

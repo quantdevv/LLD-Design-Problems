@@ -2,15 +2,29 @@
   "title": "LRU Cache (Least Recently Used)",
   "description": "Implement a thread-safe LRU cache with O(1) get and put operations. The canonical data structure problem that combines a **doubly-linked list** with a **hash map**. Appears in every LLD interview list because it tests data structure design, not just application modeling.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Proxy Pattern"},
-    {"type": "concept", "label": "Data Structure Design"},
-    {"type": "concept", "label": "O(1) Operations"},
-    {"type": "concept", "label": "Concurrency"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Proxy Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Data Structure Design"
+    },
+    {
+      "type": "concept",
+      "label": "O(1) Operations"
+    },
+    {
+      "type": "concept",
+      "label": "Concurrency"
+    }
   ],
   "prompt": "Implement a thread-safe Least Recently Used (LRU) cache with O(1) get and put operations and a fixed capacity.",
   "prompt_note": "LRU Cache is a **data structure design** problem, not an application LLD. The interviewer wants to see that you know why HashMap alone isn't enough (can't track order), why LinkedList alone isn't enough (O(N) lookup), and why the combination works (O(1) everything). The thread-safety layer is the LLD veneer on top of the data structure. Get the invariants right before writing a single line of code.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Fixed capacity that's set at construction time?\"",
@@ -43,7 +57,6 @@
       "why": "Real cache libraries (Caffeine, Guava) have eviction listeners. Acknowledge without implementing."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**`get(key)`** — return the value if present, else null. Promotes the entry to most-recently-used.",
@@ -56,7 +69,6 @@
       "TTL-based expiry, size-based eviction (by memory bytes), distributed cache, persistence, eviction listeners, statistics (hit rate), lock-free implementation."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**O(1) for get and put** — no list scans, no sorting.",
@@ -67,7 +79,6 @@
       "Lock-free concurrency, microbenchmarks, off-heap storage."
     ]
   },
-
   "primary_scope": [
     "`get(key)`: HashMap lookup → if found, move node to front of list → return value",
     "`put(key, value)`: HashMap lookup → if exists, update + move to front → else create node, add to front, insert into map → if over capacity, remove tail + remove from map",
@@ -78,7 +89,6 @@
     "Missing key in `get` → returns null (or -1 per convention) — not an exception",
     "Null key or null value in `put` → `NullPointerException` (or configurable)"
   ],
-
   "entity_intro": "This is a **one-class problem.** The interesting design is internal: a HashMap provides O(1) lookups, a doubly-linked list provides O(1) reorder + eviction. The Node class is a private inner class — not a separate entity. Don't overthink this.",
   "entities": [
     {
@@ -100,45 +110,91 @@
       "verdict_label": "? Extract only if multiple cache types are needed"
     }
   ],
-
   "relationships": [
-    {"entity": "LRUCache", "owns": "`HashMap<K, Node<K,V>>`, dummy head Node, dummy tail Node, capacity, `ReentrantLock`", "rel": "1 → N Nodes (bounded by capacity)"},
-    {"entity": "Node", "owns": "key, value, prev ref, next ref", "rel": "Doubly-linked: prev/next ↔ Nodes, referenced by 1 HashMap entry"}
+    {
+      "entity": "LRUCache",
+      "owns": "`HashMap<K, Node<K,V>>`, dummy head Node, dummy tail Node, capacity, `ReentrantLock`",
+      "rel": "1 → N Nodes (bounded by capacity)"
+    },
+    {
+      "entity": "Node",
+      "owns": "key, value, prev ref, next ref",
+      "rel": "Doubly-linked: prev/next ↔ Nodes, referenced by 1 HashMap entry"
+    }
   ],
-
   "mvc_note": "**MVC doesn't apply** — this is a data structure, not an application. The single class encapsulates all state and behavior. The **design principle at play is information hiding**: callers see `get`/`put`; they don't see the HashMap or linked list. The internal data structure is a pure implementation detail.",
-
   "classes": [
     {
-      "name": "LRUCache<K, V>", "type": "class", "layer": "Model",
+      "name": "LRUCache<K, V>",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "capacity", "type": "int"},
-        {"name": "map", "type": "HashMap<K, Node<K,V>>"},
-        {"name": "head", "type": "Node (dummy sentinel)"},
-        {"name": "tail", "type": "Node (dummy sentinel)"},
-        {"name": "lock", "type": "ReentrantLock"}
+        {
+          "name": "capacity",
+          "type": "int"
+        },
+        {
+          "name": "map",
+          "type": "HashMap<K, Node<K,V>>"
+        },
+        {
+          "name": "head",
+          "type": "Node (dummy sentinel)"
+        },
+        {
+          "name": "tail",
+          "type": "Node (dummy sentinel)"
+        },
+        {
+          "name": "lock",
+          "type": "ReentrantLock"
+        }
       ],
       "methods": [
-        {"name": "get(key)", "returns": "V"},
-        {"name": "put(key, value)", "returns": "void"},
-        {"name": "size()", "returns": "int"},
-        {"name": "containsKey(key)", "returns": "boolean"}
+        {
+          "name": "get(key)",
+          "returns": "V"
+        },
+        {
+          "name": "put(key, value)",
+          "returns": "void"
+        },
+        {
+          "name": "size()",
+          "returns": "int"
+        },
+        {
+          "name": "containsKey(key)",
+          "returns": "boolean"
+        }
       ]
     },
     {
-      "name": "Node<K, V> (private inner)", "type": "class", "layer": "Model",
+      "name": "Node<K, V> (private inner)",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "key", "type": "K"},
-        {"name": "value", "type": "V"},
-        {"name": "prev", "type": "Node"},
-        {"name": "next", "type": "Node"}
+        {
+          "name": "key",
+          "type": "K"
+        },
+        {
+          "name": "value",
+          "type": "V"
+        },
+        {
+          "name": "prev",
+          "type": "Node"
+        },
+        {
+          "name": "next",
+          "type": "Node"
+        }
       ],
       "methods": []
     }
   ],
-
   "db_schema": [],
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -157,7 +213,6 @@
       "code": "import java.util.LinkedHashMap;\nimport java.util.Map;\n\n// One-liner LRU cache — not thread-safe as written\nclass LinkedHashMapLRU<K, V> extends LinkedHashMap<K, V> {\n    private final int capacity;\n\n    public LinkedHashMapLRU(int capacity) {\n        // initial capacity, load factor, accessOrder=true → LRU behavior\n        super(capacity, 0.75f, true);\n        this.capacity = capacity;\n    }\n\n    @Override\n    protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {\n        return size() > capacity;\n    }\n}\n\n// To make it thread-safe:\n// Map<K, V> cache = Collections.synchronizedMap(new LinkedHashMapLRU<>(100));\n// (But this blocks on every access; the from-scratch version is more informative.)"
     }
   ],
-
   "patterns": [
     {
       "name": "Composite Data Structure — HashMap + Doubly-Linked List",
@@ -175,7 +230,6 @@
       "where": "`lock.lock()` / `lock.unlock()` around every operation"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two threads calling get/put concurrently → linked list corruption",
@@ -194,7 +248,6 @@
       "fix": "This implementation doesn't expose iteration. If you add `iterator()`, snapshot the list under the lock and return an unmodifiable copy. Never return the live linked list — external iteration breaks LRU semantics (every traversal would touch every entry)."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why store the key in the Node instead of just the value?",
@@ -228,5 +281,9 @@
       "question": "How would you test this?",
       "answer": "**Unit tests:** (1) Basic get/put. (2) Eviction order — fill beyond capacity, verify LRU is evicted. (3) Update in place — put on existing key, verify size unchanged and value updated. (4) Access promotes — get then put to capacity+1, verify get'd entry is retained. (5) Capacity 1 edge case. **Concurrency tests:** (6) Spawn N threads doing random get/puts on a shared key space, assert `size() <= capacity` throughout. (7) Use `CountDownLatch` to start all threads simultaneously for maximum contention. (8) Verify no `NullPointerException` from linked list corruption."
     }
+  ],
+  "companies": [
+    "Google",
+    "Amazon"
   ]
 }

@@ -2,15 +2,29 @@
   "title": "Cricket Scorecard System",
   "description": "Design a cricket scorecard tracker that manages innings, overs, balls, batsman strike rotation, wicket tracking, and extras. A **rules-heavy state machine** — the state hierarchy (match → innings → over → ball) is deep and each state transition has specific cricket rules governing it. Common in Indian company LLD interviews.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "State Machine"},
-    {"type": "pattern", "label": "Observer Pattern"},
-    {"type": "concept", "label": "Rules Engine"},
-    {"type": "concept", "label": "Deep State Hierarchy"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "State Machine"
+    },
+    {
+      "type": "pattern",
+      "label": "Observer Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Rules Engine"
+    },
+    {
+      "type": "concept",
+      "label": "Deep State Hierarchy"
+    }
   ],
   "prompt": "Design a cricket scorecard system that tracks live match data: innings, overs, runs, wickets, batsman stats, bowler stats, and extras.",
   "prompt_note": "Cricket has the most complex rule set of any LLD problem. The **state hierarchy** is nested 4 levels deep: Match → Innings → Over → Ball. Each ball delivery triggers: update batsman score, update bowler figures, track extras (wide/no-ball don't count as legal balls), rotate strike (on odd runs or end of over), check for innings end (all out / overs done / target reached). The interviewer is testing whether you can decompose these rules into clean entities without creating a God class.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Format — T20, ODI, or Test? That determines overs limit and innings count.\"",
@@ -43,7 +57,6 @@
       "why": "Simple comparison, but needs to be checked after every ball in the second innings."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**Match setup:** two teams, toss result (who bats first), overs limit, players per side (11).",
@@ -59,7 +72,6 @@
       "Field placement, DRS (review system), DLS method (rain), player substitution, powerplay rules, free hit after no-ball, detailed wagon wheel, partnership tracking."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Correctness above all:** cricket fans will notice any rule error. Over counting, extra rules, and strike rotation must be exact.",
@@ -70,7 +82,6 @@
       "Persistence, real-time broadcasting, UI rendering, concurrent access (single scorer inputs data)."
     ]
   },
-
   "primary_scope": [
     "`recordBall(runs, extra, wicket?, boundary?)` → validate → update batsman → update bowler → update team score → handle extras → rotate strike → check over end → check innings end → check match end",
     "Strike rotation: `(runs % 2 == 1) XOR (end of over)` → swap striker/non-striker",
@@ -83,7 +94,6 @@
     "`NoBatsmanAvailableException` — wicket falls but no batsman left to come in (innings should end)",
     "`InvalidBallException` — negative runs, invalid extra type"
   ],
-
   "entity_intro": "The entity hierarchy mirrors the cricket structure: **Match** contains **Innings** (2 per match). Each Innings contains **Overs** (up to 20/50). Each Over contains **Balls** (up to 6 legal + extras). **Batsman** and **Bowler** scorecards aggregate across balls.",
   "entities": [
     {
@@ -129,32 +139,518 @@
       "verdict_label": "✓ Entity — aggregated stats"
     }
   ],
-
   "relationships": [
-    {"entity": "Match", "owns": "Team[2], `List<Innings>`, matchState, result", "rel": "1→2 Teams, 1→2 Innings"},
-    {"entity": "Innings", "owns": "battingTeam, bowlingTeam, `List<Over>`, currentOver, striker, nonStriker, `List<BatsmanScorecard>`, `Map<bowlerId, BowlerScorecard>`, totalRuns, totalWickets, totalExtras", "rel": "N→1 Match"},
-    {"entity": "Over", "owns": "overNumber, bowlerId, `List<Ball>`, legalBallCount, runsConceded", "rel": "N→1 Innings"},
-    {"entity": "Ball", "owns": "runs, extraType, wicket, boundary, batsmanId, bowlerId", "rel": "N→1 Over"}
+    {
+      "entity": "Match",
+      "owns": "Team[2], `List<Innings>`, matchState, result",
+      "rel": "1→2 Teams, 1→2 Innings"
+    },
+    {
+      "entity": "Innings",
+      "owns": "battingTeam, bowlingTeam, `List<Over>`, currentOver, striker, nonStriker, `List<BatsmanScorecard>`, `Map<bowlerId, BowlerScorecard>`, totalRuns, totalWickets, totalExtras",
+      "rel": "N→1 Match"
+    },
+    {
+      "entity": "Over",
+      "owns": "overNumber, bowlerId, `List<Ball>`, legalBallCount, runsConceded",
+      "rel": "N→1 Innings"
+    },
+    {
+      "entity": "Ball",
+      "owns": "runs, extraType, wicket, boundary, batsmanId, bowlerId",
+      "rel": "N→1 Over"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Team, Player, Ball, BatsmanScorecard, BowlerScorecard, Over, ExtraType/WicketType/MatchState enums. **Service** = Innings (the complex state manager with strike rotation, over management, end detection). **Controller** = Match (public API: `recordBall`, `getScorecard`, `getResult`). The Innings class does the heavy lifting.",
-
   "classes": [
-    {"name": "Match", "type": "class", "layer": "Controller", "fields": [{"name": "matchId", "type": "String"}, {"name": "teams", "type": "Team[2]"}, {"name": "innings", "type": "List<Innings>"}, {"name": "currentInningsIndex", "type": "int"}, {"name": "oversLimit", "type": "int"}, {"name": "matchState", "type": "MatchState"}, {"name": "result", "type": "String"}], "methods": [{"name": "recordBall(runs, extra, wicket, boundary)", "returns": "void"}, {"name": "startNextInnings()", "returns": "void"}, {"name": "getScorecard()", "returns": "MatchScorecard"}, {"name": "getResult()", "returns": "String"}]},
-    {"name": "Innings", "type": "class", "layer": "Service", "fields": [{"name": "battingTeam", "type": "Team"}, {"name": "bowlingTeam", "type": "Team"}, {"name": "overs", "type": "List<Over>"}, {"name": "currentOver", "type": "Over"}, {"name": "striker", "type": "BatsmanScorecard"}, {"name": "nonStriker", "type": "BatsmanScorecard"}, {"name": "waitingBatsmen", "type": "Queue<Player>"}, {"name": "batsmanCards", "type": "List<BatsmanScorecard>"}, {"name": "bowlerCards", "type": "Map<String, BowlerScorecard>"}, {"name": "totalRuns", "type": "int"}, {"name": "totalWickets", "type": "int"}, {"name": "totalExtras", "type": "int"}, {"name": "target", "type": "int (0 for 1st innings)"}, {"name": "isComplete", "type": "boolean"}], "methods": [{"name": "recordBall(runs, extra, wicket, boundary)", "returns": "void"}, {"name": "rotateStrike()", "returns": "void"}, {"name": "endOver()", "returns": "void"}, {"name": "handleWicket(wicket)", "returns": "void"}, {"name": "isInningsOver()", "returns": "boolean"}, {"name": "getOversSummary()", "returns": "String (e.g., 12.4)"}]},
-    {"name": "Over", "type": "class", "layer": "Model", "fields": [{"name": "overNumber", "type": "int"}, {"name": "bowlerId", "type": "String"}, {"name": "balls", "type": "List<Ball>"}, {"name": "legalBallCount", "type": "int"}, {"name": "runsConceded", "type": "int"}], "methods": [{"name": "addBall(ball)", "returns": "void"}, {"name": "isComplete()", "returns": "boolean"}, {"name": "isMaiden()", "returns": "boolean"}]},
-    {"name": "Ball", "type": "class", "layer": "Model", "fields": [{"name": "runs", "type": "int"}, {"name": "extraType", "type": "ExtraType"}, {"name": "extraRuns", "type": "int"}, {"name": "wicket", "type": "Wicket (nullable)"}, {"name": "isBoundary", "type": "boolean"}, {"name": "strikerId", "type": "String"}, {"name": "bowlerId", "type": "String"}], "methods": [{"name": "isLegalDelivery()", "returns": "boolean"}, {"name": "totalRuns()", "returns": "int"}]},
-    {"name": "BatsmanScorecard", "type": "class", "layer": "Model", "fields": [{"name": "playerId", "type": "String"}, {"name": "playerName", "type": "String"}, {"name": "runs", "type": "int"}, {"name": "ballsFaced", "type": "int"}, {"name": "fours", "type": "int"}, {"name": "sixes", "type": "int"}, {"name": "dismissalType", "type": "String (nullable)"}, {"name": "isOut", "type": "boolean"}], "methods": [{"name": "addRuns(runs, isBoundary)", "returns": "void"}, {"name": "facedBall()", "returns": "void"}, {"name": "getStrikeRate()", "returns": "double"}, {"name": "dismiss(type)", "returns": "void"}]},
-    {"name": "BowlerScorecard", "type": "class", "layer": "Model", "fields": [{"name": "playerId", "type": "String"}, {"name": "playerName", "type": "String"}, {"name": "ballsBowled", "type": "int"}, {"name": "runsConceded", "type": "int"}, {"name": "wickets", "type": "int"}, {"name": "maidens", "type": "int"}, {"name": "wides", "type": "int"}, {"name": "noBalls", "type": "int"}], "methods": [{"name": "recordDelivery(runs, isLegal, isWicket, extraType)", "returns": "void"}, {"name": "getOvers()", "returns": "String (e.g., 4.0)"}, {"name": "getEconomyRate()", "returns": "double"}]}
+    {
+      "name": "Match",
+      "type": "class",
+      "layer": "Controller",
+      "fields": [
+        {
+          "name": "matchId",
+          "type": "String"
+        },
+        {
+          "name": "teams",
+          "type": "Team[2]"
+        },
+        {
+          "name": "innings",
+          "type": "List<Innings>"
+        },
+        {
+          "name": "currentInningsIndex",
+          "type": "int"
+        },
+        {
+          "name": "oversLimit",
+          "type": "int"
+        },
+        {
+          "name": "matchState",
+          "type": "MatchState"
+        },
+        {
+          "name": "result",
+          "type": "String"
+        }
+      ],
+      "methods": [
+        {
+          "name": "recordBall(runs, extra, wicket, boundary)",
+          "returns": "void"
+        },
+        {
+          "name": "startNextInnings()",
+          "returns": "void"
+        },
+        {
+          "name": "getScorecard()",
+          "returns": "MatchScorecard"
+        },
+        {
+          "name": "getResult()",
+          "returns": "String"
+        }
+      ]
+    },
+    {
+      "name": "Innings",
+      "type": "class",
+      "layer": "Service",
+      "fields": [
+        {
+          "name": "battingTeam",
+          "type": "Team"
+        },
+        {
+          "name": "bowlingTeam",
+          "type": "Team"
+        },
+        {
+          "name": "overs",
+          "type": "List<Over>"
+        },
+        {
+          "name": "currentOver",
+          "type": "Over"
+        },
+        {
+          "name": "striker",
+          "type": "BatsmanScorecard"
+        },
+        {
+          "name": "nonStriker",
+          "type": "BatsmanScorecard"
+        },
+        {
+          "name": "waitingBatsmen",
+          "type": "Queue<Player>"
+        },
+        {
+          "name": "batsmanCards",
+          "type": "List<BatsmanScorecard>"
+        },
+        {
+          "name": "bowlerCards",
+          "type": "Map<String, BowlerScorecard>"
+        },
+        {
+          "name": "totalRuns",
+          "type": "int"
+        },
+        {
+          "name": "totalWickets",
+          "type": "int"
+        },
+        {
+          "name": "totalExtras",
+          "type": "int"
+        },
+        {
+          "name": "target",
+          "type": "int (0 for 1st innings)"
+        },
+        {
+          "name": "isComplete",
+          "type": "boolean"
+        }
+      ],
+      "methods": [
+        {
+          "name": "recordBall(runs, extra, wicket, boundary)",
+          "returns": "void"
+        },
+        {
+          "name": "rotateStrike()",
+          "returns": "void"
+        },
+        {
+          "name": "endOver()",
+          "returns": "void"
+        },
+        {
+          "name": "handleWicket(wicket)",
+          "returns": "void"
+        },
+        {
+          "name": "isInningsOver()",
+          "returns": "boolean"
+        },
+        {
+          "name": "getOversSummary()",
+          "returns": "String (e.g., 12.4)"
+        }
+      ]
+    },
+    {
+      "name": "Over",
+      "type": "class",
+      "layer": "Model",
+      "fields": [
+        {
+          "name": "overNumber",
+          "type": "int"
+        },
+        {
+          "name": "bowlerId",
+          "type": "String"
+        },
+        {
+          "name": "balls",
+          "type": "List<Ball>"
+        },
+        {
+          "name": "legalBallCount",
+          "type": "int"
+        },
+        {
+          "name": "runsConceded",
+          "type": "int"
+        }
+      ],
+      "methods": [
+        {
+          "name": "addBall(ball)",
+          "returns": "void"
+        },
+        {
+          "name": "isComplete()",
+          "returns": "boolean"
+        },
+        {
+          "name": "isMaiden()",
+          "returns": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "Ball",
+      "type": "class",
+      "layer": "Model",
+      "fields": [
+        {
+          "name": "runs",
+          "type": "int"
+        },
+        {
+          "name": "extraType",
+          "type": "ExtraType"
+        },
+        {
+          "name": "extraRuns",
+          "type": "int"
+        },
+        {
+          "name": "wicket",
+          "type": "Wicket (nullable)"
+        },
+        {
+          "name": "isBoundary",
+          "type": "boolean"
+        },
+        {
+          "name": "strikerId",
+          "type": "String"
+        },
+        {
+          "name": "bowlerId",
+          "type": "String"
+        }
+      ],
+      "methods": [
+        {
+          "name": "isLegalDelivery()",
+          "returns": "boolean"
+        },
+        {
+          "name": "totalRuns()",
+          "returns": "int"
+        }
+      ]
+    },
+    {
+      "name": "BatsmanScorecard",
+      "type": "class",
+      "layer": "Model",
+      "fields": [
+        {
+          "name": "playerId",
+          "type": "String"
+        },
+        {
+          "name": "playerName",
+          "type": "String"
+        },
+        {
+          "name": "runs",
+          "type": "int"
+        },
+        {
+          "name": "ballsFaced",
+          "type": "int"
+        },
+        {
+          "name": "fours",
+          "type": "int"
+        },
+        {
+          "name": "sixes",
+          "type": "int"
+        },
+        {
+          "name": "dismissalType",
+          "type": "String (nullable)"
+        },
+        {
+          "name": "isOut",
+          "type": "boolean"
+        }
+      ],
+      "methods": [
+        {
+          "name": "addRuns(runs, isBoundary)",
+          "returns": "void"
+        },
+        {
+          "name": "facedBall()",
+          "returns": "void"
+        },
+        {
+          "name": "getStrikeRate()",
+          "returns": "double"
+        },
+        {
+          "name": "dismiss(type)",
+          "returns": "void"
+        }
+      ]
+    },
+    {
+      "name": "BowlerScorecard",
+      "type": "class",
+      "layer": "Model",
+      "fields": [
+        {
+          "name": "playerId",
+          "type": "String"
+        },
+        {
+          "name": "playerName",
+          "type": "String"
+        },
+        {
+          "name": "ballsBowled",
+          "type": "int"
+        },
+        {
+          "name": "runsConceded",
+          "type": "int"
+        },
+        {
+          "name": "wickets",
+          "type": "int"
+        },
+        {
+          "name": "maidens",
+          "type": "int"
+        },
+        {
+          "name": "wides",
+          "type": "int"
+        },
+        {
+          "name": "noBalls",
+          "type": "int"
+        }
+      ],
+      "methods": [
+        {
+          "name": "recordDelivery(runs, isLegal, isWicket, extraType)",
+          "returns": "void"
+        },
+        {
+          "name": "getOvers()",
+          "returns": "String (e.g., 4.0)"
+        },
+        {
+          "name": "getEconomyRate()",
+          "returns": "double"
+        }
+      ]
+    }
   ],
-
   "db_schema": [
-    {"table": "matches", "columns": [{"name": "match_id", "type": "UUID", "pk": true}, {"name": "team1_id", "type": "UUID", "fk": true}, {"name": "team2_id", "type": "UUID", "fk": true}, {"name": "overs_limit", "type": "INT"}, {"name": "toss_winner", "type": "UUID"}, {"name": "bat_first", "type": "UUID"}, {"name": "state", "type": "ENUM(IN_PROGRESS,COMPLETED)"}, {"name": "result", "type": "TEXT"}]},
-    {"table": "innings", "columns": [{"name": "innings_id", "type": "UUID", "pk": true}, {"name": "match_id", "type": "UUID", "fk": true, "idx": true}, {"name": "innings_number", "type": "INT"}, {"name": "batting_team_id", "type": "UUID"}, {"name": "total_runs", "type": "INT"}, {"name": "total_wickets", "type": "INT"}, {"name": "total_extras", "type": "INT"}, {"name": "overs_completed", "type": "VARCHAR"}]},
-    {"table": "balls", "columns": [{"name": "ball_id", "type": "BIGSERIAL", "pk": true}, {"name": "innings_id", "type": "UUID", "fk": true, "idx": true}, {"name": "over_number", "type": "INT"}, {"name": "ball_number", "type": "INT"}, {"name": "striker_id", "type": "UUID", "fk": true}, {"name": "bowler_id", "type": "UUID", "fk": true}, {"name": "runs", "type": "INT"}, {"name": "extra_type", "type": "ENUM(NONE,WIDE,NOBALL,BYE,LEGBYE)"}, {"name": "extra_runs", "type": "INT"}, {"name": "is_wicket", "type": "BOOLEAN"}, {"name": "wicket_type", "type": "VARCHAR"}, {"name": "dismissed_id", "type": "UUID"}, {"name": "is_boundary", "type": "BOOLEAN"}, {"name": "is_legal", "type": "BOOLEAN"}]}
+    {
+      "table": "matches",
+      "columns": [
+        {
+          "name": "match_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "team1_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "team2_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "overs_limit",
+          "type": "INT"
+        },
+        {
+          "name": "toss_winner",
+          "type": "UUID"
+        },
+        {
+          "name": "bat_first",
+          "type": "UUID"
+        },
+        {
+          "name": "state",
+          "type": "ENUM(IN_PROGRESS,COMPLETED)"
+        },
+        {
+          "name": "result",
+          "type": "TEXT"
+        }
+      ]
+    },
+    {
+      "table": "innings",
+      "columns": [
+        {
+          "name": "innings_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "match_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "innings_number",
+          "type": "INT"
+        },
+        {
+          "name": "batting_team_id",
+          "type": "UUID"
+        },
+        {
+          "name": "total_runs",
+          "type": "INT"
+        },
+        {
+          "name": "total_wickets",
+          "type": "INT"
+        },
+        {
+          "name": "total_extras",
+          "type": "INT"
+        },
+        {
+          "name": "overs_completed",
+          "type": "VARCHAR"
+        }
+      ]
+    },
+    {
+      "table": "balls",
+      "columns": [
+        {
+          "name": "ball_id",
+          "type": "BIGSERIAL",
+          "pk": true
+        },
+        {
+          "name": "innings_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "over_number",
+          "type": "INT"
+        },
+        {
+          "name": "ball_number",
+          "type": "INT"
+        },
+        {
+          "name": "striker_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "bowler_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "runs",
+          "type": "INT"
+        },
+        {
+          "name": "extra_type",
+          "type": "ENUM(NONE,WIDE,NOBALL,BYE,LEGBYE)"
+        },
+        {
+          "name": "extra_runs",
+          "type": "INT"
+        },
+        {
+          "name": "is_wicket",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "wicket_type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "dismissed_id",
+          "type": "UUID"
+        },
+        {
+          "name": "is_boundary",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "is_legal",
+          "type": "BOOLEAN"
+        }
+      ]
+    }
   ],
   "schema_note": "**The `balls` table is the source of truth** — all stats can be recomputed from it. Scorecards (batsman/bowler) are materialized views updated incrementally. `(innings_id, over_number, ball_number)` gives exact ball-by-ball playback.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -172,23 +668,57 @@
       "code": "class Match {\n    private final String matchId;\n    private final Team[] teams = new Team[2];\n    private final int oversLimit;\n    private final List<Innings> inningsList = new ArrayList<>();\n    private int currentInningsIndex = -1;\n    private MatchState state = MatchState.NOT_STARTED;\n    private String result;\n\n    public Match(String matchId, Team team1, Team team2, int oversLimit, int batFirstIndex) {\n        this.matchId = matchId;\n        this.teams[0] = team1;\n        this.teams[1] = team2;\n        this.oversLimit = oversLimit;\n        // Start first innings\n        startInnings(batFirstIndex);\n        state = MatchState.IN_PROGRESS;\n    }\n\n    private void startInnings(int battingTeamIndex) {\n        int bowlingIndex = 1 - battingTeamIndex;\n        int target = (inningsList.size() == 1)\n            ? inningsList.get(0).totalRuns + 1 : 0;\n        Innings innings = new Innings(\n            teams[battingTeamIndex], teams[bowlingIndex], oversLimit, target);\n        inningsList.add(innings);\n        currentInningsIndex = inningsList.size() - 1;\n    }\n\n    public void recordBall(int runs, ExtraType extra, Wicket wicket,\n                            boolean boundary, String currentBowlerId) {\n        if (state == MatchState.COMPLETED)\n            throw new MatchAlreadyOverException(\"Match is over: \" + result);\n\n        Innings current = inningsList.get(currentInningsIndex);\n\n        // Set bowler on current over if it's a new over\n        // (In production, bowler selection is a separate action)\n        if (current.currentOver == null || current.currentOver.isComplete()) {\n            // bowlerId would be set via a separate `setBowler` method\n        }\n\n        current.recordBall(runs, extra, wicket, boundary);\n\n        if (current.isComplete) {\n            if (currentInningsIndex == 0) {\n                // First innings done — start second\n                int secondBatIndex = (teams[0] == current.battingTeam) ? 1 : 0;\n                startInnings(secondBatIndex);\n            } else {\n                // Second innings done — determine result\n                state = MatchState.COMPLETED;\n                result = computeResult();\n            }\n        }\n    }\n\n    private String computeResult() {\n        Innings first = inningsList.get(0);\n        Innings second = inningsList.get(1);\n\n        if (second.totalRuns > first.totalRuns) {\n            int wicketsRemaining = 10 - second.totalWickets;\n            return second.battingTeam.teamName() + \" won by \" + wicketsRemaining + \" wickets\";\n        } else if (first.totalRuns > second.totalRuns) {\n            int runMargin = first.totalRuns - second.totalRuns;\n            return first.battingTeam.teamName() + \" won by \" + runMargin + \" runs\";\n        } else {\n            return \"Match tied\";\n        }\n    }\n\n    public MatchState getState() { return state; }\n    public String getResult() { return result; }\n    public List<Innings> getInnings() { return Collections.unmodifiableList(inningsList); }\n}"
     }
   ],
-
   "patterns": [
-    {"name": "Hierarchical State Machine → Match > Innings > Over > Ball", "why": "The state hierarchy mirrors the real cricket structure: a match contains innings, an innings contains overs, an over contains balls. Each level has its own completion rules. Ball completion is trivial (one event). Over completes after 6 legal balls. Innings completes after all out / overs done / target chased. Match completes after both innings. This **nested FSM** is the natural model — don't flatten it.", "where": "`Match.recordBall()` → `Innings.recordBall()` → updates `Over` → checks completion at each level"},
-    {"name": "Observer Pattern (extension) → Live Score Updates", "why": "Every ball is an event that could trigger UI updates, push notifications, commentary, and stat refreshes. In production, `recordBall` would fire an event that multiple listeners consume. Our simplified version computes everything synchronously.", "where": "Would add `MatchEventListener` with `onBall`, `onWicket`, `onOverEnd`, `onInningsEnd`, `onMatchEnd` callbacks"},
-    {"name": "Rules as Data", "why": "The extra-type scoring rules (WIDE = 1 penalty + not legal; BYE = legal + runs to extras) are implemented in a switch statement. For more complex rulesets (Test cricket, DLS), extract a `CricketRules` strategy that computes per-ball impacts. The Innings would call `rules.compute(ball)` and apply the returned state delta.", "where": "Currently inline in `Innings.recordBall()` switch — could be extracted"}
+    {
+      "name": "Hierarchical State Machine → Match > Innings > Over > Ball",
+      "why": "The state hierarchy mirrors the real cricket structure: a match contains innings, an innings contains overs, an over contains balls. Each level has its own completion rules. Ball completion is trivial (one event). Over completes after 6 legal balls. Innings completes after all out / overs done / target chased. Match completes after both innings. This **nested FSM** is the natural model — don't flatten it.",
+      "where": "`Match.recordBall()` → `Innings.recordBall()` → updates `Over` → checks completion at each level"
+    },
+    {
+      "name": "Observer Pattern (extension) → Live Score Updates",
+      "why": "Every ball is an event that could trigger UI updates, push notifications, commentary, and stat refreshes. In production, `recordBall` would fire an event that multiple listeners consume. Our simplified version computes everything synchronously.",
+      "where": "Would add `MatchEventListener` with `onBall`, `onWicket`, `onOverEnd`, `onInningsEnd`, `onMatchEnd` callbacks"
+    },
+    {
+      "name": "Rules as Data",
+      "why": "The extra-type scoring rules (WIDE = 1 penalty + not legal; BYE = legal + runs to extras) are implemented in a switch statement. For more complex rulesets (Test cricket, DLS), extract a `CricketRules` strategy that computes per-ball impacts. The Innings would call `rules.compute(ball)` and apply the returned state delta.",
+      "where": "Currently inline in `Innings.recordBall()` switch — could be extracted"
+    }
   ],
-
   "concurrency": [
-    {"issue": "Not applicable in the core design", "fix": "Cricket scoring is inherently single-threaded — one official scorer enters data ball by ball. No concurrent mutations. For a **live broadcast system** with thousands of readers, the scorecard would be published via an **event stream** (Kafka topic or WebSocket) — readers consume a projection, don't read from the mutable Innings directly."}
+    {
+      "issue": "Not applicable in the core design",
+      "fix": "Cricket scoring is inherently single-threaded — one official scorer enters data ball by ball. No concurrent mutations. For a **live broadcast system** with thousands of readers, the scorecard would be published via an **event stream** (Kafka topic or WebSocket) — readers consume a projection, don't read from the mutable Innings directly."
+    }
   ],
-
   "deep_dives": [
-    {"question": "How do you handle the complexity of extras and their different scoring rules?", "answer": "**Centralize in one place.** The switch statement in `recordBall()` handles all four extra types. Each type has exactly three properties: (1) is it a legal delivery? (2) who gets the runs (batsman or extras)? (3) does the bowler get charged? Encode this as a table: `WIDE={legal:false, batsmanRuns:false, bowlerCharged:true}`, `BYE={legal:true, batsmanRuns:false, bowlerCharged:false}`. The code reads the table and applies. If you add more extras (penalty runs, etc.), just add a row."},
-    {"question": "Why is strike rotation tricky?", "answer": "**Odd runs swap striker.** But: (1) Wide with no runs → no swap. (2) Wide + 1 run → swap (batsman ran). (3) End of over → swap (on top of any mid-over swaps). (4) Wicket might affect who's on strike (run-out of non-striker mid-run). Rule: swap happens independently for 'runs off bat' and 'end of over'. In code: `if (runs % 2 == 1) swap(); if (overComplete) swap();` — these compose correctly because XOR. **But on a wicket that's also the last ball of an over, the new batsman takes strike at the non-striker end.** Edge case city."},
-    {"question": "How would you implement undo (correct last ball)?", "answer": "**Memento Pattern.** Before each `recordBall`, snapshot the entire Innings state (totalRuns, totalWickets, striker/nonStriker references, bowler figures, over state). Store in a stack. On undo: pop the snapshot, restore state. **Alternative:** since balls are immutable events, maintain the ball list as the source of truth, and recompute the entire innings from scratch by replaying all balls. Slower but always correct. For T20 (max 240 balls), replay takes microseconds."},
-    {"question": "How would you support Test cricket (5-day, unlimited overs)?", "answer": "**Remove the `oversLimit` constraint.** Test innings end only on: all out, declaration (batting captain voluntarily ends), or follow-on. Add: `declare()` method on Innings. Match has 4 innings (not 2). Result: win by innings, win by runs, draw (not all innings completed in 5 days). The **state machine structure is identical** — just the completion conditions change. This is why parameterizing the format at construction time was important."},
-    {"question": "How would you add DLS (Duckworth-Lewis-Stern) for rain-affected matches?", "answer": "**Separate calculator service.** DLS takes: overs remaining, wickets lost, and uses published resource tables to compute a revised target. Add a `DLSCalculator` service injected into Match. When rain interrupts: `match.rainDelay(oversLost)` → `DLSCalculator.revisedTarget(oversRemaining, wicketsLost, firstInningsTotal)` → update `Innings.target`. **Don't embed DLS in the Innings class** — it's a separate algorithm that reads innings state. Classic Single Responsibility."},
-    {"question": "How would you generate a ball-by-ball commentary from this data?", "answer": "**Observer + Template.** Register a `CommentaryListener` on the match. On each ball event, the listener receives the Ball object + match context (score, overs, batsman). A `CommentaryTemplate` maps ball types to text: `{4 runs, boundary} → 'FOUR! Driven through covers!'`, `{wicket, bowled} → 'BOWLED! The stumps are shattered!'`. Templates can be randomized for variety. The match fires events; the commentary system consumes them. **Fully decoupled.** This is how ESPNcricinfo and Cricbuzz work internally."}
+    {
+      "question": "How do you handle the complexity of extras and their different scoring rules?",
+      "answer": "**Centralize in one place.** The switch statement in `recordBall()` handles all four extra types. Each type has exactly three properties: (1) is it a legal delivery? (2) who gets the runs (batsman or extras)? (3) does the bowler get charged? Encode this as a table: `WIDE={legal:false, batsmanRuns:false, bowlerCharged:true}`, `BYE={legal:true, batsmanRuns:false, bowlerCharged:false}`. The code reads the table and applies. If you add more extras (penalty runs, etc.), just add a row."
+    },
+    {
+      "question": "Why is strike rotation tricky?",
+      "answer": "**Odd runs swap striker.** But: (1) Wide with no runs → no swap. (2) Wide + 1 run → swap (batsman ran). (3) End of over → swap (on top of any mid-over swaps). (4) Wicket might affect who's on strike (run-out of non-striker mid-run). Rule: swap happens independently for 'runs off bat' and 'end of over'. In code: `if (runs % 2 == 1) swap(); if (overComplete) swap();` — these compose correctly because XOR. **But on a wicket that's also the last ball of an over, the new batsman takes strike at the non-striker end.** Edge case city."
+    },
+    {
+      "question": "How would you implement undo (correct last ball)?",
+      "answer": "**Memento Pattern.** Before each `recordBall`, snapshot the entire Innings state (totalRuns, totalWickets, striker/nonStriker references, bowler figures, over state). Store in a stack. On undo: pop the snapshot, restore state. **Alternative:** since balls are immutable events, maintain the ball list as the source of truth, and recompute the entire innings from scratch by replaying all balls. Slower but always correct. For T20 (max 240 balls), replay takes microseconds."
+    },
+    {
+      "question": "How would you support Test cricket (5-day, unlimited overs)?",
+      "answer": "**Remove the `oversLimit` constraint.** Test innings end only on: all out, declaration (batting captain voluntarily ends), or follow-on. Add: `declare()` method on Innings. Match has 4 innings (not 2). Result: win by innings, win by runs, draw (not all innings completed in 5 days). The **state machine structure is identical** — just the completion conditions change. This is why parameterizing the format at construction time was important."
+    },
+    {
+      "question": "How would you add DLS (Duckworth-Lewis-Stern) for rain-affected matches?",
+      "answer": "**Separate calculator service.** DLS takes: overs remaining, wickets lost, and uses published resource tables to compute a revised target. Add a `DLSCalculator` service injected into Match. When rain interrupts: `match.rainDelay(oversLost)` → `DLSCalculator.revisedTarget(oversRemaining, wicketsLost, firstInningsTotal)` → update `Innings.target`. **Don't embed DLS in the Innings class** — it's a separate algorithm that reads innings state. Classic Single Responsibility."
+    },
+    {
+      "question": "How would you generate a ball-by-ball commentary from this data?",
+      "answer": "**Observer + Template.** Register a `CommentaryListener` on the match. On each ball event, the listener receives the Ball object + match context (score, overs, batsman). A `CommentaryTemplate` maps ball types to text: `{4 runs, boundary} → 'FOUR! Driven through covers!'`, `{wicket, bowled} → 'BOWLED! The stumps are shattered!'`. Templates can be randomized for variety. The match fires events; the commentary system consumes them. **Fully decoupled.** This is how ESPNcricinfo and Cricbuzz work internally."
+    }
+  ],
+  "companies": [
+    "ESPN Cricinfo",
+    "Cricbuzz"
   ]
 }

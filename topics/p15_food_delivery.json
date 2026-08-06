@@ -2,15 +2,29 @@
   "title": "Food Delivery System (Zomato / Swiggy)",
   "description": "Design a food delivery platform connecting customers, restaurants, and delivery agents. The order goes through a long state machine (placed → confirmed → prepared → picked up → delivered) and the system must dispatch agents intelligently. Multiple actors with asymmetric concerns.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "State Machine"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "pattern", "label": "Observer Pattern"},
-    {"type": "concept", "label": "Multi-Actor System"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "State Machine"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Observer Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Multi-Actor System"
+    }
   ],
   "prompt": "Design a food delivery system like Zomato or Swiggy where customers order food from restaurants and delivery agents fulfill the orders.",
   "prompt_note": "This is a **multi-actor system**: customer, restaurant, delivery agent, and the platform orchestrating them. The biggest design temptation is to model 'Order' as one giant blob. Resist that — the order state machine is the central spine, and each actor interacts with it differently. Don't get lost in the menu/cart hierarchy; focus on the order lifecycle and agent assignment.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Three actors — customer, restaurant, delivery agent. All in scope?\"",
@@ -48,7 +62,6 @@
       "why": "Don't get lost in menu CRUD. Focus on the order lifecycle."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**Customer:** browse restaurants, view menu, place order (with payment), track order status, cancel (until PICKED_UP).",
@@ -61,7 +74,6 @@
       "Payment processing, dynamic pricing, surge pricing, order batching, AI dispatch, multi-restaurant orders, ratings/reviews, search ranking."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Atomic state transitions:** an order's status updates must be linearizable — no concurrent transitions to inconsistent states.",
@@ -72,7 +84,6 @@
       "Sub-second latency, distributed agent location updates, geographic sharding, real-time map matching."
     ]
   },
-
   "primary_scope": [
     "`placeOrder(customerId, restaurantId, items)` → create Order in PLACED → notify restaurant",
     "`restaurantAccept(orderId)` → PLACED → CONFIRMED → PREPARING (restaurant cooking)",
@@ -90,7 +101,6 @@
     "`UnauthorizedActionException` — wrong actor (customer trying to mark PICKED_UP)",
     "`ItemUnavailableException` — restaurant out of stock for an item"
   ],
-
   "entity_intro": "The system has three actors but **the order is the central entity** that all actors interact with. Treat the order's state machine as the spine; everything else (assignment, notification, payment) hangs off state transitions.",
   "entities": [
     {
@@ -148,152 +158,385 @@
       "verdict_label": "✓ Service — Observer Pattern"
     }
   ],
-
   "relationships": [
-    {"entity": "Order", "owns": "orderId, customerId, restaurantId, items list, total, status, deliveryAgentId, timestamps", "rel": "N→1 Customer, N→1 Restaurant, 0..1 DeliveryAgent"},
-    {"entity": "Restaurant", "owns": "id, name, GeoLocation, `Map<itemId, MenuItem>`", "rel": "1→N MenuItems, 1→N Orders"},
-    {"entity": "DeliveryAgent", "owns": "id, currentLocation, status", "rel": "1→N Orders (over time), 0..1 Order (current)"},
-    {"entity": "OrderService", "owns": "orders map, references to RestaurantService, AgentService, PaymentService, NotificationService", "rel": "Orchestrator over all"}
+    {
+      "entity": "Order",
+      "owns": "orderId, customerId, restaurantId, items list, total, status, deliveryAgentId, timestamps",
+      "rel": "N→1 Customer, N→1 Restaurant, 0..1 DeliveryAgent"
+    },
+    {
+      "entity": "Restaurant",
+      "owns": "id, name, GeoLocation, `Map<itemId, MenuItem>`",
+      "rel": "1→N MenuItems, 1→N Orders"
+    },
+    {
+      "entity": "DeliveryAgent",
+      "owns": "id, currentLocation, status",
+      "rel": "1→N Orders (over time), 0..1 Order (current)"
+    },
+    {
+      "entity": "OrderService",
+      "owns": "orders map, references to RestaurantService, AgentService, PaymentService, NotificationService",
+      "rel": "Orchestrator over all"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Order, Restaurant, MenuItem, DeliveryAgent, GeoLocation, OrderStatus enum. **Service** = DeliveryAgentService (dispatch), DispatchStrategy implementations, NotificationService, PaymentService. **Controller** = OrderService (the public API for all actor interactions). The order state machine lives partly in `OrderStatus.canTransitionTo()` and partly in `OrderService.onStatusChange()` side effects.",
-
   "classes": [
     {
-      "name": "Order", "type": "class", "layer": "Model",
+      "name": "Order",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "orderId", "type": "String"},
-        {"name": "customerId", "type": "String"},
-        {"name": "restaurantId", "type": "String"},
-        {"name": "items", "type": "List<OrderItem>"},
-        {"name": "totalAmount", "type": "long"},
-        {"name": "status", "type": "volatile OrderStatus"},
-        {"name": "deliveryAgentId", "type": "String (nullable)"},
-        {"name": "rejectedAgents", "type": "Set<String>"},
-        {"name": "createdAt", "type": "Instant"}
+        {
+          "name": "orderId",
+          "type": "String"
+        },
+        {
+          "name": "customerId",
+          "type": "String"
+        },
+        {
+          "name": "restaurantId",
+          "type": "String"
+        },
+        {
+          "name": "items",
+          "type": "List<OrderItem>"
+        },
+        {
+          "name": "totalAmount",
+          "type": "long"
+        },
+        {
+          "name": "status",
+          "type": "volatile OrderStatus"
+        },
+        {
+          "name": "deliveryAgentId",
+          "type": "String (nullable)"
+        },
+        {
+          "name": "rejectedAgents",
+          "type": "Set<String>"
+        },
+        {
+          "name": "createdAt",
+          "type": "Instant"
+        }
       ],
       "methods": [
-        {"name": "canTransitionTo(newStatus)", "returns": "boolean (delegates to enum)"},
-        {"name": "transitionTo(newStatus)", "returns": "void (synchronized)"}
+        {
+          "name": "canTransitionTo(newStatus)",
+          "returns": "boolean (delegates to enum)"
+        },
+        {
+          "name": "transitionTo(newStatus)",
+          "returns": "void (synchronized)"
+        }
       ]
     },
     {
-      "name": "DeliveryAgent", "type": "class", "layer": "Model",
+      "name": "DeliveryAgent",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "agentId", "type": "String"},
-        {"name": "name", "type": "String"},
-        {"name": "currentLocation", "type": "volatile GeoLocation"},
-        {"name": "status", "type": "volatile AgentStatus"}
+        {
+          "name": "agentId",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "currentLocation",
+          "type": "volatile GeoLocation"
+        },
+        {
+          "name": "status",
+          "type": "volatile AgentStatus"
+        }
       ],
       "methods": [
-        {"name": "updateLocation(loc)", "returns": "void"},
-        {"name": "markBusy()", "returns": "void"},
-        {"name": "markAvailable()", "returns": "void"},
-        {"name": "isAvailable()", "returns": "boolean"}
+        {
+          "name": "updateLocation(loc)",
+          "returns": "void"
+        },
+        {
+          "name": "markBusy()",
+          "returns": "void"
+        },
+        {
+          "name": "markAvailable()",
+          "returns": "void"
+        },
+        {
+          "name": "isAvailable()",
+          "returns": "boolean"
+        }
       ]
     },
     {
-      "name": "DispatchStrategy", "type": "interface", "layer": "Service",
+      "name": "DispatchStrategy",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "selectAgent(orderLocation, candidates)", "returns": "Optional<DeliveryAgent>"}
+        {
+          "name": "selectAgent(orderLocation, candidates)",
+          "returns": "Optional<DeliveryAgent>"
+        }
       ]
     },
     {
-      "name": "NearestAgentStrategy", "type": "class", "layer": "Service",
+      "name": "NearestAgentStrategy",
+      "type": "class",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "selectAgent(orderLocation, candidates)", "returns": "nearest by Haversine"}
+        {
+          "name": "selectAgent(orderLocation, candidates)",
+          "returns": "nearest by Haversine"
+        }
       ]
     },
     {
-      "name": "DeliveryAgentService", "type": "class", "layer": "Service",
+      "name": "DeliveryAgentService",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "agents", "type": "ConcurrentHashMap<String, DeliveryAgent>"},
-        {"name": "strategy", "type": "DispatchStrategy"}
+        {
+          "name": "agents",
+          "type": "ConcurrentHashMap<String, DeliveryAgent>"
+        },
+        {
+          "name": "strategy",
+          "type": "DispatchStrategy"
+        }
       ],
       "methods": [
-        {"name": "findAgentForOrder(restaurantLoc, excludeIds)", "returns": "Optional<DeliveryAgent>"},
-        {"name": "register(agent)", "returns": "void"},
-        {"name": "updateLocation(agentId, loc)", "returns": "void"}
+        {
+          "name": "findAgentForOrder(restaurantLoc, excludeIds)",
+          "returns": "Optional<DeliveryAgent>"
+        },
+        {
+          "name": "register(agent)",
+          "returns": "void"
+        },
+        {
+          "name": "updateLocation(agentId, loc)",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "OrderService", "type": "class", "layer": "Controller",
+      "name": "OrderService",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "orders", "type": "ConcurrentHashMap<String, Order>"},
-        {"name": "restaurantService", "type": "RestaurantService"},
-        {"name": "agentService", "type": "DeliveryAgentService"},
-        {"name": "paymentService", "type": "PaymentService"},
-        {"name": "notificationService", "type": "NotificationService"}
+        {
+          "name": "orders",
+          "type": "ConcurrentHashMap<String, Order>"
+        },
+        {
+          "name": "restaurantService",
+          "type": "RestaurantService"
+        },
+        {
+          "name": "agentService",
+          "type": "DeliveryAgentService"
+        },
+        {
+          "name": "paymentService",
+          "type": "PaymentService"
+        },
+        {
+          "name": "notificationService",
+          "type": "NotificationService"
+        }
       ],
       "methods": [
-        {"name": "placeOrder(customerId, restId, items)", "returns": "Order"},
-        {"name": "restaurantAccept(orderId)", "returns": "void"},
-        {"name": "markReady(orderId)", "returns": "void"},
-        {"name": "agentRejected(orderId, agentId)", "returns": "void"},
-        {"name": "agentPickup(orderId, agentId)", "returns": "void"},
-        {"name": "agentDeliver(orderId, agentId)", "returns": "void"},
-        {"name": "cancelOrder(orderId)", "returns": "void"}
+        {
+          "name": "placeOrder(customerId, restId, items)",
+          "returns": "Order"
+        },
+        {
+          "name": "restaurantAccept(orderId)",
+          "returns": "void"
+        },
+        {
+          "name": "markReady(orderId)",
+          "returns": "void"
+        },
+        {
+          "name": "agentRejected(orderId, agentId)",
+          "returns": "void"
+        },
+        {
+          "name": "agentPickup(orderId, agentId)",
+          "returns": "void"
+        },
+        {
+          "name": "agentDeliver(orderId, agentId)",
+          "returns": "void"
+        },
+        {
+          "name": "cancelOrder(orderId)",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "orders",
       "columns": [
-        {"name": "order_id", "type": "UUID", "pk": true},
-        {"name": "customer_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "restaurant_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "delivery_agent_id", "type": "UUID", "fk": true},
-        {"name": "total_amount", "type": "BIGINT"},
-        {"name": "status", "type": "ENUM(PLACED,CONFIRMED,PREPARING,READY,ASSIGNED,PICKED_UP,DELIVERED,CANCELLED)", "idx": true},
-        {"name": "created_at", "type": "TIMESTAMP", "idx": true}
+        {
+          "name": "order_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "customer_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "restaurant_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "delivery_agent_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "total_amount",
+          "type": "BIGINT"
+        },
+        {
+          "name": "status",
+          "type": "ENUM(PLACED,CONFIRMED,PREPARING,READY,ASSIGNED,PICKED_UP,DELIVERED,CANCELLED)",
+          "idx": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "idx": true
+        }
       ]
     },
     {
       "table": "order_items",
       "columns": [
-        {"name": "order_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "menu_item_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "quantity", "type": "INT"},
-        {"name": "price_at_order", "type": "BIGINT"}
+        {
+          "name": "order_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "menu_item_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "quantity",
+          "type": "INT"
+        },
+        {
+          "name": "price_at_order",
+          "type": "BIGINT"
+        }
       ]
     },
     {
       "table": "delivery_agents",
       "columns": [
-        {"name": "agent_id", "type": "UUID", "pk": true},
-        {"name": "name", "type": "VARCHAR"},
-        {"name": "current_lat", "type": "DOUBLE"},
-        {"name": "current_lng", "type": "DOUBLE"},
-        {"name": "status", "type": "ENUM(AVAIL,BUSY,OFFLINE)", "idx": true}
+        {
+          "name": "agent_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "current_lat",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "current_lng",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "status",
+          "type": "ENUM(AVAIL,BUSY,OFFLINE)",
+          "idx": true
+        }
       ]
     },
     {
       "table": "restaurants",
       "columns": [
-        {"name": "restaurant_id", "type": "UUID", "pk": true},
-        {"name": "name", "type": "VARCHAR"},
-        {"name": "lat", "type": "DOUBLE"},
-        {"name": "lng", "type": "DOUBLE"},
-        {"name": "is_open", "type": "BOOLEAN"}
+        {
+          "name": "restaurant_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "lat",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "lng",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "is_open",
+          "type": "BOOLEAN"
+        }
       ]
     },
     {
       "table": "menu_items",
       "columns": [
-        {"name": "menu_item_id", "type": "UUID", "pk": true},
-        {"name": "restaurant_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "name", "type": "VARCHAR"},
-        {"name": "price", "type": "BIGINT"},
-        {"name": "is_available", "type": "BOOLEAN"}
+        {
+          "name": "menu_item_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "restaurant_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "price",
+          "type": "BIGINT"
+        },
+        {
+          "name": "is_available",
+          "type": "BOOLEAN"
+        }
       ]
     }
   ],
   "schema_note": "**Geospatial query** for nearest agent: store agent locations in Postgres with PostGIS, use `ST_DWithin` + `ORDER BY ST_Distance` for the dispatch query. Or use Redis GEO commands (`GEOADD`, `GEORADIUS`) for in-memory speed. For our LLD, we just iterate the agent map.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -314,7 +557,6 @@
       "code": "class OrderService {\n    private final ConcurrentHashMap<String, Order> orders = new ConcurrentHashMap<>();\n    private final RestaurantService restaurantService;\n    private final DeliveryAgentService agentService;\n    private final PaymentService paymentService;\n    private final NotificationService notificationService;\n\n    public OrderService(RestaurantService rs, DeliveryAgentService as,\n                        PaymentService ps, NotificationService ns) {\n        this.restaurantService = rs;\n        this.agentService = as;\n        this.paymentService = ps;\n        this.notificationService = ns;\n    }\n\n    // ── 1. Customer places order ─────────\n    public Order placeOrder(String customerId, String restaurantId,\n                             List<OrderItem> items) {\n        // Validate items + compute total\n        long total = items.stream().mapToLong(i -> i.price() * i.quantity()).sum();\n\n        // Process payment (hold funds)\n        paymentService.holdFunds(customerId, total);\n\n        Order order = new Order(customerId, restaurantId, items, total);\n        orders.put(order.getOrderId(), order);\n\n        notificationService.notifyRestaurant(restaurantId,\n            \"New order: \" + order.getOrderId());\n        return order;\n    }\n\n    // ── 2. Restaurant accepts ───────────\n    public void restaurantAccept(String orderId) {\n        Order order = getOrder(orderId);\n        order.transitionTo(OrderStatus.CONFIRMED);\n        order.transitionTo(OrderStatus.PREPARING);\n        notificationService.notifyCustomer(order.getCustomerId(),\n            \"Your order is being prepared\");\n    }\n\n    // ── 3. Restaurant marks ready → trigger agent dispatch ──\n    public void markReady(String orderId) {\n        Order order = getOrder(orderId);\n        order.transitionTo(OrderStatus.READY);\n        dispatchAgent(order);\n    }\n\n    // Internal: find and assign an agent\n    private void dispatchAgent(Order order) {\n        GeoLocation pickup = restaurantService.getLocation(order.getRestaurantId());\n        Optional<DeliveryAgent> agentOpt =\n            agentService.findAgentForOrder(pickup, order.getRejectedAgents());\n\n        if (agentOpt.isEmpty()) {\n            // No agent available — escalate / retry later\n            notificationService.notifyCustomer(order.getCustomerId(),\n                \"Looking for a delivery agent...\");\n            // In production: retry after delay\n            throw new NoAgentsAvailableException(order.getOrderId());\n        }\n\n        DeliveryAgent agent = agentOpt.get();\n        agent.markBusy();\n        order.assignAgent(agent.getAgentId());\n        notificationService.notifyAgent(agent.getAgentId(),\n            \"New delivery: pick up at \" + pickup);\n    }\n\n    // ── 4. Agent rejects → re-dispatch ──\n    public void agentRejected(String orderId, String agentId) {\n        Order order = getOrder(orderId);\n        order.addRejectedAgent(agentId);\n        DeliveryAgent agent = agentService.get(agentId);\n        if (agent != null) agent.markAvailable();\n\n        // Reset order to READY so we can reassign\n        // (in production, transition through a REASSIGNING state)\n        if (order.getRejectedAgents().size() >= 3) {\n            // Escalate after 3 rejections\n            notificationService.notifyCustomer(order.getCustomerId(),\n                \"Trouble finding a delivery agent — please wait\");\n        }\n        dispatchAgent(order);\n    }\n\n    // ── 5. Agent picks up ─────────────\n    public void agentPickup(String orderId, String agentId) {\n        Order order = getOrder(orderId);\n        if (!agentId.equals(order.getDeliveryAgentId()))\n            throw new UnauthorizedActionException(\"Wrong agent\");\n        order.transitionTo(OrderStatus.PICKED_UP);\n        notificationService.notifyCustomer(order.getCustomerId(),\n            \"Your order is on the way\");\n    }\n\n    // ── 6. Agent delivers ─────────────\n    public void agentDeliver(String orderId, String agentId) {\n        Order order = getOrder(orderId);\n        if (!agentId.equals(order.getDeliveryAgentId()))\n            throw new UnauthorizedActionException(\"Wrong agent\");\n\n        order.transitionTo(OrderStatus.DELIVERED);\n\n        // Side effects: free agent, release funds to restaurant\n        DeliveryAgent agent = agentService.get(agentId);\n        if (agent != null) agent.markAvailable();\n        paymentService.releaseFundsToRestaurant(order.getRestaurantId(), order.getTotalAmount());\n\n        notificationService.notifyCustomer(order.getCustomerId(), \"Order delivered!\");\n    }\n\n    // ── Cancellation (only before PICKED_UP) ──\n    public void cancelOrder(String orderId) {\n        Order order = getOrder(orderId);\n        OrderStatus current = order.getStatus();\n        if (current == OrderStatus.PICKED_UP || current == OrderStatus.DELIVERED)\n            throw new CannotCancelException(\"Cannot cancel order in status \" + current);\n\n        order.transitionTo(OrderStatus.CANCELLED);\n\n        // Side effects: free agent if assigned, refund customer\n        if (order.getDeliveryAgentId() != null) {\n            DeliveryAgent a = agentService.get(order.getDeliveryAgentId());\n            if (a != null) a.markAvailable();\n        }\n        paymentService.refund(order.getCustomerId(), order.getTotalAmount());\n        notificationService.notifyCustomer(order.getCustomerId(), \"Order cancelled\");\n    }\n\n    private Order getOrder(String orderId) {\n        Order o = orders.get(orderId);\n        if (o == null) throw new OrderNotFoundException(orderId);\n        return o;\n    }\n}\n\ninterface PaymentService {\n    void holdFunds(String customerId, long amount);\n    void releaseFundsToRestaurant(String restaurantId, long amount);\n    void refund(String customerId, long amount);\n}\n\ninterface NotificationService {\n    void notifyCustomer(String customerId, String message);\n    void notifyRestaurant(String restaurantId, String message);\n    void notifyAgent(String agentId, String message);\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "State Machine → OrderStatus.canTransitionTo()",
@@ -337,7 +579,6 @@
       "where": "`OrderService` methods chain transitions + side effects with rollback (refund) on cancel"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Concurrent state transitions on the same order",
@@ -356,7 +597,6 @@
       "fix": "Both operations call `transitionTo()` on the same Order, which is `synchronized`. If cancel wins, the order is CANCELLED — the agent's pickup attempt sees the new state and `transitionTo(PICKED_UP)` throws `InvalidStateTransitionException`. If pickup wins, cancel sees PICKED_UP and `cancelOrder()` throws `CannotCancelException`. **Either way, the system stays consistent.**"
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why is the state machine encoded as a Map instead of a switch in transitionTo()?",
@@ -386,5 +626,9 @@
       "question": "How do you test this system?",
       "answer": "**Layered tests.** (1) **Unit tests on the state machine:** every legal and illegal transition. (2) **Unit tests on dispatch strategies:** mock agents at known locations, verify nearest is selected. (3) **Integration tests on OrderService:** mock RestaurantService, AgentService, PaymentService, NotificationService. Test full lifecycles: place → accept → ready → assign → pickup → deliver. (4) **Concurrency tests:** spawn multiple threads cancelling and progressing the same order, verify final state is consistent (no PICKED_UP + CANCELLED simultaneously). The dependency-injected services make all of this testable."
     }
+  ],
+  "companies": [
+    "Uber Eats",
+    "DoorDash"
   ]
 }

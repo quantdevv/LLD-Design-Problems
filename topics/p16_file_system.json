@@ -2,15 +2,29 @@
   "title": "In-Memory File System",
   "description": "Design an in-memory file system supporting files, directories, nested paths, and standard operations (mkdir, ls, cat, write, rm). The textbook **Composite Pattern** problem — files and directories share a common interface but behave differently.",
   "tags": [
-    {"type": "medium", "label": "Medium"},
-    {"type": "pattern", "label": "Composite Pattern"},
-    {"type": "pattern", "label": "Visitor Pattern"},
-    {"type": "concept", "label": "Tree Traversal"},
-    {"type": "concept", "label": "Recursion"}
+    {
+      "type": "medium",
+      "label": "Medium"
+    },
+    {
+      "type": "pattern",
+      "label": "Composite Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Visitor Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Tree Traversal"
+    },
+    {
+      "type": "concept",
+      "label": "Recursion"
+    }
   ],
   "prompt": "Design an in-memory file system that supports creating files and directories, reading and writing file content, listing directory contents, and deleting files/directories.",
   "prompt_note": "This is the canonical **Composite Pattern** problem. The trick is recognizing that File and Directory should share a common base (Node) so that operations like 'delete', 'getSize', and 'getPath' work uniformly. The recursive nature of directories means most operations have a recursive implementation. Watch for the temptation to over-engineer with permissions, symlinks, etc. — keep it minimal.",
-
   "clarifying_questions": [
     {
       "question": "You: \"What operations should be supported? Standard Unix-like — mkdir, ls, cat, write, rm?\"",
@@ -43,7 +57,6 @@
       "why": "Need locking. Coarse-grained (one global lock) is acceptable; fine-grained (per-directory) is better."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**`mkdir(path)`** — create a directory. Parent must exist. Fails if path already exists.",
@@ -60,7 +73,6 @@
       "Permissions, ownership, symbolic links, hard links, file modification timestamps, file size limits, concurrency on a single file's content (we lock at the node level)."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Thread-safe:** concurrent operations on different paths must not block each other unnecessarily.",
@@ -71,7 +83,6 @@
       "Persistence to disk, ACID semantics, distributed coordination, file content streaming."
     ]
   },
-
   "primary_scope": [
     "Path resolution: walk from root, split on `/`, traverse children",
     "File and Directory share a `Node` abstraction (Composite Pattern)",
@@ -86,7 +97,6 @@
     "`DirectoryNotEmptyException` — `rm` on non-empty directory without `-r`",
     "`InvalidPathException` — malformed path (missing leading `/`, empty segments)"
   ],
-
   "entity_intro": "The Composite Pattern is the right model: define a base `Node` with common operations (name, parent, size). File and Directory both extend Node. Directory holds child Nodes — possibly Files, possibly more Directories. Operations work on Nodes generically.",
   "entities": [
     {
@@ -120,78 +130,184 @@
       "verdict_label": "✗ Just a String — not an entity"
     }
   ],
-
   "relationships": [
-    {"entity": "FileSystem", "owns": "root Directory, ReadWriteLock", "rel": "1 → 1 root Directory"},
-    {"entity": "Directory", "owns": "name, parent Directory, `Map<String, Node>` children", "rel": "1 → N child Nodes (Files or Directories)"},
-    {"entity": "File", "owns": "name, parent Directory, content String", "rel": "Leaf — no children"},
-    {"entity": "Node (abstract)", "owns": "name, parent reference", "rel": "Base for File and Directory"}
+    {
+      "entity": "FileSystem",
+      "owns": "root Directory, ReadWriteLock",
+      "rel": "1 → 1 root Directory"
+    },
+    {
+      "entity": "Directory",
+      "owns": "name, parent Directory, `Map<String, Node>` children",
+      "rel": "1 → N child Nodes (Files or Directories)"
+    },
+    {
+      "entity": "File",
+      "owns": "name, parent Directory, content String",
+      "rel": "Leaf — no children"
+    },
+    {
+      "entity": "Node (abstract)",
+      "owns": "name, parent reference",
+      "rel": "Base for File and Directory"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Node hierarchy (Node, File, Directory). **Service** = Path resolution + tree traversal logic (lives partly in Directory and partly in FileSystem). **Controller** = FileSystem (the path-based public API). **Composite Pattern** is the central design choice — File and Directory are interchangeable at the Node level.",
-
   "classes": [
     {
-      "name": "Node (abstract)", "type": "abstract", "layer": "Model",
+      "name": "Node (abstract)",
+      "type": "abstract",
+      "layer": "Model",
       "fields": [
-        {"name": "name", "type": "String"},
-        {"name": "parent", "type": "Directory"},
-        {"name": "createdAt", "type": "Instant"}
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "parent",
+          "type": "Directory"
+        },
+        {
+          "name": "createdAt",
+          "type": "Instant"
+        }
       ],
       "methods": [
-        {"name": "getSize()", "returns": "long (abstract)"},
-        {"name": "isDirectory()", "returns": "boolean (abstract)"},
-        {"name": "getPath()", "returns": "String (recursive)"}
+        {
+          "name": "getSize()",
+          "returns": "long (abstract)"
+        },
+        {
+          "name": "isDirectory()",
+          "returns": "boolean (abstract)"
+        },
+        {
+          "name": "getPath()",
+          "returns": "String (recursive)"
+        }
       ]
     },
     {
-      "name": "File", "type": "class", "layer": "Model",
+      "name": "File",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "content", "type": "StringBuilder"}
+        {
+          "name": "content",
+          "type": "StringBuilder"
+        }
       ],
       "methods": [
-        {"name": "read()", "returns": "String"},
-        {"name": "write(content)", "returns": "void"},
-        {"name": "append(content)", "returns": "void"},
-        {"name": "getSize()", "returns": "long (= content.length())"}
+        {
+          "name": "read()",
+          "returns": "String"
+        },
+        {
+          "name": "write(content)",
+          "returns": "void"
+        },
+        {
+          "name": "append(content)",
+          "returns": "void"
+        },
+        {
+          "name": "getSize()",
+          "returns": "long (= content.length())"
+        }
       ]
     },
     {
-      "name": "Directory", "type": "class", "layer": "Model",
+      "name": "Directory",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "children", "type": "ConcurrentHashMap<String, Node>"}
+        {
+          "name": "children",
+          "type": "ConcurrentHashMap<String, Node>"
+        }
       ],
       "methods": [
-        {"name": "addChild(node)", "returns": "void"},
-        {"name": "removeChild(name)", "returns": "Node"},
-        {"name": "getChild(name)", "returns": "Node"},
-        {"name": "listChildren()", "returns": "List<String>"},
-        {"name": "isEmpty()", "returns": "boolean"},
-        {"name": "getSize()", "returns": "long (recursive sum)"}
+        {
+          "name": "addChild(node)",
+          "returns": "void"
+        },
+        {
+          "name": "removeChild(name)",
+          "returns": "Node"
+        },
+        {
+          "name": "getChild(name)",
+          "returns": "Node"
+        },
+        {
+          "name": "listChildren()",
+          "returns": "List<String>"
+        },
+        {
+          "name": "isEmpty()",
+          "returns": "boolean"
+        },
+        {
+          "name": "getSize()",
+          "returns": "long (recursive sum)"
+        }
       ]
     },
     {
-      "name": "FileSystem", "type": "class", "layer": "Controller",
+      "name": "FileSystem",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "root", "type": "Directory"},
-        {"name": "lock", "type": "ReentrantReadWriteLock"}
+        {
+          "name": "root",
+          "type": "Directory"
+        },
+        {
+          "name": "lock",
+          "type": "ReentrantReadWriteLock"
+        }
       ],
       "methods": [
-        {"name": "mkdir(path)", "returns": "void"},
-        {"name": "mkdirAll(path)", "returns": "void"},
-        {"name": "ls(path)", "returns": "List<String>"},
-        {"name": "cat(path)", "returns": "String"},
-        {"name": "write(path, content)", "returns": "void"},
-        {"name": "append(path, content)", "returns": "void"},
-        {"name": "rm(path, recursive)", "returns": "void"},
-        {"name": "mv(from, to)", "returns": "void"},
-        {"name": "find(rootPath, pattern)", "returns": "List<String>"}
+        {
+          "name": "mkdir(path)",
+          "returns": "void"
+        },
+        {
+          "name": "mkdirAll(path)",
+          "returns": "void"
+        },
+        {
+          "name": "ls(path)",
+          "returns": "List<String>"
+        },
+        {
+          "name": "cat(path)",
+          "returns": "String"
+        },
+        {
+          "name": "write(path, content)",
+          "returns": "void"
+        },
+        {
+          "name": "append(path, content)",
+          "returns": "void"
+        },
+        {
+          "name": "rm(path, recursive)",
+          "returns": "void"
+        },
+        {
+          "name": "mv(from, to)",
+          "returns": "void"
+        },
+        {
+          "name": "find(rootPath, pattern)",
+          "returns": "List<String>"
+        }
       ]
     }
   ],
-
   "db_schema": [],
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -207,7 +323,6 @@
       "code": "import java.util.concurrent.locks.ReentrantReadWriteLock;\n\nclass FileSystem {\n    private final Directory root = new Directory(\"\", null);\n    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();\n\n    // ── Path parsing helper ──\n    private String[] splitPath(String path) {\n        if (path == null || path.isEmpty() || !path.startsWith(\"/\"))\n            throw new InvalidPathException(\"Path must start with /: \" + path);\n        if (path.equals(\"/\")) return new String[0];\n        return Arrays.stream(path.substring(1).split(\"/\"))\n            .filter(s -> !s.isEmpty())\n            .toArray(String[]::new);\n    }\n\n    // Walk tree to find a node — read-only\n    private Node resolve(String path) {\n        String[] parts = splitPath(path);\n        Node current = root;\n        for (String part : parts) {\n            if (!(current instanceof Directory dir))\n                throw new NotADirectoryException(\"Not a directory: \" + part);\n            Node next = dir.getChild(part);\n            if (next == null)\n                throw new PathNotFoundException(\"Path not found: \" + path);\n            current = next;\n        }\n        return current;\n    }\n\n    // ── mkdir ──────────────────────────\n    public void mkdir(String path) {\n        lock.writeLock().lock();\n        try {\n            String[] parts = splitPath(path);\n            if (parts.length == 0)\n                throw new PathAlreadyExistsException(\"/\");\n\n            String[] parentParts = Arrays.copyOf(parts, parts.length - 1);\n            String name = parts[parts.length - 1];\n            String parentPath = \"/\" + String.join(\"/\", parentParts);\n\n            Node parentNode = (parentParts.length == 0) ? root : resolve(parentPath);\n            if (!(parentNode instanceof Directory parent))\n                throw new NotADirectoryException(parentPath);\n            if (parent.getChild(name) != null)\n                throw new PathAlreadyExistsException(path);\n\n            parent.addChild(new Directory(name, parent));\n        } finally {\n            lock.writeLock().unlock();\n        }\n    }\n\n    // ── mkdirAll (mkdir -p) ─────────────\n    public void mkdirAll(String path) {\n        lock.writeLock().lock();\n        try {\n            String[] parts = splitPath(path);\n            Directory current = root;\n            for (String part : parts) {\n                Node child = current.getChild(part);\n                if (child == null) {\n                    Directory dir = new Directory(part, current);\n                    current.addChild(dir);\n                    current = dir;\n                } else if (child instanceof Directory d) {\n                    current = d;\n                } else {\n                    throw new NotADirectoryException(\n                        \"Path contains a file: \" + part);\n                }\n            }\n        } finally {\n            lock.writeLock().unlock();\n        }\n    }\n\n    // ── ls ──────────────────────────────\n    public List<String> ls(String path) {\n        lock.readLock().lock();\n        try {\n            Node node = resolve(path);\n            if (!(node instanceof Directory dir))\n                throw new NotADirectoryException(path);\n            List<String> children = dir.listChildren();\n            Collections.sort(children);\n            return children;\n        } finally {\n            lock.readLock().unlock();\n        }\n    }\n\n    // ── cat ─────────────────────────────\n    public String cat(String path) {\n        lock.readLock().lock();\n        try {\n            Node node = resolve(path);\n            if (!(node instanceof File file))\n                throw new NotAFileException(path);\n            return file.read();\n        } finally {\n            lock.readLock().unlock();\n        }\n    }\n\n    // ── write (overwrite or create) ─────\n    public void write(String path, String content) {\n        lock.writeLock().lock();\n        try {\n            String[] parts = splitPath(path);\n            if (parts.length == 0)\n                throw new InvalidPathException(\"Cannot write to root\");\n\n            String[] parentParts = Arrays.copyOf(parts, parts.length - 1);\n            String name = parts[parts.length - 1];\n            String parentPath = \"/\" + String.join(\"/\", parentParts);\n\n            Node parentNode = (parentParts.length == 0) ? root : resolve(parentPath);\n            if (!(parentNode instanceof Directory parent))\n                throw new NotADirectoryException(parentPath);\n\n            Node existing = parent.getChild(name);\n            if (existing == null) {\n                File file = new File(name, parent);\n                file.write(content);\n                parent.addChild(file);\n            } else if (existing instanceof File file) {\n                file.write(content);\n            } else {\n                throw new NotAFileException(path);\n            }\n        } finally {\n            lock.writeLock().unlock();\n        }\n    }\n\n    public void append(String path, String content) {\n        lock.writeLock().lock();\n        try {\n            Node node = resolve(path);\n            if (!(node instanceof File file))\n                throw new NotAFileException(path);\n            file.append(content);\n        } finally {\n            lock.writeLock().unlock();\n        }\n    }\n\n    // ── rm ──────────────────────────────\n    public void rm(String path, boolean recursive) {\n        lock.writeLock().lock();\n        try {\n            Node node = resolve(path);\n            if (node == root)\n                throw new InvalidPathException(\"Cannot delete root\");\n\n            if (node instanceof Directory dir && !dir.isEmpty() && !recursive)\n                throw new DirectoryNotEmptyException(path);\n\n            // Detach from parent — orphans the entire subtree\n            node.getParent().removeChild(node.getName());\n        } finally {\n            lock.writeLock().unlock();\n        }\n    }\n\n    // ── mv (rename or move) ──────────────\n    public void mv(String from, String to) {\n        lock.writeLock().lock();\n        try {\n            Node sourceNode = resolve(from);\n            if (sourceNode == root)\n                throw new InvalidPathException(\"Cannot move root\");\n\n            String[] toParts = splitPath(to);\n            if (toParts.length == 0)\n                throw new PathAlreadyExistsException(\"/\");\n\n            String[] toParentParts = Arrays.copyOf(toParts, toParts.length - 1);\n            String newName = toParts[toParts.length - 1];\n            String toParentPath = \"/\" + String.join(\"/\", toParentParts);\n\n            Node targetParentNode = (toParentParts.length == 0) ? root : resolve(toParentPath);\n            if (!(targetParentNode instanceof Directory targetParent))\n                throw new NotADirectoryException(toParentPath);\n            if (targetParent.getChild(newName) != null)\n                throw new PathAlreadyExistsException(to);\n\n            // Cycle check: cannot move a directory into itself or a descendant\n            if (sourceNode instanceof Directory) {\n                Node walker = targetParent;\n                while (walker != null) {\n                    if (walker == sourceNode)\n                        throw new InvalidPathException(\n                            \"Cannot move directory into itself or a descendant\");\n                    walker = walker.getParent();\n                }\n            }\n\n            // Detach from old parent, attach to new\n            sourceNode.getParent().removeChild(sourceNode.getName());\n            // Rename — needs reflection or a setName method (omitted setter for brevity)\n            // For correctness, recreate with new name:\n            Node renamed = (sourceNode instanceof File f)\n                ? cloneFile(f, newName, targetParent)\n                : cloneDir((Directory) sourceNode, newName, targetParent);\n            targetParent.addChild(renamed);\n        } finally {\n            lock.writeLock().unlock();\n        }\n    }\n\n    // ── find (recursive search) ──────────\n    public List<String> find(String rootPath, String pattern) {\n        lock.readLock().lock();\n        try {\n            Node startNode = resolve(rootPath);\n            List<String> results = new ArrayList<>();\n            findRecursive(startNode, pattern, results);\n            return results;\n        } finally {\n            lock.readLock().unlock();\n        }\n    }\n\n    private void findRecursive(Node node, String pattern, List<String> results) {\n        if (node.getName().contains(pattern)) {\n            results.add(node.getPath());\n        }\n        if (node instanceof Directory dir) {\n            for (Node child : dir.getAllChildren()) {\n                findRecursive(child, pattern, results);\n            }\n        }\n    }\n\n    // Helpers (simplified — production would handle deep clones differently)\n    private File cloneFile(File f, String newName, Directory parent) {\n        File copy = new File(newName, parent);\n        copy.write(f.read());\n        return copy;\n    }\n\n    private Directory cloneDir(Directory d, String newName, Directory parent) {\n        Directory copy = new Directory(newName, parent);\n        for (Node child : d.getAllChildren()) {\n            Node childCopy = (child instanceof File f)\n                ? cloneFile(f, child.getName(), copy)\n                : cloneDir((Directory) child, child.getName(), copy);\n            copy.addChild(childCopy);\n        }\n        return copy;\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Composite Pattern → Node / File / Directory",
@@ -225,7 +340,6 @@
       "where": "Would add `Node.accept(Visitor)` and visitor implementations"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Concurrent mkdir/rm on the same directory",
@@ -244,7 +358,6 @@
       "fix": "The cycle check walks from the target parent up to root, checking if the source node is encountered. If yes, throw — the move would create a loop. This check is **inside the write lock**, so no concurrent move can change the tree structure mid-check."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why use the Composite Pattern instead of separate File and Directory classes with no common base?",
@@ -278,5 +391,9 @@
       "question": "What's the difference between this and a real filesystem like ext4?",
       "answer": "Real filesystems: (1) Store data on disk in fixed-size blocks (4KB), with inodes mapping file → blocks. (2) Use B-trees or hash tables for directory entries (large dirs would be slow with our HashMap). (3) Have journaling for crash consistency. (4) Support concurrent writes to different files via fine-grained locking. (5) Handle huge files via indirect blocks (the inode points to blocks that point to more blocks). Our in-memory version is simpler but conceptually similar — same composite tree, same operations, no persistence layer."
     }
+  ],
+  "companies": [
+    "Dropbox",
+    "Google"
   ]
 }

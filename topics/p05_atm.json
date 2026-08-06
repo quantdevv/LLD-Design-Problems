@@ -2,14 +2,25 @@
   "title": "ATM System",
   "description": "Design an ATM that authenticates users, checks balances, withdraws cash (with denomination dispensing), deposits, and transfers. Combines Chain of Responsibility for bill dispensing with a transaction state machine.",
   "tags": [
-    {"type": "medium", "label": "Medium"},
-    {"type": "pattern", "label": "Chain of Responsibility"},
-    {"type": "pattern", "label": "State Machine"},
-    {"type": "concept", "label": "Transaction Safety"}
+    {
+      "type": "medium",
+      "label": "Medium"
+    },
+    {
+      "type": "pattern",
+      "label": "Chain of Responsibility"
+    },
+    {
+      "type": "pattern",
+      "label": "State Machine"
+    },
+    {
+      "type": "concept",
+      "label": "Transaction Safety"
+    }
   ],
   "prompt": "Design an ATM system that supports cash withdrawal, deposits, balance inquiry, and transfers.",
   "prompt_note": "ATMs combine two interesting design challenges: a **transaction state machine** (card inserted → PIN verified → operation selected → executed → card ejected) and a **Chain of Responsibility** for dispensing bills in the right denominations. The chain pattern is the star here.",
-
   "clarifying_questions": [
     {
       "question": "You: \"What denominations does the ATM hold? Is the supply finite?\"",
@@ -37,7 +48,6 @@
       "why": "Single-user per ATM, but account-level concurrency matters for balance updates."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**Authenticate:** card number + PIN. 3 failed attempts → lock account.",
@@ -51,7 +61,6 @@
       "Network communication with bank backend, card reading hardware, receipt printing, daily withdrawal limits, multi-currency."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Atomicity:** withdraw must debit account AND dispense cash together — not one without the other.",
@@ -62,7 +71,6 @@
       "Distributed transactions (2PC), audit trail persistence, uptime SLA."
     ]
   },
-
   "primary_scope": [
     "Insert card → validate card → enter PIN → authenticate (max 3 attempts)",
     "Select operation → balance / withdraw / deposit / transfer → execute",
@@ -78,7 +86,6 @@
     "`InvalidAmountException` — amount not a multiple of ₹100 or ≤ 0",
     "`AccountNotFoundException` — transfer target doesn't exist"
   ],
-
   "entity_intro": "The ATM has a clear session lifecycle (IDLE → CARD_INSERTED → AUTHENTICATED → OPERATION_SELECTED → IDLE). The dispensing logic is a separate concern — Chain of Responsibility.",
   "entities": [
     {
@@ -118,102 +125,255 @@
       "verdict_label": "? Optional — audit log entity"
     }
   ],
-
   "relationships": [
-    {"entity": "ATM", "owns": "CashDispenser (chain head), AccountRepository ref, session state (currentAccount)", "rel": "1→1 CashDispenser chain, 1→1 AccountRepository"},
-    {"entity": "CashDispenser", "owns": "denomination, count, nextHandler ref", "rel": "Chain: 2000→500→200→100"},
-    {"entity": "AccountRepository", "owns": "`Map<cardNumber, Account>`", "rel": "1→N Accounts"}
+    {
+      "entity": "ATM",
+      "owns": "CashDispenser (chain head), AccountRepository ref, session state (currentAccount)",
+      "rel": "1→1 CashDispenser chain, 1→1 AccountRepository"
+    },
+    {
+      "entity": "CashDispenser",
+      "owns": "denomination, count, nextHandler ref",
+      "rel": "Chain: 2000→500→200→100"
+    },
+    {
+      "entity": "AccountRepository",
+      "owns": "`Map<cardNumber, Account>`",
+      "rel": "1→N Accounts"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Account, BankNote enum. **Service** = CashDispenser (chain), AccountRepository. **Controller** = ATM (session management, operation dispatch, public API).",
-
   "classes": [
     {
-      "name": "CashDispenser", "type": "class", "layer": "Service",
+      "name": "CashDispenser",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "denomination", "type": "int"},
-        {"name": "count", "type": "int"},
-        {"name": "nextHandler", "type": "CashDispenser"}
+        {
+          "name": "denomination",
+          "type": "int"
+        },
+        {
+          "name": "count",
+          "type": "int"
+        },
+        {
+          "name": "nextHandler",
+          "type": "CashDispenser"
+        }
       ],
       "methods": [
-        {"name": "dispense(amount)", "returns": "Map<Integer,Integer>"},
-        {"name": "canDispense(amount)", "returns": "boolean"},
-        {"name": "refill(qty)", "returns": "void"}
+        {
+          "name": "dispense(amount)",
+          "returns": "Map<Integer,Integer>"
+        },
+        {
+          "name": "canDispense(amount)",
+          "returns": "boolean"
+        },
+        {
+          "name": "refill(qty)",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "Account", "type": "class", "layer": "Model",
+      "name": "Account",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "accountId", "type": "String"},
-        {"name": "cardNumber", "type": "String"},
-        {"name": "hashedPin", "type": "String"},
-        {"name": "balance", "type": "long (paise/cents)"},
-        {"name": "isLocked", "type": "boolean"},
-        {"name": "failedAttempts", "type": "int"}
+        {
+          "name": "accountId",
+          "type": "String"
+        },
+        {
+          "name": "cardNumber",
+          "type": "String"
+        },
+        {
+          "name": "hashedPin",
+          "type": "String"
+        },
+        {
+          "name": "balance",
+          "type": "long (paise/cents)"
+        },
+        {
+          "name": "isLocked",
+          "type": "boolean"
+        },
+        {
+          "name": "failedAttempts",
+          "type": "int"
+        }
       ],
       "methods": [
-        {"name": "verifyPin(pin)", "returns": "boolean"},
-        {"name": "debit(amount)", "returns": "void (synchronized)"},
-        {"name": "credit(amount)", "returns": "void (synchronized)"},
-        {"name": "getBalance()", "returns": "long"}
+        {
+          "name": "verifyPin(pin)",
+          "returns": "boolean"
+        },
+        {
+          "name": "debit(amount)",
+          "returns": "void (synchronized)"
+        },
+        {
+          "name": "credit(amount)",
+          "returns": "void (synchronized)"
+        },
+        {
+          "name": "getBalance()",
+          "returns": "long"
+        }
       ]
     },
     {
-      "name": "ATM", "type": "class", "layer": "Controller",
+      "name": "ATM",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "atmId", "type": "String"},
-        {"name": "dispenserChain", "type": "CashDispenser (head)"},
-        {"name": "accountRepo", "type": "AccountRepository"},
-        {"name": "currentAccount", "type": "Account"},
-        {"name": "state", "type": "ATMState enum"}
+        {
+          "name": "atmId",
+          "type": "String"
+        },
+        {
+          "name": "dispenserChain",
+          "type": "CashDispenser (head)"
+        },
+        {
+          "name": "accountRepo",
+          "type": "AccountRepository"
+        },
+        {
+          "name": "currentAccount",
+          "type": "Account"
+        },
+        {
+          "name": "state",
+          "type": "ATMState enum"
+        }
       ],
       "methods": [
-        {"name": "insertCard(cardNumber)", "returns": "void"},
-        {"name": "enterPin(pin)", "returns": "boolean"},
-        {"name": "checkBalance()", "returns": "long"},
-        {"name": "withdraw(amount)", "returns": "Map<Int,Int>"},
-        {"name": "deposit(amount)", "returns": "void"},
-        {"name": "transfer(targetId, amount)", "returns": "void"},
-        {"name": "ejectCard()", "returns": "void"}
+        {
+          "name": "insertCard(cardNumber)",
+          "returns": "void"
+        },
+        {
+          "name": "enterPin(pin)",
+          "returns": "boolean"
+        },
+        {
+          "name": "checkBalance()",
+          "returns": "long"
+        },
+        {
+          "name": "withdraw(amount)",
+          "returns": "Map<Int,Int>"
+        },
+        {
+          "name": "deposit(amount)",
+          "returns": "void"
+        },
+        {
+          "name": "transfer(targetId, amount)",
+          "returns": "void"
+        },
+        {
+          "name": "ejectCard()",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "accounts",
       "columns": [
-        {"name": "account_id", "type": "UUID", "pk": true},
-        {"name": "card_number", "type": "VARCHAR(16)", "idx": true},
-        {"name": "hashed_pin", "type": "VARCHAR(64)"},
-        {"name": "balance", "type": "BIGINT"},
-        {"name": "is_locked", "type": "BOOLEAN"},
-        {"name": "failed_attempts", "type": "INT"}
+        {
+          "name": "account_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "card_number",
+          "type": "VARCHAR(16)",
+          "idx": true
+        },
+        {
+          "name": "hashed_pin",
+          "type": "VARCHAR(64)"
+        },
+        {
+          "name": "balance",
+          "type": "BIGINT"
+        },
+        {
+          "name": "is_locked",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "failed_attempts",
+          "type": "INT"
+        }
       ]
     },
     {
       "table": "atm_cash_inventory",
       "columns": [
-        {"name": "atm_id", "type": "UUID", "pk": true},
-        {"name": "denomination", "type": "INT", "pk": true},
-        {"name": "count", "type": "INT"}
+        {
+          "name": "atm_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "denomination",
+          "type": "INT",
+          "pk": true
+        },
+        {
+          "name": "count",
+          "type": "INT"
+        }
       ]
     },
     {
       "table": "transactions",
       "columns": [
-        {"name": "txn_id", "type": "UUID", "pk": true},
-        {"name": "atm_id", "type": "UUID", "fk": true},
-        {"name": "account_id", "type": "UUID", "fk": true},
-        {"name": "type", "type": "ENUM(WITHDRAW,DEPOSIT,TRANSFER,BALANCE)"},
-        {"name": "amount", "type": "BIGINT"},
-        {"name": "status", "type": "ENUM(SUCCESS,FAILED,CANCELLED)"},
-        {"name": "created_at", "type": "TIMESTAMP", "idx": true}
+        {
+          "name": "txn_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "atm_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "account_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "type",
+          "type": "ENUM(WITHDRAW,DEPOSIT,TRANSFER,BALANCE)"
+        },
+        {
+          "name": "amount",
+          "type": "BIGINT"
+        },
+        {
+          "name": "status",
+          "type": "ENUM(SUCCESS,FAILED,CANCELLED)"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "idx": true
+        }
       ]
     }
   ],
   "schema_note": "**Optimistic locking on accounts:** add a `version` column. On debit: `UPDATE accounts SET balance = balance - ?, version = version + 1 WHERE account_id = ? AND version = ?`. If 0 rows affected → concurrent modification, retry.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -233,7 +393,6 @@
       "code": "enum ATMState { IDLE, CARD_INSERTED, AUTHENTICATED }\n\nclass ATM {\n    private final String atmId;\n    private final CashDispenser dispenserChain;\n    private final AccountRepository accountRepo;\n    private ATMState state = ATMState.IDLE;\n    private Account currentAccount;\n\n    public ATM(String atmId, AccountRepository repo,\n               int[] denominations, int[] counts) {\n        this.atmId = atmId;\n        this.accountRepo = repo;\n        this.dispenserChain = CashDispenser.buildChain(\n            denominations, counts);\n    }\n\n    // ── Session management ──────────────────\n    public void insertCard(String cardNumber) {\n        if (state != ATMState.IDLE)\n            throw new InvalidStateException(\"Card already inserted\");\n        currentAccount = accountRepo.findByCard(cardNumber);\n        if (currentAccount == null)\n            throw new InvalidCardException(cardNumber);\n        state = ATMState.CARD_INSERTED;\n    }\n\n    public boolean enterPin(String pin) {\n        requireState(ATMState.CARD_INSERTED);\n        boolean ok = currentAccount.verifyPin(pin);\n        if (ok) state = ATMState.AUTHENTICATED;\n        return ok;\n    }\n\n    // ── Operations (require AUTHENTICATED) ──\n    public long checkBalance() {\n        requireState(ATMState.AUTHENTICATED);\n        return currentAccount.getBalance();\n    }\n\n    public Map<Integer, Integer> withdraw(int amount) {\n        requireState(ATMState.AUTHENTICATED);\n\n        if (amount <= 0 || amount % 100 != 0)\n            throw new InvalidAmountException(\n                \"Amount must be positive multiple of 100\");\n\n        // Pre-check dispensability\n        if (!dispenserChain.canDispense(amount))\n            throw new ATMInsufficientCashException(\n                \"ATM cannot dispense \" + amount);\n\n        // Debit account first (will throw if insufficient)\n        currentAccount.debit(amount);\n\n        // Dispense bills\n        try {\n            return dispenserChain.dispense(amount);\n        } catch (ATMInsufficientCashException e) {\n            // Compensating transaction: credit back\n            currentAccount.credit(amount);\n            throw e;\n        }\n    }\n\n    public void deposit(int amount) {\n        requireState(ATMState.AUTHENTICATED);\n        if (amount <= 0)\n            throw new InvalidAmountException(\"Amount must be positive\");\n        currentAccount.credit(amount);\n    }\n\n    public void transfer(String targetAccountId, long amount) {\n        requireState(ATMState.AUTHENTICATED);\n        if (amount <= 0)\n            throw new InvalidAmountException(\"Amount must be positive\");\n\n        Account target = accountRepo.findById(targetAccountId);\n        if (target == null)\n            throw new AccountNotFoundException(targetAccountId);\n\n        // Lock ordering: always lock lower accountId first\n        // to prevent deadlock between two concurrent transfers\n        Account first, second;\n        if (currentAccount.getAccountId()\n                .compareTo(target.getAccountId()) < 0) {\n            first = currentAccount; second = target;\n        } else {\n            first = target; second = currentAccount;\n        }\n\n        synchronized (first) {\n            synchronized (second) {\n                currentAccount.debit(amount);\n                target.credit(amount);\n            }\n        }\n    }\n\n    public void ejectCard() {\n        currentAccount = null;\n        state = ATMState.IDLE;\n    }\n\n    private void requireState(ATMState required) {\n        if (state != required)\n            throw new InvalidStateException(\n                \"Expected \" + required + \", at \" + state);\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Chain of Responsibility → CashDispenser",
@@ -251,7 +410,6 @@
       "where": "`withdraw()` try-catch: `debit()` → `dispense()`, catch → `credit()` rollback"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two ATMs withdraw from the same account → overdraw",
@@ -266,7 +424,6 @@
       "fix": "In single-ATM use, this is sequential (one user at a time). For admin refill during a transaction, add `synchronized` on each CashDispenser's `count` field, or lock the entire chain head during dispense."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why Chain of Responsibility instead of a simple loop over denominations?",
@@ -292,5 +449,9 @@
       "question": "How would you add receipt printing?",
       "answer": "Create a `ReceiptService` interface with `print(Transaction)`. Inject into ATM. After each successful operation, call `receiptService.print(txn)`. Implementations: `ThermalPrinterReceipt`, `EmailReceipt`, `NoOpReceipt`. **Strategy Pattern** — the ATM doesn't know or care about the printing mechanism."
     }
+  ],
+  "companies": [
+    "Visa",
+    "JPMorgan"
   ]
 }

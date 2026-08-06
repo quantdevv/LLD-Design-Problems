@@ -2,15 +2,29 @@
   "title": "Movie Ticket Booking (BookMyShow)",
   "description": "Design a movie ticket booking system: browse movies, pick a show, select seats, and book them. The concurrency challenge is preventing double-booking of the same seat while multiple users are selecting at the same time. Classic hold-then-confirm pattern.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Hold-and-Confirm"},
-    {"type": "pattern", "label": "Optimistic Locking"},
-    {"type": "concept", "label": "Concurrency"},
-    {"type": "concept", "label": "State Machine"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Hold-and-Confirm"
+    },
+    {
+      "type": "pattern",
+      "label": "Optimistic Locking"
+    },
+    {
+      "type": "concept",
+      "label": "Concurrency"
+    },
+    {
+      "type": "concept",
+      "label": "State Machine"
+    }
   ],
   "prompt": "Design a movie ticket booking system like BookMyShow where users browse movies, pick shows, select seats, and book them.",
   "prompt_note": "The concurrency story is the interesting part. Two users click the same seat at the same moment — who gets it? The naive 'check then set' has a race. The correct pattern is **hold-then-confirm**: mark the seat HELD for a short TTL (5 min), redirect to payment, and only transition to BOOKED on payment success. If payment fails or TTL expires, the hold auto-releases.",
-
   "clarifying_questions": [
     {
       "question": "You: \"What's the hierarchy? Cities → theaters → screens → shows → seats?\"",
@@ -43,7 +57,6 @@
       "why": "Cancel is just a state transition. Refund logic belongs to the payment service."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**Browse:** list movies, theaters, and shows by city/date.",
@@ -57,7 +70,6 @@
       "Payment gateway integration, dynamic pricing, seat recommendations, loyalty programs, coupon codes, group booking discounts."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**No double-booking:** two users selecting the same seat must not both succeed.",
@@ -69,7 +81,6 @@
       "Distributed coordination across datacenters, sub-100ms p99 latency under extreme load."
     ]
   },
-
   "primary_scope": [
     "`getAvailableSeats(showId)` → returns seats with their status (AVAILABLE/HELD/BOOKED)",
     "`holdSeats(showId, userId, seatIds)` → atomic: all succeed or none → return holdId",
@@ -84,7 +95,6 @@
     "`PaymentFailedException` — payment gateway rejected",
     "`ShowNotFoundException` / `SeatNotFoundException`"
   ],
-
   "entity_intro": "Entities are hierarchical: City → Theater → Screen → Show → Seat. The interesting behavior is at the **Show** level — that's where the concurrent seat booking happens. A Show owns its seats and the lock that protects them.",
   "entities": [
     {
@@ -130,114 +140,292 @@
       "verdict_label": "✓ Entity — audit record"
     }
   ],
-
   "relationships": [
-    {"entity": "Show", "owns": "movieId, screenId, startTime, `Map<seatId, SeatStatus>`, ReentrantLock", "rel": "N→1 Movie, N→1 Screen, 1→N Seats (by reference to Screen's layout)"},
-    {"entity": "Hold", "owns": "holdId, showId, userId, seatIds, createdAt, ttl", "rel": "N→1 Show, N→1 User"},
-    {"entity": "Booking", "owns": "bookingId, userId, showId, seats, totalAmount, status", "rel": "N→1 User, N→1 Show"}
+    {
+      "entity": "Show",
+      "owns": "movieId, screenId, startTime, `Map<seatId, SeatStatus>`, ReentrantLock",
+      "rel": "N→1 Movie, N→1 Screen, 1→N Seats (by reference to Screen's layout)"
+    },
+    {
+      "entity": "Hold",
+      "owns": "holdId, showId, userId, seatIds, createdAt, ttl",
+      "rel": "N→1 Show, N→1 User"
+    },
+    {
+      "entity": "Booking",
+      "owns": "bookingId, userId, showId, seats, totalAmount, status",
+      "rel": "N→1 User, N→1 Show"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Movie, Theater, Screen, Seat, Hold, Booking, SeatStatus enum. **Service** = Show (owns the seat availability + locking), BookingService (orchestration). **Controller** = BookingService public API. The Show entity is **both model and service** — it holds state AND enforces the atomic hold operation.",
-
   "classes": [
     {
-      "name": "Show", "type": "class", "layer": "Service",
+      "name": "Show",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "showId", "type": "String"},
-        {"name": "movie", "type": "Movie"},
-        {"name": "screen", "type": "Screen"},
-        {"name": "startTime", "type": "LocalDateTime"},
-        {"name": "seatStatus", "type": "Map<String, SeatStatus>"},
-        {"name": "lock", "type": "ReentrantLock"}
+        {
+          "name": "showId",
+          "type": "String"
+        },
+        {
+          "name": "movie",
+          "type": "Movie"
+        },
+        {
+          "name": "screen",
+          "type": "Screen"
+        },
+        {
+          "name": "startTime",
+          "type": "LocalDateTime"
+        },
+        {
+          "name": "seatStatus",
+          "type": "Map<String, SeatStatus>"
+        },
+        {
+          "name": "lock",
+          "type": "ReentrantLock"
+        }
       ],
       "methods": [
-        {"name": "getAvailableSeats()", "returns": "List<Seat>"},
-        {"name": "tryHoldSeats(seatIds)", "returns": "boolean (atomic)"},
-        {"name": "confirmSeats(seatIds)", "returns": "void"},
-        {"name": "releaseSeats(seatIds)", "returns": "void"}
+        {
+          "name": "getAvailableSeats()",
+          "returns": "List<Seat>"
+        },
+        {
+          "name": "tryHoldSeats(seatIds)",
+          "returns": "boolean (atomic)"
+        },
+        {
+          "name": "confirmSeats(seatIds)",
+          "returns": "void"
+        },
+        {
+          "name": "releaseSeats(seatIds)",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "Hold", "type": "class", "layer": "Model",
+      "name": "Hold",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "holdId", "type": "String"},
-        {"name": "showId", "type": "String"},
-        {"name": "userId", "type": "String"},
-        {"name": "seatIds", "type": "Set<String>"},
-        {"name": "createdAt", "type": "Instant"},
-        {"name": "ttl", "type": "Duration"}
+        {
+          "name": "holdId",
+          "type": "String"
+        },
+        {
+          "name": "showId",
+          "type": "String"
+        },
+        {
+          "name": "userId",
+          "type": "String"
+        },
+        {
+          "name": "seatIds",
+          "type": "Set<String>"
+        },
+        {
+          "name": "createdAt",
+          "type": "Instant"
+        },
+        {
+          "name": "ttl",
+          "type": "Duration"
+        }
       ],
       "methods": [
-        {"name": "isExpired()", "returns": "boolean"}
+        {
+          "name": "isExpired()",
+          "returns": "boolean"
+        }
       ]
     },
     {
-      "name": "Booking", "type": "class", "layer": "Model",
+      "name": "Booking",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "bookingId", "type": "String"},
-        {"name": "userId", "type": "String"},
-        {"name": "showId", "type": "String"},
-        {"name": "seatIds", "type": "Set<String>"},
-        {"name": "totalAmount", "type": "long"},
-        {"name": "status", "type": "BookingStatus"},
-        {"name": "createdAt", "type": "Instant"}
+        {
+          "name": "bookingId",
+          "type": "String"
+        },
+        {
+          "name": "userId",
+          "type": "String"
+        },
+        {
+          "name": "showId",
+          "type": "String"
+        },
+        {
+          "name": "seatIds",
+          "type": "Set<String>"
+        },
+        {
+          "name": "totalAmount",
+          "type": "long"
+        },
+        {
+          "name": "status",
+          "type": "BookingStatus"
+        },
+        {
+          "name": "createdAt",
+          "type": "Instant"
+        }
       ],
       "methods": []
     },
     {
-      "name": "BookingService", "type": "class", "layer": "Controller",
+      "name": "BookingService",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "shows", "type": "Map<String, Show>"},
-        {"name": "holds", "type": "ConcurrentHashMap<String, Hold>"},
-        {"name": "bookings", "type": "ConcurrentHashMap<String, Booking>"},
-        {"name": "paymentService", "type": "PaymentService"},
-        {"name": "cleanupScheduler", "type": "ScheduledExecutorService"}
+        {
+          "name": "shows",
+          "type": "Map<String, Show>"
+        },
+        {
+          "name": "holds",
+          "type": "ConcurrentHashMap<String, Hold>"
+        },
+        {
+          "name": "bookings",
+          "type": "ConcurrentHashMap<String, Booking>"
+        },
+        {
+          "name": "paymentService",
+          "type": "PaymentService"
+        },
+        {
+          "name": "cleanupScheduler",
+          "type": "ScheduledExecutorService"
+        }
       ],
       "methods": [
-        {"name": "getAvailableSeats(showId)", "returns": "List<Seat>"},
-        {"name": "holdSeats(showId, userId, seatIds)", "returns": "String (holdId)"},
-        {"name": "confirmBooking(holdId, paymentToken)", "returns": "Booking"},
-        {"name": "cancelBooking(bookingId)", "returns": "void"},
-        {"name": "cleanupExpiredHolds()", "returns": "void"}
+        {
+          "name": "getAvailableSeats(showId)",
+          "returns": "List<Seat>"
+        },
+        {
+          "name": "holdSeats(showId, userId, seatIds)",
+          "returns": "String (holdId)"
+        },
+        {
+          "name": "confirmBooking(holdId, paymentToken)",
+          "returns": "Booking"
+        },
+        {
+          "name": "cancelBooking(bookingId)",
+          "returns": "void"
+        },
+        {
+          "name": "cleanupExpiredHolds()",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "shows",
       "columns": [
-        {"name": "show_id", "type": "UUID", "pk": true},
-        {"name": "movie_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "screen_id", "type": "UUID", "fk": true},
-        {"name": "start_time", "type": "TIMESTAMP", "idx": true}
+        {
+          "name": "show_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "movie_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "screen_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "start_time",
+          "type": "TIMESTAMP",
+          "idx": true
+        }
       ]
     },
     {
       "table": "show_seats",
       "columns": [
-        {"name": "show_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "seat_id", "type": "VARCHAR", "pk": true},
-        {"name": "status", "type": "ENUM(AVAIL,HELD,BOOKED)", "idx": true},
-        {"name": "held_by_user", "type": "UUID"},
-        {"name": "held_until", "type": "TIMESTAMP"}
+        {
+          "name": "show_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "seat_id",
+          "type": "VARCHAR",
+          "pk": true
+        },
+        {
+          "name": "status",
+          "type": "ENUM(AVAIL,HELD,BOOKED)",
+          "idx": true
+        },
+        {
+          "name": "held_by_user",
+          "type": "UUID"
+        },
+        {
+          "name": "held_until",
+          "type": "TIMESTAMP"
+        }
       ]
     },
     {
       "table": "bookings",
       "columns": [
-        {"name": "booking_id", "type": "UUID", "pk": true},
-        {"name": "user_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "show_id", "type": "UUID", "fk": true},
-        {"name": "seat_ids", "type": "TEXT[] or JSONB"},
-        {"name": "total_amount", "type": "BIGINT"},
-        {"name": "status", "type": "ENUM(CONFIRMED,CANCELLED)"},
-        {"name": "created_at", "type": "TIMESTAMP"}
+        {
+          "name": "booking_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "show_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "seat_ids",
+          "type": "TEXT[] or JSONB"
+        },
+        {
+          "name": "total_amount",
+          "type": "BIGINT"
+        },
+        {
+          "name": "status",
+          "type": "ENUM(CONFIRMED,CANCELLED)"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP"
+        }
       ]
     }
   ],
   "schema_note": "**In DB-backed version:** `SELECT ... FOR UPDATE` on `show_seats` rows during hold — atomicity via row-level locks. Add index on `(status, held_until)` for the cleanup query. In our in-memory version, a ReentrantLock per show serves the same purpose.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -261,7 +449,6 @@
       "code": "class BookingService {\n    private final Map<String, Show> shows = new ConcurrentHashMap<>();\n    private final ConcurrentHashMap<String, Hold> holds = new ConcurrentHashMap<>();\n    private final ConcurrentHashMap<String, Booking> bookings = new ConcurrentHashMap<>();\n    private final PaymentService paymentService;\n    private final ScheduledExecutorService cleanupScheduler;\n    private static final Duration HOLD_TTL = Duration.ofMinutes(5);\n\n    public BookingService(PaymentService paymentService) {\n        this.paymentService = paymentService;\n        this.cleanupScheduler = Executors.newSingleThreadScheduledExecutor();\n        cleanupScheduler.scheduleAtFixedRate(\n            this::cleanupExpiredHolds, 30, 30, TimeUnit.SECONDS);\n    }\n\n    public List<Seat> getAvailableSeats(String showId) {\n        Show show = shows.get(showId);\n        if (show == null) throw new ShowNotFoundException(showId);\n        return show.getAvailableSeats();\n    }\n\n    // ── holdSeats ─────────────────────────\n    public String holdSeats(String showId, String userId, Set<String> seatIds) {\n        if (seatIds == null || seatIds.isEmpty())\n            throw new IllegalArgumentException(\"seatIds required\");\n\n        Show show = shows.get(showId);\n        if (show == null) throw new ShowNotFoundException(showId);\n\n        // Atomic multi-seat hold — all or nothing\n        if (!show.tryHoldSeats(seatIds))\n            throw new SeatUnavailableException(\n                \"One or more seats not available\");\n\n        Hold hold = new Hold(showId, userId, seatIds, HOLD_TTL);\n        holds.put(hold.getHoldId(), hold);\n        return hold.getHoldId();\n    }\n\n    // ── confirmBooking ────────────────────\n    public Booking confirmBooking(String holdId, String paymentToken) {\n        Hold hold = holds.get(holdId);\n        if (hold == null)\n            throw new InvalidHoldException(\"Hold not found: \" + holdId);\n\n        if (hold.isExpired()) {\n            // Clean up the expired hold\n            Show show = shows.get(hold.getShowId());\n            if (show != null) show.releaseSeats(hold.getSeatIds());\n            holds.remove(holdId);\n            throw new HoldExpiredException(\"Hold expired, please retry\");\n        }\n\n        long totalAmount = computeTotal(hold);\n\n        // Process payment\n        boolean paymentOk = paymentService.processPayment(\n            hold.getUserId(), totalAmount, paymentToken);\n        if (!paymentOk) {\n            // Don't release the seats here — user might retry with a different card.\n            // Seats will auto-release on TTL expiry if not retried.\n            throw new PaymentFailedException(\"Payment declined\");\n        }\n\n        // Confirm seats — HELD → BOOKED\n        Show show = shows.get(hold.getShowId());\n        try {\n            show.confirmSeats(hold.getSeatIds());\n        } catch (IllegalStateException e) {\n            // Rare: TTL expired between our isExpired check and here.\n            // Refund the payment (out of scope for the LLD).\n            throw new HoldExpiredException(\"Hold expired during confirmation\");\n        }\n\n        // Create booking record\n        Booking booking = new Booking(\n            UUID.randomUUID().toString(),\n            hold.getUserId(),\n            hold.getShowId(),\n            hold.getSeatIds(),\n            totalAmount,\n            BookingStatus.CONFIRMED,\n            Instant.now());\n        bookings.put(booking.bookingId(), booking);\n        holds.remove(holdId);\n\n        return booking;\n    }\n\n    // ── cancelBooking ─────────────────────\n    public void cancelBooking(String bookingId) {\n        Booking b = bookings.get(bookingId);\n        if (b == null) throw new IllegalArgumentException(\"Booking not found\");\n        if (b.status() != BookingStatus.CONFIRMED) return;  // already cancelled\n\n        Show show = shows.get(b.showId());\n        if (show != null) show.releaseSeats(b.seatIds());\n\n        // Replace booking with cancelled version\n        bookings.put(bookingId, new Booking(\n            b.bookingId(), b.userId(), b.showId(), b.seatIds(),\n            b.totalAmount(), BookingStatus.CANCELLED, b.createdAt()));\n    }\n\n    // ── Background cleanup (TTL enforcement) ──\n    public void cleanupExpiredHolds() {\n        holds.forEach((id, hold) -> {\n            if (hold.isExpired()) {\n                Show show = shows.get(hold.getShowId());\n                if (show != null) show.releaseSeats(hold.getSeatIds());\n                holds.remove(id);\n            }\n        });\n    }\n\n    private long computeTotal(Hold hold) {\n        Show show = shows.get(hold.getShowId());\n        return show.getScreen().getLayout().stream()\n            .filter(s -> hold.getSeatIds().contains(s.seatId()))\n            .mapToLong(Seat::price)\n            .sum();\n    }\n\n    public void shutdown() {\n        cleanupScheduler.shutdown();\n    }\n}\n\ninterface PaymentService {\n    boolean processPayment(String userId, long amount, String token);\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Hold-and-Confirm (Two-Phase Booking)",
@@ -279,7 +466,6 @@
       "where": "`cleanupExpiredHolds()` scheduled to run every 30s"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two users clicking the same seat simultaneously",
@@ -302,7 +488,6 @@
       "fix": "The cleanup job removes expired holds from the `holds` map every 30 seconds. Without it, the map grows unbounded. For production, use `Caffeine` cache with `expireAfterWrite` — auto-eviction with no background thread needed."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why lock per-show instead of per-seat?",
@@ -332,5 +517,9 @@
       "question": "Distributed version — how would you scale across multiple servers?",
       "answer": "**Move the seat state to Redis or a DB with row-level locks.** Each server becomes stateless — reads and writes go to the shared store. Redis: `WATCH/MULTI/EXEC` for atomic multi-seat holds with optimistic locking. DB: `SELECT ... FOR UPDATE` on seat rows with `SKIP LOCKED` so concurrent holds don't block. Cleanup becomes a DB job: `UPDATE show_seats SET status='AVAILABLE' WHERE status='HELD' AND held_until < NOW()`. The Java design stays similar — the Show class becomes a thin wrapper around DB/Redis calls."
     }
+  ],
+  "companies": [
+    "BookMyShow",
+    "Fandango"
   ]
 }

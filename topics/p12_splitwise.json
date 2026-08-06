@@ -2,14 +2,25 @@
   "title": "Splitwise — Expense Splitting",
   "description": "Design an expense-splitting app where users create groups, add expenses, split them (equally, by percentage, or exactly), and see net balances. The interesting part is the balance sheet: representing who owes whom efficiently, and simplifying transitive debts.",
   "tags": [
-    {"type": "medium", "label": "Medium"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "pattern", "label": "Observer Pattern"},
-    {"type": "concept", "label": "Graph Algorithms"}
+    {
+      "type": "medium",
+      "label": "Medium"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Observer Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Graph Algorithms"
+    }
   ],
   "prompt": "Design Splitwise — a system where users can record shared expenses and see who owes whom.",
   "prompt_note": "Splitwise looks simple until you realize the balance sheet is a **directed graph** of debts. Alice owes Bob $10, Bob owes Carol $10 → this simplifies to Alice owes Carol $10. The split-type variation is a clean Strategy Pattern, but the graph simplification is where interviewers dig in.",
-
   "clarifying_questions": [
     {
       "question": "You: \"What types of splits are supported? Equal, exact amounts, percentages?\"",
@@ -42,7 +53,6 @@
       "why": "Edits affect historical balances. Real Splitwise handles this with expense history + recomputation."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**User and Group management:** create users, create groups, add/remove members.",
@@ -56,7 +66,6 @@
       "Multi-currency, expense edit/delete history, receipt uploads, recurring expenses, notifications, payment gateway integration."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Correctness over performance:** balances must be accurate to the last cent (use integer cents, not doubles).",
@@ -67,7 +76,6 @@
       "Distributed storage, high-throughput, sub-millisecond latency."
     ]
   },
-
   "primary_scope": [
     "`addExpense(paidBy, amount, participants, splitStrategy)` → compute shares → update balance sheet",
     "Split strategies compute `Map<userId, shareAmount>` — must sum to total",
@@ -81,7 +89,6 @@
     "`InsufficientSettlementException` — settling more than what's owed",
     "`IllegalArgumentException` — negative amount, empty participant list"
   ],
-
   "entity_intro": "Users, groups, expenses — all clear nouns. The interesting design question is: **how do we store balances?** Option A: recompute from expense history every time (slow, always correct). Option B: maintain a running balance sheet (fast, must stay in sync). We choose B with the expense history as the source of truth for rebuilds.",
   "entities": [
     {
@@ -121,121 +128,265 @@
       "verdict_label": "✓ Entity — Orchestrator"
     }
   ],
-
   "relationships": [
-    {"entity": "SplitwiseService", "owns": "`Map<userId, User>`, `Map<groupId, Group>`, `List<Expense>` history, BalanceSheet", "rel": "1→N Users, 1→N Groups, 1→1 BalanceSheet"},
-    {"entity": "Group", "owns": "groupId, name, `Set<userId>`", "rel": "N→N with Users"},
-    {"entity": "Expense", "owns": "paidByUserId, totalAmount, `Map<userId, share>`, splitType", "rel": "N→1 with paying User, N→M with participant Users"},
-    {"entity": "BalanceSheet", "owns": "`ConcurrentHashMap<userId, ConcurrentHashMap<userId, Long>>`", "rel": "Shared across all users, updated on every expense"}
+    {
+      "entity": "SplitwiseService",
+      "owns": "`Map<userId, User>`, `Map<groupId, Group>`, `List<Expense>` history, BalanceSheet",
+      "rel": "1→N Users, 1→N Groups, 1→1 BalanceSheet"
+    },
+    {
+      "entity": "Group",
+      "owns": "groupId, name, `Set<userId>`",
+      "rel": "N→N with Users"
+    },
+    {
+      "entity": "Expense",
+      "owns": "paidByUserId, totalAmount, `Map<userId, share>`, splitType",
+      "rel": "N→1 with paying User, N→M with participant Users"
+    },
+    {
+      "entity": "BalanceSheet",
+      "owns": "`ConcurrentHashMap<userId, ConcurrentHashMap<userId, Long>>`",
+      "rel": "Shared across all users, updated on every expense"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = User, Group, Expense, SplitType enum. **Service** = BalanceSheet (the stateful core), SplitStrategy implementations. **Controller** = SplitwiseService (public API, orchestration). The split between Service and Controller matters here: BalanceSheet is the 'heart' that does real work; SplitwiseService is the thin facade.",
-
   "classes": [
     {
-      "name": "SplitStrategy", "type": "interface", "layer": "Service",
+      "name": "SplitStrategy",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "computeShares(total, participants, params)", "returns": "Map<String, Long>"}
+        {
+          "name": "computeShares(total, participants, params)",
+          "returns": "Map<String, Long>"
+        }
       ]
     },
     {
-      "name": "EqualSplit", "type": "class", "layer": "Service",
+      "name": "EqualSplit",
+      "type": "class",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "computeShares(total, participants, params)", "returns": "Map<String, Long>"}
+        {
+          "name": "computeShares(total, participants, params)",
+          "returns": "Map<String, Long>"
+        }
       ]
     },
     {
-      "name": "ExactSplit", "type": "class", "layer": "Service",
+      "name": "ExactSplit",
+      "type": "class",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "computeShares(total, participants, amountMap)", "returns": "Map<String, Long>"}
+        {
+          "name": "computeShares(total, participants, amountMap)",
+          "returns": "Map<String, Long>"
+        }
       ]
     },
     {
-      "name": "PercentageSplit", "type": "class", "layer": "Service",
+      "name": "PercentageSplit",
+      "type": "class",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "computeShares(total, participants, percentMap)", "returns": "Map<String, Long>"}
+        {
+          "name": "computeShares(total, participants, percentMap)",
+          "returns": "Map<String, Long>"
+        }
       ]
     },
     {
-      "name": "BalanceSheet", "type": "class", "layer": "Service",
+      "name": "BalanceSheet",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "balances", "type": "ConcurrentHashMap<String, ConcurrentHashMap<String, Long>>"}
+        {
+          "name": "balances",
+          "type": "ConcurrentHashMap<String, ConcurrentHashMap<String, Long>>"
+        }
       ],
       "methods": [
-        {"name": "recordExpense(paidBy, shares)", "returns": "void"},
-        {"name": "recordSettlement(from, to, amount)", "returns": "void"},
-        {"name": "getBalance(u1, u2)", "returns": "long"},
-        {"name": "getNetBalances(users)", "returns": "Map<String, Long>"},
-        {"name": "simplifyDebts(users)", "returns": "List<Settlement>"}
+        {
+          "name": "recordExpense(paidBy, shares)",
+          "returns": "void"
+        },
+        {
+          "name": "recordSettlement(from, to, amount)",
+          "returns": "void"
+        },
+        {
+          "name": "getBalance(u1, u2)",
+          "returns": "long"
+        },
+        {
+          "name": "getNetBalances(users)",
+          "returns": "Map<String, Long>"
+        },
+        {
+          "name": "simplifyDebts(users)",
+          "returns": "List<Settlement>"
+        }
       ]
     },
     {
-      "name": "SplitwiseService", "type": "class", "layer": "Controller",
+      "name": "SplitwiseService",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "users", "type": "Map<String, User>"},
-        {"name": "groups", "type": "Map<String, Group>"},
-        {"name": "expenseHistory", "type": "List<Expense>"},
-        {"name": "balanceSheet", "type": "BalanceSheet"}
+        {
+          "name": "users",
+          "type": "Map<String, User>"
+        },
+        {
+          "name": "groups",
+          "type": "Map<String, Group>"
+        },
+        {
+          "name": "expenseHistory",
+          "type": "List<Expense>"
+        },
+        {
+          "name": "balanceSheet",
+          "type": "BalanceSheet"
+        }
       ],
       "methods": [
-        {"name": "addExpense(paidBy, amount, participants, strategy, params)", "returns": "String (expenseId)"},
-        {"name": "settleUp(from, to, amount)", "returns": "void"},
-        {"name": "getBalance(u1, u2)", "returns": "long"},
-        {"name": "getUserSummary(userId)", "returns": "Map<String, Long>"},
-        {"name": "simplifyGroupDebts(groupId)", "returns": "List<Settlement>"}
+        {
+          "name": "addExpense(paidBy, amount, participants, strategy, params)",
+          "returns": "String (expenseId)"
+        },
+        {
+          "name": "settleUp(from, to, amount)",
+          "returns": "void"
+        },
+        {
+          "name": "getBalance(u1, u2)",
+          "returns": "long"
+        },
+        {
+          "name": "getUserSummary(userId)",
+          "returns": "Map<String, Long>"
+        },
+        {
+          "name": "simplifyGroupDebts(groupId)",
+          "returns": "List<Settlement>"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "users",
       "columns": [
-        {"name": "user_id", "type": "UUID", "pk": true},
-        {"name": "name", "type": "VARCHAR"},
-        {"name": "email", "type": "VARCHAR", "idx": true}
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR",
+          "idx": true
+        }
       ]
     },
     {
       "table": "groups",
       "columns": [
-        {"name": "group_id", "type": "UUID", "pk": true},
-        {"name": "name", "type": "VARCHAR"}
+        {
+          "name": "group_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR"
+        }
       ]
     },
     {
       "table": "group_members",
       "columns": [
-        {"name": "group_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "user_id", "type": "UUID", "pk": true, "fk": true}
+        {
+          "name": "group_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        }
       ]
     },
     {
       "table": "expenses",
       "columns": [
-        {"name": "expense_id", "type": "UUID", "pk": true},
-        {"name": "group_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "paid_by_user_id", "type": "UUID", "fk": true},
-        {"name": "total_amount", "type": "BIGINT"},
-        {"name": "split_type", "type": "ENUM(EQUAL,EXACT,PCT)"},
-        {"name": "created_at", "type": "TIMESTAMP", "idx": true}
+        {
+          "name": "expense_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "group_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "paid_by_user_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "total_amount",
+          "type": "BIGINT"
+        },
+        {
+          "name": "split_type",
+          "type": "ENUM(EQUAL,EXACT,PCT)"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "idx": true
+        }
       ]
     },
     {
       "table": "expense_shares",
       "columns": [
-        {"name": "expense_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "user_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "share_amount", "type": "BIGINT"}
+        {
+          "name": "expense_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "share_amount",
+          "type": "BIGINT"
+        }
       ]
     }
   ],
   "schema_note": "**Store amounts as BIGINT in smallest currency unit** (paise/cents) — never as DOUBLE. Floating-point math on money is a recipe for off-by-one-cent bugs. Index `(group_id, created_at)` for fetching group expenses in order.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -256,7 +407,6 @@
       "code": "class SplitwiseService {\n    private final Map<String, User> users = new ConcurrentHashMap<>();\n    private final Map<String, Group> groups = new ConcurrentHashMap<>();\n    private final List<Expense> expenseHistory =\n        Collections.synchronizedList(new ArrayList<>());\n    private final BalanceSheet balanceSheet = new BalanceSheet();\n\n    // ── addExpense ───────────────────────\n    public String addExpense(String paidByUserId, long amount,\n                              List<String> participantIds,\n                              SplitType splitType, Object params) {\n        if (amount <= 0)\n            throw new IllegalArgumentException(\"Amount must be positive\");\n        if (!users.containsKey(paidByUserId))\n            throw new UserNotFoundException(paidByUserId);\n        for (String pid : participantIds) {\n            if (!users.containsKey(pid))\n                throw new UserNotFoundException(pid);\n        }\n\n        SplitStrategy strategy = switch (splitType) {\n            case EQUAL      -> new EqualSplit();\n            case EXACT      -> new ExactSplit();\n            case PERCENTAGE -> new PercentageSplit();\n        };\n\n        Map<String, Long> shares =\n            strategy.computeShares(amount, participantIds, params);\n\n        Expense expense = new Expense(UUID.randomUUID().toString(),\n            paidByUserId, amount, shares, splitType, System.currentTimeMillis());\n        expenseHistory.add(expense);\n\n        balanceSheet.recordExpense(paidByUserId, shares);\n        return expense.expenseId();\n    }\n\n    public void settleUp(String fromUser, String toUser, long amount) {\n        if (amount <= 0)\n            throw new IllegalArgumentException(\"Amount must be positive\");\n        balanceSheet.recordSettlement(fromUser, toUser, amount);\n    }\n\n    public long getBalance(String u1, String u2) {\n        return balanceSheet.getBalance(u1, u2);\n    }\n\n    public List<Settlement> simplifyGroupDebts(String groupId) {\n        Group g = groups.get(groupId);\n        if (g == null) throw new IllegalArgumentException(\"Unknown group\");\n        return balanceSheet.simplifyDebts(g.memberIds());\n    }\n}\n\nenum SplitType { EQUAL, EXACT, PERCENTAGE }\nrecord Expense(String expenseId, String paidBy, long total,\n               Map<String, Long> shares, SplitType type, long timestamp) {}\nrecord User(String userId, String name, String email) {}\nrecord Group(String groupId, String name, Set<String> memberIds) {}"
     }
   ],
-
   "patterns": [
     {
       "name": "Strategy Pattern → SplitStrategy",
@@ -274,7 +424,6 @@
       "where": "Would be added to BalanceSheet as listener callbacks"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two concurrent expenses in the same group corrupt the balance sheet",
@@ -289,7 +438,6 @@
       "fix": "Both go through the same `synchronized (lock)` block in BalanceSheet. They serialize. No double-update possible."
     }
   ],
-
   "deep_dives": [
     {
       "question": "How does debt simplification (greedy) work? Is it optimal?",
@@ -319,5 +467,8 @@
       "question": "Is the BalanceSheet a valid place for the simplification algorithm, or should it be a separate service?",
       "answer": "**Arguable.** BalanceSheet owns the data; putting the algorithm there is Law of Demeter-friendly. **Counter-argument:** simplification is a read-only analysis, not a state mutation — it could live in a separate `DebtSimplifier` service that takes a `BalanceSheet` as input. In a larger system, extraction makes sense. In a 35-minute interview, keeping it on BalanceSheet is fine. Mention the trade-off to show you're thinking about it."
     }
+  ],
+  "companies": [
+    "Splitwise"
   ]
 }

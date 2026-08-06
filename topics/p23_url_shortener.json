@@ -2,15 +2,29 @@
   "title": "URL Shortener (TinyURL / bit.ly)",
   "description": "Design a URL shortening service that creates short aliases for long URLs, redirects via the alias, tracks click analytics, and supports custom aliases and expiry. The classic **API design + encoding strategy** problem.",
   "tags": [
-    {"type": "medium", "label": "Medium"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "pattern", "label": "Factory Pattern"},
-    {"type": "concept", "label": "Hash/Encoding"},
-    {"type": "concept", "label": "Collision Handling"}
+    {
+      "type": "medium",
+      "label": "Medium"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Factory Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Hash/Encoding"
+    },
+    {
+      "type": "concept",
+      "label": "Collision Handling"
+    }
   ],
   "prompt": "Design a URL shortening service like TinyURL or bit.ly that converts long URLs into short aliases and redirects to the original on access.",
   "prompt_note": "This is one of the most commonly asked system design problems adapted to LLD scope. The interesting decisions are: (1) **how to generate the short code** — counter-based vs hash-based vs random, (2) **collision handling**, (3) custom alias support, (4) TTL/expiry. Keep it focused on the in-memory engine; don't go into load balancers and CDNs.",
-
   "clarifying_questions": [
     {
       "question": "You: \"What length for the short code? Fixed or variable?\"",
@@ -43,7 +57,6 @@
       "why": "Simplifies design — no deduplication lookup needed. Each `shorten()` call creates a new entry."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**`shorten(longUrl, customAlias?, ttl?)`** → returns short URL. Auto-generate code or use custom alias.",
@@ -57,7 +70,6 @@
       "User accounts, rate limiting, spam detection, preview pages, QR code generation, detailed analytics (geo, referrer, device)."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Redirect latency < 5ms** — lookup must be O(1). This is the hot path.",
@@ -69,7 +81,6 @@
       "Distributed ID generation (Snowflake), CDN caching, geographic routing."
     ]
   },
-
   "primary_scope": [
     "`shorten(longUrl)` → generate code via strategy → store mapping → return short URL",
     "`redirect(shortCode)` → lookup → if expired, remove + 404 → else return longUrl + increment counter",
@@ -83,7 +94,6 @@
     "`UrlNotFoundException` — short code doesn't exist or has expired",
     "`InvalidUrlException` — long URL is malformed (basic validation)"
   ],
-
   "entity_intro": "The core data model is simple: a `ShortenedUrl` mapping short code → long URL + metadata. The interesting design is **how we generate the short code** — this is where Strategy Pattern shines.",
   "entities": [
     {
@@ -111,87 +121,191 @@
       "verdict_label": "? Optional — simple counter is enough for LLD"
     }
   ],
-
   "relationships": [
-    {"entity": "UrlShortenerService", "owns": "`ConcurrentHashMap<shortCode, ShortenedUrl>`, CodeGenerator, cleanup scheduler", "rel": "1→N ShortenedUrls, 1→1 CodeGenerator"},
-    {"entity": "ShortenedUrl", "owns": "shortCode, longUrl, createdAt, expiresAt, clickCount", "rel": "Standalone mapping entry"}
+    {
+      "entity": "UrlShortenerService",
+      "owns": "`ConcurrentHashMap<shortCode, ShortenedUrl>`, CodeGenerator, cleanup scheduler",
+      "rel": "1→N ShortenedUrls, 1→1 CodeGenerator"
+    },
+    {
+      "entity": "ShortenedUrl",
+      "owns": "shortCode, longUrl, createdAt, expiresAt, clickCount",
+      "rel": "Standalone mapping entry"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = ShortenedUrl, AnalyticsEvent. **Service** = CodeGenerator strategies (code gen logic). **Controller** = UrlShortenerService (public API). This problem is **lightweight on entities but rich on strategy choices** — the interesting discussion is in the code generation, not the entity modeling.",
-
   "classes": [
     {
-      "name": "CodeGenerator", "type": "interface", "layer": "Service",
+      "name": "CodeGenerator",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "generate()", "returns": "String (7-char code)"}
+        {
+          "name": "generate()",
+          "returns": "String (7-char code)"
+        }
       ]
     },
     {
-      "name": "CounterBasedGenerator", "type": "class", "layer": "Service",
+      "name": "CounterBasedGenerator",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "counter", "type": "AtomicLong"}
+        {
+          "name": "counter",
+          "type": "AtomicLong"
+        }
       ],
       "methods": [
-        {"name": "generate()", "returns": "String (base62 encode of counter++)"}
+        {
+          "name": "generate()",
+          "returns": "String (base62 encode of counter++)"
+        }
       ]
     },
     {
-      "name": "ShortenedUrl", "type": "class", "layer": "Model",
+      "name": "ShortenedUrl",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "shortCode", "type": "String"},
-        {"name": "longUrl", "type": "String"},
-        {"name": "createdAt", "type": "Instant"},
-        {"name": "expiresAt", "type": "Instant (nullable)"},
-        {"name": "clickCount", "type": "AtomicLong"}
+        {
+          "name": "shortCode",
+          "type": "String"
+        },
+        {
+          "name": "longUrl",
+          "type": "String"
+        },
+        {
+          "name": "createdAt",
+          "type": "Instant"
+        },
+        {
+          "name": "expiresAt",
+          "type": "Instant (nullable)"
+        },
+        {
+          "name": "clickCount",
+          "type": "AtomicLong"
+        }
       ],
       "methods": [
-        {"name": "isExpired()", "returns": "boolean"},
-        {"name": "incrementClicks()", "returns": "void"},
-        {"name": "getClickCount()", "returns": "long"}
+        {
+          "name": "isExpired()",
+          "returns": "boolean"
+        },
+        {
+          "name": "incrementClicks()",
+          "returns": "void"
+        },
+        {
+          "name": "getClickCount()",
+          "returns": "long"
+        }
       ]
     },
     {
-      "name": "UrlShortenerService", "type": "class", "layer": "Controller",
+      "name": "UrlShortenerService",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "urlMap", "type": "ConcurrentHashMap<String, ShortenedUrl>"},
-        {"name": "codeGenerator", "type": "CodeGenerator"},
-        {"name": "baseUrl", "type": "String (e.g., https://short.ly/)"},
-        {"name": "cleanupScheduler", "type": "ScheduledExecutorService"}
+        {
+          "name": "urlMap",
+          "type": "ConcurrentHashMap<String, ShortenedUrl>"
+        },
+        {
+          "name": "codeGenerator",
+          "type": "CodeGenerator"
+        },
+        {
+          "name": "baseUrl",
+          "type": "String (e.g., https://short.ly/)"
+        },
+        {
+          "name": "cleanupScheduler",
+          "type": "ScheduledExecutorService"
+        }
       ],
       "methods": [
-        {"name": "shorten(longUrl, customAlias?, ttl?)", "returns": "String (full short URL)"},
-        {"name": "redirect(shortCode)", "returns": "String (long URL)"},
-        {"name": "getStats(shortCode)", "returns": "UrlStats"},
-        {"name": "delete(shortCode)", "returns": "void"}
+        {
+          "name": "shorten(longUrl, customAlias?, ttl?)",
+          "returns": "String (full short URL)"
+        },
+        {
+          "name": "redirect(shortCode)",
+          "returns": "String (long URL)"
+        },
+        {
+          "name": "getStats(shortCode)",
+          "returns": "UrlStats"
+        },
+        {
+          "name": "delete(shortCode)",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "shortened_urls",
       "columns": [
-        {"name": "short_code", "type": "VARCHAR(20)", "pk": true},
-        {"name": "long_url", "type": "TEXT"},
-        {"name": "created_at", "type": "TIMESTAMP"},
-        {"name": "expires_at", "type": "TIMESTAMP", "idx": true},
-        {"name": "click_count", "type": "BIGINT"}
+        {
+          "name": "short_code",
+          "type": "VARCHAR(20)",
+          "pk": true
+        },
+        {
+          "name": "long_url",
+          "type": "TEXT"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMP",
+          "idx": true
+        },
+        {
+          "name": "click_count",
+          "type": "BIGINT"
+        }
       ]
     },
     {
       "table": "click_events (optional analytics)",
       "columns": [
-        {"name": "event_id", "type": "BIGSERIAL", "pk": true},
-        {"name": "short_code", "type": "VARCHAR(20)", "fk": true, "idx": true},
-        {"name": "clicked_at", "type": "TIMESTAMP", "idx": true},
-        {"name": "referrer", "type": "VARCHAR"},
-        {"name": "user_agent", "type": "VARCHAR"}
+        {
+          "name": "event_id",
+          "type": "BIGSERIAL",
+          "pk": true
+        },
+        {
+          "name": "short_code",
+          "type": "VARCHAR(20)",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "clicked_at",
+          "type": "TIMESTAMP",
+          "idx": true
+        },
+        {
+          "name": "referrer",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "user_agent",
+          "type": "VARCHAR"
+        }
       ]
     }
   ],
   "schema_note": "**Redirect is the hot path** — `short_code` as PK gives O(1) lookup. The `click_events` table is append-only and write-heavy — consider a time-series DB (TimescaleDB) or Kafka + ClickHouse for real analytics at scale. Index `expires_at` for cleanup query: `DELETE WHERE expires_at < NOW()`.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -211,7 +325,6 @@
       "code": "class UrlShortenerService {\n    private static final int MAX_COLLISION_RETRIES = 5;\n\n    private final ConcurrentHashMap<String, ShortenedUrl> urlMap = new ConcurrentHashMap<>();\n    private final CodeGenerator codeGenerator;\n    private final String baseUrl;\n    private final ScheduledExecutorService cleanupScheduler;\n\n    public UrlShortenerService(CodeGenerator generator, String baseUrl) {\n        this.codeGenerator = generator;\n        this.baseUrl = baseUrl;\n        this.cleanupScheduler = Executors.newSingleThreadScheduledExecutor();\n        cleanupScheduler.scheduleAtFixedRate(\n            this::cleanupExpired, 1, 1, TimeUnit.HOURS);\n    }\n\n    // ── shorten ─────────────────────────\n    public String shorten(String longUrl, String customAlias, Duration ttl) {\n        validateUrl(longUrl);\n\n        String code;\n        if (customAlias != null && !customAlias.isBlank()) {\n            // Custom alias path\n            validateAlias(customAlias);\n            if (urlMap.containsKey(customAlias))\n                throw new AliasAlreadyExistsException(customAlias);\n            code = customAlias;\n        } else {\n            // Auto-generate with collision handling\n            code = generateUniqueCode();\n        }\n\n        ShortenedUrl entry = new ShortenedUrl(code, longUrl, ttl);\n\n        // Atomic put-if-absent for thread safety\n        ShortenedUrl existing = urlMap.putIfAbsent(code, entry);\n        if (existing != null) {\n            // Race condition: another thread beat us with this code\n            throw new AliasAlreadyExistsException(code);\n        }\n\n        return baseUrl + code;\n    }\n\n    // ── redirect (the hot path) ─────────\n    public String redirect(String shortCode) {\n        ShortenedUrl entry = urlMap.get(shortCode);\n        if (entry == null)\n            throw new UrlNotFoundException(shortCode);\n\n        // Lazy expiry check\n        if (entry.isExpired()) {\n            urlMap.remove(shortCode);\n            throw new UrlNotFoundException(shortCode + \" (expired)\");\n        }\n\n        // Atomic click increment — no lock needed\n        entry.incrementClicks();\n        return entry.getLongUrl();\n    }\n\n    // ── Stats ───────────────────────────\n    public UrlStats getStats(String shortCode) {\n        ShortenedUrl entry = urlMap.get(shortCode);\n        if (entry == null)\n            throw new UrlNotFoundException(shortCode);\n        return new UrlStats(entry.getShortCode(), entry.getLongUrl(),\n            entry.getClickCount(), entry.getCreatedAt(), entry.getExpiresAt());\n    }\n\n    // ── Delete ──────────────────────────\n    public void delete(String shortCode) {\n        if (urlMap.remove(shortCode) == null)\n            throw new UrlNotFoundException(shortCode);\n    }\n\n    // ── Code generation with retry ──────\n    private String generateUniqueCode() {\n        for (int i = 0; i < MAX_COLLISION_RETRIES; i++) {\n            String code = codeGenerator.generate();\n            if (!urlMap.containsKey(code)) return code;\n        }\n        throw new RuntimeException(\n            \"Failed to generate unique code after \" + MAX_COLLISION_RETRIES + \" attempts\");\n    }\n\n    // ── Validation ──────────────────────\n    private void validateUrl(String url) {\n        if (url == null || url.isBlank())\n            throw new InvalidUrlException(\"URL is empty\");\n        if (!url.startsWith(\"http://\") && !url.startsWith(\"https://\"))\n            throw new InvalidUrlException(\"URL must start with http(s)://\");\n    }\n\n    private void validateAlias(String alias) {\n        if (alias.length() < 3 || alias.length() > 20)\n            throw new InvalidAliasException(\"Alias must be 3-20 characters\");\n        if (!alias.matches(\"^[a-zA-Z0-9_-]+$\"))\n            throw new InvalidAliasException(\"Alias must be alphanumeric, _, or -\");\n    }\n\n    // ── Background cleanup ──────────────\n    private void cleanupExpired() {\n        urlMap.entrySet().removeIf(e -> e.getValue().isExpired());\n    }\n\n    public void shutdown() {\n        cleanupScheduler.shutdown();\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Strategy Pattern → CodeGenerator",
@@ -224,7 +337,6 @@
       "where": "`redirect()` — CHM.get() + AtomicLong — both lock-free"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two threads generate the same random code simultaneously",
@@ -243,7 +355,6 @@
       "fix": "The `redirect` method reads the entry from the map. Even if cleanup removes it from the map during the method, our local reference is still valid — we can still read `longUrl` and increment `clickCount`. The stale click won't be recorded against a deleted entry. Acceptable — the URL was about to expire anyway."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Counter-based vs Hash-based vs Random — which should you pick?",
@@ -269,5 +380,9 @@
       "question": "How would you scale this to billions of URLs?",
       "answer": "**Shard by short code.** Hash the short code to a partition (e.g., first char → 62 partitions). Each partition is a separate DB/cache shard. Redirect: hash the code → route to shard → lookup. **Cache hot URLs** in Redis (LRU eviction) — redirect latency drops to <1ms. **Counter sharding:** each server gets a counter range (e.g., server-1 gets 1M–2M, server-2 gets 2M–3M) — no coordination needed. **Read/write split:** writes go to primary → replicated to read replicas for redirects."
     }
+  ],
+  "companies": [
+    "Bitly",
+    "TinyURL"
   ]
 }

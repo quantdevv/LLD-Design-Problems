@@ -33,6 +33,13 @@
     });
     h += `</div>`;
     h += `<h1 class="prob-title">${esc(p.title)}</h1>`;
+    if (p.companies?.length) {
+      h += `<div class="prob-companies">`;
+      p.companies.forEach(c => {
+        h += `<span class="company-badge">${esc(c)}</span>`;
+      });
+      h += `</div>`;
+    }
     h += `<p class="prob-desc">${md(p.description)}</p>`;
     h += `</header>`;
     return h;

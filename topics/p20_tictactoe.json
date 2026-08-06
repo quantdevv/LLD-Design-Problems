@@ -2,15 +2,29 @@
   "title": "Tic-Tac-Toe (Game Engine Framework)",
   "description": "Design Tic-Tac-Toe, but with a twist: build it as a **generic game engine** that could be extended to Connect-Four, Gomoku, or other grid-based games. Tests your ability to distinguish 'rules of Tic-Tac-Toe' from 'rules of any grid game' and separate them via the Template Method pattern.",
   "tags": [
-    {"type": "medium", "label": "Medium"},
-    {"type": "pattern", "label": "Template Method"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "concept", "label": "Extensibility"},
-    {"type": "concept", "label": "Polymorphism"}
+    {
+      "type": "medium",
+      "label": "Medium"
+    },
+    {
+      "type": "pattern",
+      "label": "Template Method"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Extensibility"
+    },
+    {
+      "type": "concept",
+      "label": "Polymorphism"
+    }
   ],
   "prompt": "Design a Tic-Tac-Toe game. Bonus: make it extensible so the same engine can run Connect-Four with minimal changes.",
   "prompt_note": "The trap here is over-simplifying. 'Just a 3×3 board with X and O' feels like it needs ~50 lines of code. That's fine for a junior interview, but senior candidates should **design for extension**. The win-check logic, move validation, and board size are all game-specific. Isolate them into overridable hooks. Connect-Four should then be one new class (plus a different win checker).",
-
   "clarifying_questions": [
     {
       "question": "You: \"Just Tic-Tac-Toe, or should the design support other grid games like Connect-Four?\"",
@@ -43,7 +57,6 @@
       "why": "Undo is a nice extension via Memento or simple move log."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**Two players** alternating turns. Player 1 = X (or RED), Player 2 = O (or YELLOW).",
@@ -58,7 +71,6 @@
       "AI opponents (mention as extension), networking, UI/rendering, move history persistence, replay files, tournament management."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Extensibility:** adding Connect-Four should be one new subclass with ~50 lines. No changes to the base engine.",
@@ -69,7 +81,6 @@
       "Concurrency (turn-based, single-thread), performance (games are small), persistence."
     ]
   },
-
   "primary_scope": [
     "`makeMove(player, position)` → validate turn → validate move → apply → check winner → check draw → switch turn",
     "Subclass overrides: board dimensions, `isValidMove`, `applyMove`, `checkWinCondition`",
@@ -81,7 +92,6 @@
     "`GameAlreadyOverException` — move attempted after WON or DRAWN state",
     "Final states: WON (one player wins), DRAWN (board full, no winner)"
   ],
-
   "entity_intro": "The design hinges on separating **what every grid game has in common** from **what's specific to Tic-Tac-Toe**. Common: a 2D board, two players alternating, terminal states, move validation framework. Game-specific: board size, win condition, how moves apply. Template Method handles this cleanly.",
   "entities": [
     {
@@ -127,80 +137,192 @@
       "verdict_label": "✓ Enum — game state"
     }
   ],
-
   "relationships": [
-    {"entity": "BoardGame (abstract)", "owns": "Board, `Player[2]`, currentTurnIndex, GameState, winner", "rel": "1 → 1 Board, 1 → 2 Players"},
-    {"entity": "Board", "owns": "`Player[rows][cols]` grid, dimensions", "rel": "Contains Player references (or null for empty cells)"},
-    {"entity": "TicTacToe", "owns": "inherited from BoardGame, plus the 3×3 size constant", "rel": "Extends BoardGame"},
-    {"entity": "ConnectFour", "owns": "inherited plus 6×7 size and column-based move logic", "rel": "Extends BoardGame"}
+    {
+      "entity": "BoardGame (abstract)",
+      "owns": "Board, `Player[2]`, currentTurnIndex, GameState, winner",
+      "rel": "1 → 1 Board, 1 → 2 Players"
+    },
+    {
+      "entity": "Board",
+      "owns": "`Player[rows][cols]` grid, dimensions",
+      "rel": "Contains Player references (or null for empty cells)"
+    },
+    {
+      "entity": "TicTacToe",
+      "owns": "inherited from BoardGame, plus the 3×3 size constant",
+      "rel": "Extends BoardGame"
+    },
+    {
+      "entity": "ConnectFour",
+      "owns": "inherited plus 6×7 size and column-based move logic",
+      "rel": "Extends BoardGame"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Board, Player, Position, GameState enum. **Service** = BoardGame (the abstract template) + subclasses (TicTacToe, ConnectFour — each encapsulates game rules). **Controller** = The public `makeMove` API on BoardGame. This is a problem where **Model and Service blur** — the BoardGame subclasses carry both state (board, turn) and logic (rules).",
-
   "classes": [
     {
-      "name": "BoardGame (abstract)", "type": "abstract", "layer": "Service",
+      "name": "BoardGame (abstract)",
+      "type": "abstract",
+      "layer": "Service",
       "fields": [
-        {"name": "board", "type": "Board"},
-        {"name": "players", "type": "Player[2]"},
-        {"name": "currentPlayerIndex", "type": "int"},
-        {"name": "state", "type": "GameState"},
-        {"name": "winner", "type": "Player (nullable)"},
-        {"name": "moveHistory", "type": "List<Move>"}
+        {
+          "name": "board",
+          "type": "Board"
+        },
+        {
+          "name": "players",
+          "type": "Player[2]"
+        },
+        {
+          "name": "currentPlayerIndex",
+          "type": "int"
+        },
+        {
+          "name": "state",
+          "type": "GameState"
+        },
+        {
+          "name": "winner",
+          "type": "Player (nullable)"
+        },
+        {
+          "name": "moveHistory",
+          "type": "List<Move>"
+        }
       ],
       "methods": [
-        {"name": "makeMove(playerId, position)", "returns": "void (template)"},
-        {"name": "isValidMove(position)", "returns": "boolean (hook)"},
-        {"name": "applyMove(player, position)", "returns": "Position (hook)"},
-        {"name": "checkWinCondition(lastMove)", "returns": "boolean (hook)"},
-        {"name": "getBoardSize()", "returns": "int[] (hook)"},
-        {"name": "getState()", "returns": "GameState"},
-        {"name": "getWinner()", "returns": "Player"}
+        {
+          "name": "makeMove(playerId, position)",
+          "returns": "void (template)"
+        },
+        {
+          "name": "isValidMove(position)",
+          "returns": "boolean (hook)"
+        },
+        {
+          "name": "applyMove(player, position)",
+          "returns": "Position (hook)"
+        },
+        {
+          "name": "checkWinCondition(lastMove)",
+          "returns": "boolean (hook)"
+        },
+        {
+          "name": "getBoardSize()",
+          "returns": "int[] (hook)"
+        },
+        {
+          "name": "getState()",
+          "returns": "GameState"
+        },
+        {
+          "name": "getWinner()",
+          "returns": "Player"
+        }
       ]
     },
     {
-      "name": "TicTacToe", "type": "class", "layer": "Service",
+      "name": "TicTacToe",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "SIZE", "type": "static final int = 3"}
+        {
+          "name": "SIZE",
+          "type": "static final int = 3"
+        }
       ],
       "methods": [
-        {"name": "isValidMove(pos)", "returns": "boolean (in bounds + empty)"},
-        {"name": "applyMove(player, pos)", "returns": "Position (place at pos)"},
-        {"name": "checkWinCondition(lastMove)", "returns": "boolean (3 in a row/col/diag)"}
+        {
+          "name": "isValidMove(pos)",
+          "returns": "boolean (in bounds + empty)"
+        },
+        {
+          "name": "applyMove(player, pos)",
+          "returns": "Position (place at pos)"
+        },
+        {
+          "name": "checkWinCondition(lastMove)",
+          "returns": "boolean (3 in a row/col/diag)"
+        }
       ]
     },
     {
-      "name": "ConnectFour", "type": "class", "layer": "Service",
+      "name": "ConnectFour",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "ROWS", "type": "static final int = 6"},
-        {"name": "COLS", "type": "static final int = 7"},
-        {"name": "WIN_LENGTH", "type": "static final int = 4"}
+        {
+          "name": "ROWS",
+          "type": "static final int = 6"
+        },
+        {
+          "name": "COLS",
+          "type": "static final int = 7"
+        },
+        {
+          "name": "WIN_LENGTH",
+          "type": "static final int = 4"
+        }
       ],
       "methods": [
-        {"name": "isValidMove(pos)", "returns": "boolean (column in bounds + not full)"},
-        {"name": "applyMove(player, pos)", "returns": "Position (drop to lowest empty row in column)"},
-        {"name": "checkWinCondition(lastMove)", "returns": "boolean (4 in any direction from lastMove)"}
+        {
+          "name": "isValidMove(pos)",
+          "returns": "boolean (column in bounds + not full)"
+        },
+        {
+          "name": "applyMove(player, pos)",
+          "returns": "Position (drop to lowest empty row in column)"
+        },
+        {
+          "name": "checkWinCondition(lastMove)",
+          "returns": "boolean (4 in any direction from lastMove)"
+        }
       ]
     },
     {
-      "name": "Board", "type": "class", "layer": "Model",
+      "name": "Board",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "rows", "type": "int"},
-        {"name": "cols", "type": "int"},
-        {"name": "grid", "type": "Player[][]"}
+        {
+          "name": "rows",
+          "type": "int"
+        },
+        {
+          "name": "cols",
+          "type": "int"
+        },
+        {
+          "name": "grid",
+          "type": "Player[][]"
+        }
       ],
       "methods": [
-        {"name": "getCell(pos)", "returns": "Player (or null)"},
-        {"name": "setCell(pos, player)", "returns": "void"},
-        {"name": "isFull()", "returns": "boolean"},
-        {"name": "isEmpty(pos)", "returns": "boolean"},
-        {"name": "inBounds(pos)", "returns": "boolean"}
+        {
+          "name": "getCell(pos)",
+          "returns": "Player (or null)"
+        },
+        {
+          "name": "setCell(pos, player)",
+          "returns": "void"
+        },
+        {
+          "name": "isFull()",
+          "returns": "boolean"
+        },
+        {
+          "name": "isEmpty(pos)",
+          "returns": "boolean"
+        },
+        {
+          "name": "inBounds(pos)",
+          "returns": "boolean"
+        }
       ]
     }
   ],
-
   "db_schema": [],
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -230,7 +352,6 @@
       "code": "// Tic-Tac-Toe game\nPlayer alice = new Player(\"alice\", \"Alice\", 'X');\nPlayer bob = new Player(\"bob\", \"Bob\", 'O');\nTicTacToe ttt = new TicTacToe(alice, bob);\n\nttt.makeMove(\"alice\", new Position(0, 0));  // X at top-left\nttt.makeMove(\"bob\",   new Position(1, 1));  // O center\nttt.makeMove(\"alice\", new Position(0, 1));  // X top-middle\nttt.makeMove(\"bob\",   new Position(2, 2));  // O bottom-right\nttt.makeMove(\"alice\", new Position(0, 2));  // X top-right — wins!\n\nSystem.out.println(ttt.getState());  // WON\nSystem.out.println(ttt.getWinner().name()); // Alice\nSystem.out.println(ttt.getBoard().render());\n\n// Connect-Four game — reuses the same engine\nPlayer red = new Player(\"red\", \"Red\", 'R');\nPlayer yellow = new Player(\"yellow\", \"Yellow\", 'Y');\nConnectFour c4 = new ConnectFour(red, yellow);\n\n// Red drops in column 3; actual row is determined by applyMove\nc4.makeMove(\"red\", new Position(0, 3));\nc4.makeMove(\"yellow\", new Position(0, 2));\nc4.makeMove(\"red\", new Position(0, 3));\n// ... continue play\n\nSystem.out.println(c4.getBoard().render());"
     }
   ],
-
   "patterns": [
     {
       "name": "Template Method Pattern → BoardGame.makeMove()",
@@ -248,14 +369,12 @@
       "where": "Could refactor: `BoardGame(GameRules rules)` instead of `TicTacToe extends BoardGame`"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Not applicable — turn-based, single-threaded",
       "fix": "Tic-Tac-Toe is inherently sequential. One player moves, the other responds. No meaningful concurrency concerns for local play. For **network play**, you'd synchronize `makeMove` on the game instance — but that's an extension, not core."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why Template Method instead of just writing two separate game classes?",
@@ -289,5 +408,9 @@
       "question": "How would you handle games with more than two players?",
       "answer": "**Parameterize the player count.** Change `Player[2]` to `List<Player>`. The `currentPlayerIndex = (currentPlayerIndex + 1) % players.size()`. Turn alternation becomes rotation. Win condition is unchanged — whoever made the last move wins if their move triggers a win. **Consider:** some games might have elimination (player loses, others continue). That's a new hook: `isPlayerActive(player)`. Add it to the base class as a default returning true. **YAGNI until you need it.**"
     }
+  ],
+  "companies": [
+    "Microsoft",
+    "Google"
   ]
 }

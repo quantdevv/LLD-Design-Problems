@@ -2,15 +2,29 @@
   "title": "Distributed Task Scheduler",
   "description": "Design an in-process task scheduler that runs tasks at specific times, supports priorities, retries on failure, and uses a worker pool for parallel execution. The core data structure is a priority queue ordered by execution time.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Command Pattern"},
-    {"type": "pattern", "label": "Producer-Consumer"},
-    {"type": "concept", "label": "Priority Queue"},
-    {"type": "concept", "label": "Concurrency"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Command Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Producer-Consumer"
+    },
+    {
+      "type": "concept",
+      "label": "Priority Queue"
+    },
+    {
+      "type": "concept",
+      "label": "Concurrency"
+    }
   ],
   "prompt": "Design a task scheduler that runs tasks at a specific time with support for retries and priorities.",
   "prompt_note": "Scheduler problems are producer-consumer under the hood. Producers submit tasks; a dispatcher thread pulls due tasks from a priority queue and hands them to worker threads. The interesting bits are: efficient 'wait until next task is due' (use `DelayQueue` or condition variables), retry with backoff, and graceful shutdown.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Is this in-process (single JVM) or distributed across multiple machines?\"",
@@ -43,7 +57,6 @@
       "why": "Need a `stopped` flag and `ExecutorService.shutdown()` semantics."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "`scheduleAt(task, time)` → one-time execution at a specific timestamp.",
@@ -58,7 +71,6 @@
       "Distributed scheduling, persistence (tasks lost on restart), task result/callback propagation, CRON expressions, task dependencies/DAGs."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Efficient wait:** dispatcher thread must not busy-wait. Block until next task is due using `DelayQueue.take()` (condition variable under the hood).",
@@ -69,7 +81,6 @@
       "Strict real-time guarantees, millisecond precision across clock adjustments."
     ]
   },
-
   "primary_scope": [
     "`scheduleAt(task, time)` → wrap in ScheduledTask → add to DelayQueue → return taskId",
     "Dispatcher loop: `queue.take()` (blocks until due) → submit to worker pool",
@@ -83,7 +94,6 @@
     "Task cancelled → worker sees CANCELLED status, skips execution",
     "Dispatcher interrupted → break loop, stop workers"
   ],
-
   "entity_intro": "The core insight: separate the **time-ordered queue** (which task runs next) from the **execution pool** (who runs it). This prevents slow tasks from blocking the dispatcher.",
   "entities": [
     {
@@ -117,89 +127,212 @@
       "verdict_label": "? Inline thread — could extract if dispatcher logic grows"
     }
   ],
-
   "relationships": [
-    {"entity": "TaskScheduler", "owns": "`DelayQueue<ScheduledTask>`, `ExecutorService workerPool`, dispatcher thread, `ConcurrentHashMap<taskId, ScheduledTask>`", "rel": "1→1 queue, 1→1 pool, 1→N tasks"},
-    {"entity": "ScheduledTask", "owns": "taskId, Runnable, executionTime, priority, status, RetryPolicy, attempt count", "rel": "1→1 Runnable (user code)"},
-    {"entity": "RetryPolicy", "owns": "maxRetries, base delay, multiplier", "rel": "N tasks → 1 policy (reusable)"}
+    {
+      "entity": "TaskScheduler",
+      "owns": "`DelayQueue<ScheduledTask>`, `ExecutorService workerPool`, dispatcher thread, `ConcurrentHashMap<taskId, ScheduledTask>`",
+      "rel": "1→1 queue, 1→1 pool, 1→N tasks"
+    },
+    {
+      "entity": "ScheduledTask",
+      "owns": "taskId, Runnable, executionTime, priority, status, RetryPolicy, attempt count",
+      "rel": "1→1 Runnable (user code)"
+    },
+    {
+      "entity": "RetryPolicy",
+      "owns": "maxRetries, base delay, multiplier",
+      "rel": "N tasks → 1 policy (reusable)"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = ScheduledTask, TaskStatus enum, Priority enum, RetryPolicy. **Service** = Dispatcher loop, worker execution logic. **Controller** = TaskScheduler (public API: schedule/cancel/shutdown).",
-
   "classes": [
     {
-      "name": "TaskScheduler", "type": "class", "layer": "Controller",
+      "name": "TaskScheduler",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "queue", "type": "DelayQueue<ScheduledTask>"},
-        {"name": "workerPool", "type": "ExecutorService"},
-        {"name": "dispatcher", "type": "Thread"},
-        {"name": "allTasks", "type": "ConcurrentHashMap<String, ScheduledTask>"},
-        {"name": "running", "type": "volatile boolean"}
+        {
+          "name": "queue",
+          "type": "DelayQueue<ScheduledTask>"
+        },
+        {
+          "name": "workerPool",
+          "type": "ExecutorService"
+        },
+        {
+          "name": "dispatcher",
+          "type": "Thread"
+        },
+        {
+          "name": "allTasks",
+          "type": "ConcurrentHashMap<String, ScheduledTask>"
+        },
+        {
+          "name": "running",
+          "type": "volatile boolean"
+        }
       ],
       "methods": [
-        {"name": "scheduleAt(runnable, time, priority)", "returns": "String (taskId)"},
-        {"name": "scheduleEvery(runnable, interval, priority)", "returns": "String"},
-        {"name": "cancel(taskId)", "returns": "boolean"},
-        {"name": "shutdown()", "returns": "void"}
+        {
+          "name": "scheduleAt(runnable, time, priority)",
+          "returns": "String (taskId)"
+        },
+        {
+          "name": "scheduleEvery(runnable, interval, priority)",
+          "returns": "String"
+        },
+        {
+          "name": "cancel(taskId)",
+          "returns": "boolean"
+        },
+        {
+          "name": "shutdown()",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "ScheduledTask", "type": "class", "layer": "Model",
+      "name": "ScheduledTask",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "taskId", "type": "String (UUID)"},
-        {"name": "runnable", "type": "Runnable"},
-        {"name": "executionTime", "type": "long (epoch ms)"},
-        {"name": "priority", "type": "Priority"},
-        {"name": "status", "type": "volatile TaskStatus"},
-        {"name": "retryPolicy", "type": "RetryPolicy"},
-        {"name": "attempt", "type": "int"},
-        {"name": "intervalMs", "type": "long (0 if one-time)"}
+        {
+          "name": "taskId",
+          "type": "String (UUID)"
+        },
+        {
+          "name": "runnable",
+          "type": "Runnable"
+        },
+        {
+          "name": "executionTime",
+          "type": "long (epoch ms)"
+        },
+        {
+          "name": "priority",
+          "type": "Priority"
+        },
+        {
+          "name": "status",
+          "type": "volatile TaskStatus"
+        },
+        {
+          "name": "retryPolicy",
+          "type": "RetryPolicy"
+        },
+        {
+          "name": "attempt",
+          "type": "int"
+        },
+        {
+          "name": "intervalMs",
+          "type": "long (0 if one-time)"
+        }
       ],
       "methods": [
-        {"name": "getDelay(unit)", "returns": "long (Delayed interface)"},
-        {"name": "compareTo(other)", "returns": "int"},
-        {"name": "isRecurring()", "returns": "boolean"}
+        {
+          "name": "getDelay(unit)",
+          "returns": "long (Delayed interface)"
+        },
+        {
+          "name": "compareTo(other)",
+          "returns": "int"
+        },
+        {
+          "name": "isRecurring()",
+          "returns": "boolean"
+        }
       ]
     },
     {
-      "name": "RetryPolicy", "type": "interface", "layer": "Service",
+      "name": "RetryPolicy",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "shouldRetry(attempt)", "returns": "boolean"},
-        {"name": "nextDelayMs(attempt)", "returns": "long"}
+        {
+          "name": "shouldRetry(attempt)",
+          "returns": "boolean"
+        },
+        {
+          "name": "nextDelayMs(attempt)",
+          "returns": "long"
+        }
       ]
     },
     {
-      "name": "ExponentialBackoff", "type": "class", "layer": "Service",
+      "name": "ExponentialBackoff",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "baseDelayMs", "type": "long"},
-        {"name": "maxRetries", "type": "int"},
-        {"name": "multiplier", "type": "double"}
+        {
+          "name": "baseDelayMs",
+          "type": "long"
+        },
+        {
+          "name": "maxRetries",
+          "type": "int"
+        },
+        {
+          "name": "multiplier",
+          "type": "double"
+        }
       ],
       "methods": [
-        {"name": "shouldRetry(attempt)", "returns": "boolean"},
-        {"name": "nextDelayMs(attempt)", "returns": "long"}
+        {
+          "name": "shouldRetry(attempt)",
+          "returns": "boolean"
+        },
+        {
+          "name": "nextDelayMs(attempt)",
+          "returns": "long"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "scheduled_tasks (optional persistence)",
       "columns": [
-        {"name": "task_id", "type": "UUID", "pk": true},
-        {"name": "execution_time", "type": "TIMESTAMP", "idx": true},
-        {"name": "priority", "type": "ENUM(HIGH,MED,LOW)"},
-        {"name": "status", "type": "ENUM(PENDING,RUNNING,DONE,FAILED,CANCELLED)", "idx": true},
-        {"name": "interval_ms", "type": "BIGINT"},
-        {"name": "attempt", "type": "INT"},
-        {"name": "max_retries", "type": "INT"},
-        {"name": "payload", "type": "JSONB"}
+        {
+          "name": "task_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "execution_time",
+          "type": "TIMESTAMP",
+          "idx": true
+        },
+        {
+          "name": "priority",
+          "type": "ENUM(HIGH,MED,LOW)"
+        },
+        {
+          "name": "status",
+          "type": "ENUM(PENDING,RUNNING,DONE,FAILED,CANCELLED)",
+          "idx": true
+        },
+        {
+          "name": "interval_ms",
+          "type": "BIGINT"
+        },
+        {
+          "name": "attempt",
+          "type": "INT"
+        },
+        {
+          "name": "max_retries",
+          "type": "INT"
+        },
+        {
+          "name": "payload",
+          "type": "JSONB"
+        }
       ]
     }
   ],
   "schema_note": "For persistence, add a DB. Index `(status, execution_time)` for 'find next due task'. On startup, load all PENDING tasks into the DelayQueue. Not in LLD scope unless interviewer asks — in-memory by default.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -219,7 +352,6 @@
       "code": "class TaskScheduler {\n    private final DelayQueue<ScheduledTask> queue = new DelayQueue<>();\n    private final ExecutorService workerPool;\n    private final Thread dispatcher;\n    private final ConcurrentHashMap<String, ScheduledTask> allTasks = new ConcurrentHashMap<>();\n    private volatile boolean running = true;\n\n    public TaskScheduler(int numWorkers) {\n        this.workerPool = Executors.newFixedThreadPool(numWorkers);\n        this.dispatcher = new Thread(this::dispatchLoop, \"task-dispatcher\");\n        this.dispatcher.setDaemon(true);\n        this.dispatcher.start();\n    }\n\n    // ── Public API ──────────────────────────\n    public String scheduleAt(Runnable task, long epochMs,\n                             Priority priority, RetryPolicy policy) {\n        if (!running)\n            throw new SchedulerStoppedException(\"Scheduler stopped\");\n        ScheduledTask st = new ScheduledTask(task, epochMs, priority, policy, 0);\n        allTasks.put(st.getTaskId(), st);\n        queue.put(st);\n        return st.getTaskId();\n    }\n\n    public String scheduleEvery(Runnable task, long intervalMs,\n                                Priority priority) {\n        if (!running)\n            throw new SchedulerStoppedException(\"Scheduler stopped\");\n        long firstRun = System.currentTimeMillis() + intervalMs;\n        ScheduledTask st = new ScheduledTask(\n            task, firstRun, priority, RetryPolicy.NO_RETRY, intervalMs);\n        allTasks.put(st.getTaskId(), st);\n        queue.put(st);\n        return st.getTaskId();\n    }\n\n    public boolean cancel(String taskId) {\n        ScheduledTask st = allTasks.get(taskId);\n        if (st == null) return false;\n        if (st.getStatus() == TaskStatus.PENDING) {\n            st.setStatus(TaskStatus.CANCELLED);\n            return true;\n        }\n        return false; // already running or done\n    }\n\n    public void shutdown() {\n        running = false;\n        dispatcher.interrupt();\n        workerPool.shutdown();\n        try {\n            workerPool.awaitTermination(30, TimeUnit.SECONDS);\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }\n\n    // ── Dispatcher loop ─────────────────────\n    private void dispatchLoop() {\n        while (running) {\n            try {\n                ScheduledTask task = queue.take(); // blocks until due\n                if (task.getStatus() == TaskStatus.CANCELLED) {\n                    allTasks.remove(task.getTaskId());\n                    continue;\n                }\n                task.setStatus(TaskStatus.RUNNING);\n                workerPool.submit(() -> executeTask(task));\n            } catch (InterruptedException e) {\n                if (!running) break; // shutdown signal\n                Thread.currentThread().interrupt();\n            }\n        }\n    }\n\n    // ── Worker execution logic ──────────────\n    private void executeTask(ScheduledTask task) {\n        // Double-check cancellation just before execution\n        if (task.getStatus() == TaskStatus.CANCELLED) {\n            allTasks.remove(task.getTaskId());\n            return;\n        }\n\n        try {\n            task.getRunnable().run();\n\n            // Success path\n            if (task.isRecurring()) {\n                // Reschedule for next interval\n                task.setExecutionTime(\n                    System.currentTimeMillis() + task.getIntervalMs());\n                task.setStatus(TaskStatus.PENDING);\n                queue.put(task);\n            } else {\n                task.setStatus(TaskStatus.DONE);\n                allTasks.remove(task.getTaskId());\n            }\n        } catch (Exception e) {\n            // Failure path — retry with backoff?\n            task.incrementAttempt();\n            if (task.getRetryPolicy().shouldRetry(task.getAttempt())) {\n                long delay = task.getRetryPolicy().nextDelayMs(task.getAttempt());\n                task.setExecutionTime(System.currentTimeMillis() + delay);\n                task.setStatus(TaskStatus.PENDING);\n                queue.put(task);\n            } else {\n                task.setStatus(TaskStatus.FAILED);\n                // Optional: send to dead-letter queue / callback\n                allTasks.remove(task.getTaskId());\n            }\n        }\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Command Pattern → ScheduledTask wraps Runnable",
@@ -237,7 +369,6 @@
       "where": "`DelayQueue<ScheduledTask>` + `ExecutorService workerPool`"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Dispatcher busy-waiting on an empty queue",
@@ -256,7 +387,6 @@
       "fix": "`shutdown()` sets `running = false` → interrupts the dispatcher (breaking the `take()` call) → calls `workerPool.shutdown()` → `awaitTermination(30s)`. This means: no new tasks dispatched, in-flight workers complete, 30-second max wait. For a hard stop, use `workerPool.shutdownNow()` which interrupts running tasks."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why DelayQueue instead of PriorityQueue + sleep?",
@@ -282,5 +412,9 @@
       "question": "How do you handle clock adjustments (NTP sync)?",
       "answer": "`DelayQueue` uses `System.nanoTime()` internally which is monotonic — not affected by wall clock jumps. However, we store `executionTime` as `System.currentTimeMillis()` which **is** affected by NTP adjustments. A backward NTP jump could make tasks fire late. Fix: use `Instant.now(Clock.systemUTC())` for scheduling and convert to nanos-from-now for the DelayQueue. For extreme precision, inject a `Clock` and test with a fake."
     }
+  ],
+  "companies": [
+    "Google",
+    "Microsoft"
   ]
 }

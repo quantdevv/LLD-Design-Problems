@@ -2,15 +2,29 @@
   "title": "Rate Limiter",
   "description": "Design an in-process rate limiter that throttles requests per client. Supports multiple algorithms (Token Bucket, Sliding Window Log, Fixed Window). The most concurrency-intensive LLD problem — every nanosecond of lock contention matters.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "pattern", "label": "Token Bucket"},
-    {"type": "concept", "label": "Concurrency"},
-    {"type": "concept", "label": "Sliding Window"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Token Bucket"
+    },
+    {
+      "type": "concept",
+      "label": "Concurrency"
+    },
+    {
+      "type": "concept",
+      "label": "Sliding Window"
+    }
   ],
   "prompt": "Design a rate limiter that restricts how many requests a client can make within a time window.",
   "prompt_note": "Rate limiters sit on the **hot path** — every single request passes through them. This makes concurrency the dominant design concern. The algorithm choice (Token Bucket vs Sliding Window) is secondary to getting the locking right. Ask early whether this is in-process (single JVM) or distributed (Redis-backed).",
-
   "clarifying_questions": [
     {
       "question": "You: \"Is this an in-process rate limiter (single JVM) or distributed (shared across servers)?\"",
@@ -38,7 +52,6 @@
       "why": "Need a `RateLimitConfig` per client, not a global setting."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "`allowRequest(clientId)` → returns `true` if under limit, `false` if throttled.",
@@ -51,7 +64,6 @@
       "Distributed rate limiting (Redis), request queueing/retry, HTTP response headers (X-RateLimit-Remaining), IP-based detection."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Ultra-low latency:** `allowRequest()` must be O(1) or amortized O(1). This is on the hot path.",
@@ -63,7 +75,6 @@
       "Persistence, distributed coordination, analytics/reporting."
     ]
   },
-
   "primary_scope": [
     "`allowRequest(clientId)` → lookup/create bucket → try consume token → return boolean",
     "Token Bucket: lazy refill on each `allowRequest()` call (no background thread needed)",
@@ -75,7 +86,6 @@
     "`IllegalArgumentException` — null/empty clientId",
     "Client not registered → auto-create with default config, or reject (design choice)"
   ],
-
   "entity_intro": "The key design insight: separate the **routing** (which client → which bucket) from the **algorithm** (how the bucket decides allow/deny). Strategy Pattern is the natural fit.",
   "entities": [
     {
@@ -109,96 +119,210 @@
       "verdict_label": "✓ Entity — configuration"
     }
   ],
-
   "relationships": [
-    {"entity": "RateLimiter", "owns": "`ConcurrentHashMap<clientId, RateLimiterAlgorithm>`, `Map<clientId, RateLimitConfig>`", "rel": "1→N algorithm instances (one per client)"},
-    {"entity": "RateLimiterAlgorithm", "owns": "Internal state (tokens, timestamps)", "rel": "Standalone — no outward refs"},
-    {"entity": "RateLimitConfig", "owns": "algorithm type, capacity, rate, window", "rel": "1→1 with each client"}
+    {
+      "entity": "RateLimiter",
+      "owns": "`ConcurrentHashMap<clientId, RateLimiterAlgorithm>`, `Map<clientId, RateLimitConfig>`",
+      "rel": "1→N algorithm instances (one per client)"
+    },
+    {
+      "entity": "RateLimiterAlgorithm",
+      "owns": "Internal state (tokens, timestamps)",
+      "rel": "Standalone — no outward refs"
+    },
+    {
+      "entity": "RateLimitConfig",
+      "owns": "algorithm type, capacity, rate, window",
+      "rel": "1→1 with each client"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = RateLimitConfig. **Service** = TokenBucket, SlidingWindowLog (algorithm implementations). **Controller** = RateLimiter (routing, lazy init, public API).",
-
   "classes": [
     {
-      "name": "RateLimiterAlgorithm", "type": "interface", "layer": "Service",
+      "name": "RateLimiterAlgorithm",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "tryConsume()", "returns": "boolean"}
+        {
+          "name": "tryConsume()",
+          "returns": "boolean"
+        }
       ]
     },
     {
-      "name": "TokenBucket", "type": "class", "layer": "Service",
+      "name": "TokenBucket",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "maxTokens", "type": "int"},
-        {"name": "currentTokens", "type": "double"},
-        {"name": "refillRate", "type": "double (tokens/sec)"},
-        {"name": "lastRefillTime", "type": "long (nanos)"}
+        {
+          "name": "maxTokens",
+          "type": "int"
+        },
+        {
+          "name": "currentTokens",
+          "type": "double"
+        },
+        {
+          "name": "refillRate",
+          "type": "double (tokens/sec)"
+        },
+        {
+          "name": "lastRefillTime",
+          "type": "long (nanos)"
+        }
       ],
       "methods": [
-        {"name": "tryConsume()", "returns": "boolean (synchronized)"},
-        {"name": "refill()", "returns": "void (private)"}
+        {
+          "name": "tryConsume()",
+          "returns": "boolean (synchronized)"
+        },
+        {
+          "name": "refill()",
+          "returns": "void (private)"
+        }
       ]
     },
     {
-      "name": "SlidingWindowLog", "type": "class", "layer": "Service",
+      "name": "SlidingWindowLog",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "windowMillis", "type": "long"},
-        {"name": "maxRequests", "type": "int"},
-        {"name": "timestamps", "type": "Deque<Long>"}
+        {
+          "name": "windowMillis",
+          "type": "long"
+        },
+        {
+          "name": "maxRequests",
+          "type": "int"
+        },
+        {
+          "name": "timestamps",
+          "type": "Deque<Long>"
+        }
       ],
       "methods": [
-        {"name": "tryConsume()", "returns": "boolean (synchronized)"},
-        {"name": "evictStale()", "returns": "void (private)"}
+        {
+          "name": "tryConsume()",
+          "returns": "boolean (synchronized)"
+        },
+        {
+          "name": "evictStale()",
+          "returns": "void (private)"
+        }
       ]
     },
     {
-      "name": "RateLimitConfig", "type": "class", "layer": "Model",
+      "name": "RateLimitConfig",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "algorithm", "type": "enum (TOKEN_BUCKET, SLIDING_WINDOW)"},
-        {"name": "capacity", "type": "int"},
-        {"name": "refillRate", "type": "double"},
-        {"name": "windowSeconds", "type": "int"}
+        {
+          "name": "algorithm",
+          "type": "enum (TOKEN_BUCKET, SLIDING_WINDOW)"
+        },
+        {
+          "name": "capacity",
+          "type": "int"
+        },
+        {
+          "name": "refillRate",
+          "type": "double"
+        },
+        {
+          "name": "windowSeconds",
+          "type": "int"
+        }
       ],
       "methods": []
     },
     {
-      "name": "RateLimiter", "type": "class", "layer": "Controller",
+      "name": "RateLimiter",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "buckets", "type": "ConcurrentHashMap<String, RateLimiterAlgorithm>"},
-        {"name": "configs", "type": "Map<String, RateLimitConfig>"},
-        {"name": "defaultConfig", "type": "RateLimitConfig"}
+        {
+          "name": "buckets",
+          "type": "ConcurrentHashMap<String, RateLimiterAlgorithm>"
+        },
+        {
+          "name": "configs",
+          "type": "Map<String, RateLimitConfig>"
+        },
+        {
+          "name": "defaultConfig",
+          "type": "RateLimitConfig"
+        }
       ],
       "methods": [
-        {"name": "allowRequest(clientId)", "returns": "boolean"},
-        {"name": "registerClient(clientId, config)", "returns": "void"},
-        {"name": "removeClient(clientId)", "returns": "void"}
+        {
+          "name": "allowRequest(clientId)",
+          "returns": "boolean"
+        },
+        {
+          "name": "registerClient(clientId, config)",
+          "returns": "void"
+        },
+        {
+          "name": "removeClient(clientId)",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "rate_limit_configs",
       "columns": [
-        {"name": "client_id", "type": "VARCHAR", "pk": true},
-        {"name": "algorithm", "type": "ENUM(TOKEN_BUCKET, SLIDING_WINDOW)"},
-        {"name": "capacity", "type": "INT"},
-        {"name": "refill_rate", "type": "DOUBLE"},
-        {"name": "window_seconds", "type": "INT"}
+        {
+          "name": "client_id",
+          "type": "VARCHAR",
+          "pk": true
+        },
+        {
+          "name": "algorithm",
+          "type": "ENUM(TOKEN_BUCKET, SLIDING_WINDOW)"
+        },
+        {
+          "name": "capacity",
+          "type": "INT"
+        },
+        {
+          "name": "refill_rate",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "window_seconds",
+          "type": "INT"
+        }
       ]
     },
     {
       "table": "rate_limit_events (optional audit)",
       "columns": [
-        {"name": "event_id", "type": "BIGSERIAL", "pk": true},
-        {"name": "client_id", "type": "VARCHAR", "idx": true},
-        {"name": "allowed", "type": "BOOLEAN"},
-        {"name": "timestamp", "type": "TIMESTAMP", "idx": true}
+        {
+          "name": "event_id",
+          "type": "BIGSERIAL",
+          "pk": true
+        },
+        {
+          "name": "client_id",
+          "type": "VARCHAR",
+          "idx": true
+        },
+        {
+          "name": "allowed",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "timestamp",
+          "type": "TIMESTAMP",
+          "idx": true
+        }
       ]
     }
   ],
   "schema_note": "Rate limiter state is **entirely in-memory** at runtime — DB stores configs only. The events table is optional for analytics (throttle rate per client). Don't persist bucket state — it's ephemeral.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -220,7 +344,6 @@
       "code": "class RateLimiter {\n    private final ConcurrentHashMap<String, RateLimiterAlgorithm> buckets\n        = new ConcurrentHashMap<>();\n    private final Map<String, RateLimitConfig> configs\n        = new ConcurrentHashMap<>();\n    private final RateLimitConfig defaultConfig;\n\n    public RateLimiter(RateLimitConfig defaultConfig) {\n        this.defaultConfig = defaultConfig;\n    }\n\n    public boolean allowRequest(String clientId) {\n        if (clientId == null || clientId.isBlank())\n            throw new IllegalArgumentException(\"clientId required\");\n\n        RateLimiterAlgorithm algo = buckets.computeIfAbsent(\n            clientId, id -> createAlgorithm(\n                configs.getOrDefault(id, defaultConfig)));\n        return algo.tryConsume();\n    }\n\n    public void registerClient(String clientId, RateLimitConfig config) {\n        configs.put(clientId, config);\n        buckets.remove(clientId); // force re-creation with new config\n    }\n\n    public void removeClient(String clientId) {\n        configs.remove(clientId);\n        buckets.remove(clientId);\n    }\n\n    private RateLimiterAlgorithm createAlgorithm(RateLimitConfig config) {\n        return switch (config.algorithm()) {\n            case TOKEN_BUCKET -> new TokenBucket(\n                config.capacity(), config.refillRate());\n            case SLIDING_WINDOW -> new SlidingWindowLog(\n                config.capacity(), config.windowSeconds());\n        };\n    }\n\n    // Optional: evict inactive clients to prevent memory leak\n    public void evictInactive(Duration maxIdle) {\n        // In production: track lastAccessed per bucket,\n        // remove entries idle beyond maxIdle.\n        // Or use Caffeine cache with expireAfterAccess.\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Strategy Pattern → RateLimiterAlgorithm",
@@ -233,7 +356,6 @@
       "where": "`RateLimiter.createAlgorithm()` — switch on config.algorithm()"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two threads call allowRequest() for the same client simultaneously → double token consumption or race on token count",
@@ -252,7 +374,6 @@
       "fix": "Option 1: Use `Caffeine` cache with `expireAfterAccess(duration)` instead of plain ConcurrentHashMap — auto-evicts idle entries. Option 2: background job that scans for stale buckets. Option 3: wrap bucket in a timestamped holder, evict periodically."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Token Bucket vs Sliding Window Log — when to use which?",
@@ -278,5 +399,9 @@
       "question": "What's the real-world performance of synchronized per-bucket?",
       "answer": "Per-bucket `synchronized` means contention only among threads hitting the **same client**. For N clients, max contention = max concurrent requests per client. A typical API client sends 10–100 concurrent requests. `synchronized` on an uncontended lock is ~25ns (biased locking). Even contended, it's ~100ns. For comparison, a network RTT is 1–10ms. The lock is **never the bottleneck** in practice."
     }
+  ],
+  "companies": [
+    "Google",
+    "Netflix"
   ]
 }

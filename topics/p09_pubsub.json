@@ -2,15 +2,29 @@
   "title": "In-Memory Pub/Sub System",
   "description": "Design a publish-subscribe system where publishers post messages to topics and subscribers receive messages for topics they've subscribed to. Observer Pattern at scale with async delivery.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Observer Pattern"},
-    {"type": "pattern", "label": "Producer-Consumer"},
-    {"type": "concept", "label": "Async Delivery"},
-    {"type": "concept", "label": "Concurrency"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Observer Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Producer-Consumer"
+    },
+    {
+      "type": "concept",
+      "label": "Async Delivery"
+    },
+    {
+      "type": "concept",
+      "label": "Concurrency"
+    }
   ],
   "prompt": "Design an in-memory publish-subscribe system where publishers post to topics and subscribers receive messages for topics they care about.",
   "prompt_note": "Pub/Sub is the architectural backbone of event-driven systems (Kafka, Redis Pub/Sub, RabbitMQ). In-process version is still non-trivial: concurrent subscribe/unsubscribe while messages flow, slow subscribers not blocking publishers, ordering guarantees per topic, and delivery semantics (at-most-once vs at-least-once).",
-
   "clarifying_questions": [
     {
       "question": "You: \"In-process or distributed?\"",
@@ -43,7 +57,6 @@
       "why": "Avoid tangent on regex/trie matching. Plain string topics are fine."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "`publish(topic, message)` — send a message to all current subscribers of that topic. Non-blocking.",
@@ -58,7 +71,6 @@
       "Distributed pub/sub, message persistence, wildcard/pattern topics, exactly-once semantics, message TTL, dead-letter queues."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Non-blocking publish:** publisher latency = O(subscriber count × enqueue time). Never waits on subscriber processing.",
@@ -70,7 +82,6 @@
       "Cross-JVM coordination, persistence on restart, exactly-once idempotency tokens."
     ]
   },
-
   "primary_scope": [
     "`subscribe(topic, handler)` → create Subscription → spawn worker thread → store in topicMap → return handle",
     "`publish(topic, msg)` → iterate subscribers → enqueue to each subscriber's queue (non-blocking)",
@@ -83,7 +94,6 @@
     "Subscriber exceeds retry budget → drop message, log, increment `dropped` counter",
     "Subscriber queue full → drop oldest, log backpressure event"
   ],
-
   "entity_intro": "The key insight: a subscriber isn't just a callback — it's a callback + its own queue + its own worker thread. Modeling the subscription as a stateful entity lets us isolate slow consumers.",
   "entities": [
     {
@@ -117,70 +127,154 @@
       "verdict_label": "✗ Just a String — not an entity"
     }
   ],
-
   "relationships": [
-    {"entity": "PubSubBroker", "owns": "`ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>>`, shared `ExecutorService` (or per-subscription threads)", "rel": "1→N topics, N→M subscriptions"},
-    {"entity": "Subscription", "owns": "subscriptionId, topic, Subscriber callback, `BlockingQueue<Message>`, worker Thread, `AtomicLong dropped`", "rel": "1→1 Subscriber, 1→1 queue, 1→1 worker"},
-    {"entity": "Message", "owns": "topic, payload, timestamp", "rel": "Immutable value object"}
+    {
+      "entity": "PubSubBroker",
+      "owns": "`ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>>`, shared `ExecutorService` (or per-subscription threads)",
+      "rel": "1→N topics, N→M subscriptions"
+    },
+    {
+      "entity": "Subscription",
+      "owns": "subscriptionId, topic, Subscriber callback, `BlockingQueue<Message>`, worker Thread, `AtomicLong dropped`",
+      "rel": "1→1 Subscriber, 1→1 queue, 1→1 worker"
+    },
+    {
+      "entity": "Message",
+      "owns": "topic, payload, timestamp",
+      "rel": "Immutable value object"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Message record, Subscriber interface. **Service** = Subscription (owns queue + worker + retry logic — the interesting concurrency lives here). **Controller** = PubSubBroker (routing, registration, public API).",
-
   "classes": [
     {
-      "name": "Subscriber", "type": "interface", "layer": "Model",
+      "name": "Subscriber",
+      "type": "interface",
+      "layer": "Model",
       "fields": [],
       "methods": [
-        {"name": "onMessage(topic, payload)", "returns": "void (may throw)"}
+        {
+          "name": "onMessage(topic, payload)",
+          "returns": "void (may throw)"
+        }
       ]
     },
     {
-      "name": "Message", "type": "class", "layer": "Model",
+      "name": "Message",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "topic", "type": "String"},
-        {"name": "payload", "type": "Object"},
-        {"name": "timestamp", "type": "long"}
+        {
+          "name": "topic",
+          "type": "String"
+        },
+        {
+          "name": "payload",
+          "type": "Object"
+        },
+        {
+          "name": "timestamp",
+          "type": "long"
+        }
       ],
       "methods": [
-        {"name": "(record — auto accessors)", "returns": ""}
+        {
+          "name": "(record — auto accessors)",
+          "returns": ""
+        }
       ]
     },
     {
-      "name": "Subscription", "type": "class", "layer": "Service",
+      "name": "Subscription",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "subscriptionId", "type": "String"},
-        {"name": "topic", "type": "String"},
-        {"name": "subscriber", "type": "Subscriber"},
-        {"name": "queue", "type": "BlockingQueue<Message> (bounded)"},
-        {"name": "worker", "type": "Thread"},
-        {"name": "dropped", "type": "AtomicLong"},
-        {"name": "running", "type": "volatile boolean"}
+        {
+          "name": "subscriptionId",
+          "type": "String"
+        },
+        {
+          "name": "topic",
+          "type": "String"
+        },
+        {
+          "name": "subscriber",
+          "type": "Subscriber"
+        },
+        {
+          "name": "queue",
+          "type": "BlockingQueue<Message> (bounded)"
+        },
+        {
+          "name": "worker",
+          "type": "Thread"
+        },
+        {
+          "name": "dropped",
+          "type": "AtomicLong"
+        },
+        {
+          "name": "running",
+          "type": "volatile boolean"
+        }
       ],
       "methods": [
-        {"name": "enqueue(message)", "returns": "void (non-blocking, may drop)"},
-        {"name": "run()", "returns": "void (worker loop)"},
-        {"name": "stop()", "returns": "void"}
+        {
+          "name": "enqueue(message)",
+          "returns": "void (non-blocking, may drop)"
+        },
+        {
+          "name": "run()",
+          "returns": "void (worker loop)"
+        },
+        {
+          "name": "stop()",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "PubSubBroker", "type": "class", "layer": "Controller",
+      "name": "PubSubBroker",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "topicSubscriptions", "type": "ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>>"},
-        {"name": "allSubscriptions", "type": "ConcurrentHashMap<String, Subscription>"},
-        {"name": "queueCapacity", "type": "int"},
-        {"name": "running", "type": "volatile boolean"}
+        {
+          "name": "topicSubscriptions",
+          "type": "ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>>"
+        },
+        {
+          "name": "allSubscriptions",
+          "type": "ConcurrentHashMap<String, Subscription>"
+        },
+        {
+          "name": "queueCapacity",
+          "type": "int"
+        },
+        {
+          "name": "running",
+          "type": "volatile boolean"
+        }
       ],
       "methods": [
-        {"name": "publish(topic, payload)", "returns": "void"},
-        {"name": "subscribe(topic, subscriber)", "returns": "String (handle)"},
-        {"name": "unsubscribe(handle)", "returns": "void"},
-        {"name": "shutdown()", "returns": "void"}
+        {
+          "name": "publish(topic, payload)",
+          "returns": "void"
+        },
+        {
+          "name": "subscribe(topic, subscriber)",
+          "returns": "String (handle)"
+        },
+        {
+          "name": "unsubscribe(handle)",
+          "returns": "void"
+        },
+        {
+          "name": "shutdown()",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [],
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -204,7 +298,6 @@
       "code": "PubSubBroker broker = new PubSubBroker(1000);\n\n// Subscriber 1 — fast consumer\nString h1 = broker.subscribe(\"orders\", (topic, payload) -> {\n    System.out.println(\"Fast: \" + payload);\n});\n\n// Subscriber 2 — slow consumer (won't block fast one)\nString h2 = broker.subscribe(\"orders\", (topic, payload) -> {\n    Thread.sleep(100);  // simulated slow processing\n    System.out.println(\"Slow: \" + payload);\n});\n\n// Publish 1000 messages — returns immediately\nfor (int i = 0; i < 1000; i++) {\n    broker.publish(\"orders\", \"order-\" + i);\n}\n\n// Fast subscriber processes all 1000 quickly\n// Slow subscriber processes at 10/sec, may drop messages if queue fills\n\nbroker.unsubscribe(h2);\nbroker.shutdown();"
     }
   ],
-
   "patterns": [
     {
       "name": "Observer Pattern → Topic Subscription",
@@ -222,7 +315,6 @@
       "where": "One Subscription per subscriber, each with dedicated queue + worker"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Subscribe during active publish → ConcurrentModificationException",
@@ -245,7 +337,6 @@
       "fix": "`stop()` sets `running = false` and interrupts the worker. Remaining queue messages are lost by default. If drain-on-stop is required, drain inside `stop()` before returning: `while(!queue.isEmpty()) deliverWithRetry(queue.poll())` with a timeout to prevent hanging."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why one worker thread per subscription instead of a shared thread pool?",
@@ -275,5 +366,9 @@
       "question": "What if a subscriber needs to filter messages (e.g., only orders > $100)?",
       "answer": "Two approaches: (1) **Filter in the subscriber callback** — simplest, but the filtered messages still consumed queue space and CPU. (2) **Filter at subscribe time** via a `Predicate<Message>` — `broker.subscribe(topic, predicate, handler)`. The Subscription checks the predicate in `deliverWithRetry()` before invoking the handler. Not filtered = no CPU spent. This is how Kafka's consumer filtering works (via deserializers + predicates)."
     }
+  ],
+  "companies": [
+    "Google",
+    "AWS"
   ]
 }

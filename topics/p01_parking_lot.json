@@ -2,14 +2,25 @@
   "title": "Parking Lot System",
   "description": "Design a parking lot system that manages multiple floors, different vehicle types, and generates tickets. Classic state machine problem with real concurrency challenges around slot assignment.",
   "tags": [
-    {"type": "medium", "label": "Medium"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "pattern", "label": "Singleton"},
-    {"type": "concept", "label": "Concurrency"}
+    {
+      "type": "medium",
+      "label": "Medium"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Singleton"
+    },
+    {
+      "type": "concept",
+      "label": "Concurrency"
+    }
   ],
   "prompt": "Design a parking lot system where vehicles are assigned to spots as they pull in.",
   "prompt_note": "The prompt is intentionally minimal. Our job is to turn it into a spec we can design around. We spend the first 1–2 minutes asking clarifying questions to cover: core actions, error handling, system boundaries, and future extensions.",
-
   "clarifying_questions": [
     {
       "question": "You: \"How many floors and slots per floor? Are there different vehicle types?\"",
@@ -37,7 +48,6 @@
       "why": "Saved us from a 15-minute tangent on payment gateways."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "Support multiple vehicle types: Motorcycle, Car, Truck — each needs a different slot size (SMALL, MEDIUM, LARGE).",
@@ -50,7 +60,6 @@
       "Payment processing integration, online reservation, valet service, EV charging slots."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Thread-safe:** concurrent park/exit calls must not double-book a slot.",
@@ -61,7 +70,6 @@
       "Distributed deployment, persistence/RDBMS, metrics/monitoring, auto-scaling."
     ]
   },
-
   "primary_scope": [
     "Vehicle enters → slot allocated → ticket issued",
     "Vehicle exits → fee calculated → slot freed",
@@ -74,7 +82,6 @@
     "`IllegalArgumentException` — null/blank license plate",
     "`IllegalStateException` — attempting to park into an already-occupied slot (secondary guard)"
   ],
-
   "entity_intro": "Scan the requirements for nouns that maintain state or enforce rules. Discard anything that's just data on another entity.",
   "entities": [
     {
@@ -114,109 +121,265 @@
       "verdict_label": "✓ Entity — interface with variants"
     }
   ],
-
   "relationships": [
-    {"entity": "ParkingLot", "owns": "`List<Floor>`, `FeeStrategy`, `ConcurrentHashMap<ticketId, Ticket>`", "rel": "1 → N Floors, 1 → 1 FeeStrategy"},
-    {"entity": "Floor", "owns": "`Map<SlotType, Queue<ParkingSlot>>`, `ReentrantLock`", "rel": "1 → N ParkingSlots (grouped by type)"},
-    {"entity": "Ticket", "owns": "ParkingSlot ref, VehicleType, entryTime", "rel": "1 → 1 ParkingSlot"}
+    {
+      "entity": "ParkingLot",
+      "owns": "`List<Floor>`, `FeeStrategy`, `ConcurrentHashMap<ticketId, Ticket>`",
+      "rel": "1 → N Floors, 1 → 1 FeeStrategy"
+    },
+    {
+      "entity": "Floor",
+      "owns": "`Map<SlotType, Queue<ParkingSlot>>`, `ReentrantLock`",
+      "rel": "1 → N ParkingSlots (grouped by type)"
+    },
+    {
+      "entity": "Ticket",
+      "owns": "ParkingSlot ref, VehicleType, entryTime",
+      "rel": "1 → 1 ParkingSlot"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** In LLD problems, MVC doesn't apply literally (no HTTP views), but the **layered thinking** helps. **Model** = Enums + ParkingSlot + Ticket (pure data/state). **Service** = Floor (owns allocation logic + lock). **Controller** = ParkingLot (public API, orchestration, Singleton).",
-
   "classes": [
     {
-      "name": "FeeStrategy", "type": "interface", "layer": "Service",
+      "name": "FeeStrategy",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
-      "methods": [{"name": "calculateFee(minutes: long)", "returns": "double"}]
-    },
-    {
-      "name": "HourlyFeeStrategy", "type": "class", "layer": "Service",
-      "fields": [{"name": "ratePerHour", "type": "double"}],
-      "methods": [{"name": "calculateFee(minutes)", "returns": "double"}]
-    },
-    {
-      "name": "ParkingSlot", "type": "class", "layer": "Model",
-      "fields": [
-        {"name": "slotId", "type": "String"},
-        {"name": "floorNumber", "type": "int"},
-        {"name": "slotType", "type": "SlotType"},
-        {"name": "status", "type": "SlotStatus"}
-      ],
       "methods": [
-        {"name": "park()", "returns": "void"},
-        {"name": "free()", "returns": "void"},
-        {"name": "isAvailable()", "returns": "boolean"}
+        {
+          "name": "calculateFee(minutes: long)",
+          "returns": "double"
+        }
       ]
     },
     {
-      "name": "Floor", "type": "class", "layer": "Service",
+      "name": "HourlyFeeStrategy",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "floorNumber", "type": "int"},
-        {"name": "availableSlots", "type": "Map<SlotType, Queue>"},
-        {"name": "lock", "type": "ReentrantLock"}
+        {
+          "name": "ratePerHour",
+          "type": "double"
+        }
       ],
       "methods": [
-        {"name": "findAndOccupy(type)", "returns": "Optional<ParkingSlot>"},
-        {"name": "returnSlot(slot)", "returns": "void"},
-        {"name": "getAvailableCount(type)", "returns": "int"}
+        {
+          "name": "calculateFee(minutes)",
+          "returns": "double"
+        }
       ]
     },
     {
-      "name": "ParkingLot (Singleton)", "type": "class", "layer": "Controller",
+      "name": "ParkingSlot",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "instance", "type": "volatile ParkingLot"},
-        {"name": "floors", "type": "List<Floor>"},
-        {"name": "activeTickets", "type": "ConcurrentHashMap<String,Ticket>"},
-        {"name": "feeStrategy", "type": "FeeStrategy"}
+        {
+          "name": "slotId",
+          "type": "String"
+        },
+        {
+          "name": "floorNumber",
+          "type": "int"
+        },
+        {
+          "name": "slotType",
+          "type": "SlotType"
+        },
+        {
+          "name": "status",
+          "type": "SlotStatus"
+        }
       ],
       "methods": [
-        {"name": "getInstance()", "returns": "ParkingLot"},
-        {"name": "park(vType, plate)", "returns": "Ticket"},
-        {"name": "exit(ticketId)", "returns": "double"},
-        {"name": "getAvailable(floor, type)", "returns": "int"}
+        {
+          "name": "park()",
+          "returns": "void"
+        },
+        {
+          "name": "free()",
+          "returns": "void"
+        },
+        {
+          "name": "isAvailable()",
+          "returns": "boolean"
+        }
       ]
     },
     {
-      "name": "Ticket", "type": "class", "layer": "Model",
+      "name": "Floor",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "ticketId", "type": "String (UUID)"},
-        {"name": "slot", "type": "ParkingSlot"},
-        {"name": "vehicleType", "type": "VehicleType"},
-        {"name": "licensePlate", "type": "String"},
-        {"name": "entryTime", "type": "LocalDateTime"}
+        {
+          "name": "floorNumber",
+          "type": "int"
+        },
+        {
+          "name": "availableSlots",
+          "type": "Map<SlotType, Queue>"
+        },
+        {
+          "name": "lock",
+          "type": "ReentrantLock"
+        }
       ],
       "methods": [
-        {"name": "getDurationMinutes()", "returns": "long"}
+        {
+          "name": "findAndOccupy(type)",
+          "returns": "Optional<ParkingSlot>"
+        },
+        {
+          "name": "returnSlot(slot)",
+          "returns": "void"
+        },
+        {
+          "name": "getAvailableCount(type)",
+          "returns": "int"
+        }
+      ]
+    },
+    {
+      "name": "ParkingLot (Singleton)",
+      "type": "class",
+      "layer": "Controller",
+      "fields": [
+        {
+          "name": "instance",
+          "type": "volatile ParkingLot"
+        },
+        {
+          "name": "floors",
+          "type": "List<Floor>"
+        },
+        {
+          "name": "activeTickets",
+          "type": "ConcurrentHashMap<String,Ticket>"
+        },
+        {
+          "name": "feeStrategy",
+          "type": "FeeStrategy"
+        }
+      ],
+      "methods": [
+        {
+          "name": "getInstance()",
+          "returns": "ParkingLot"
+        },
+        {
+          "name": "park(vType, plate)",
+          "returns": "Ticket"
+        },
+        {
+          "name": "exit(ticketId)",
+          "returns": "double"
+        },
+        {
+          "name": "getAvailable(floor, type)",
+          "returns": "int"
+        }
+      ]
+    },
+    {
+      "name": "Ticket",
+      "type": "class",
+      "layer": "Model",
+      "fields": [
+        {
+          "name": "ticketId",
+          "type": "String (UUID)"
+        },
+        {
+          "name": "slot",
+          "type": "ParkingSlot"
+        },
+        {
+          "name": "vehicleType",
+          "type": "VehicleType"
+        },
+        {
+          "name": "licensePlate",
+          "type": "String"
+        },
+        {
+          "name": "entryTime",
+          "type": "LocalDateTime"
+        }
+      ],
+      "methods": [
+        {
+          "name": "getDurationMinutes()",
+          "returns": "long"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "parking_slots",
       "columns": [
-        {"name": "slot_id", "type": "UUID", "pk": true},
-        {"name": "floor_number", "type": "INT", "idx": true},
-        {"name": "slot_number", "type": "INT"},
-        {"name": "slot_type", "type": "ENUM(S,M,L)"},
-        {"name": "status", "type": "ENUM(FREE,OCC)", "idx": true}
+        {
+          "name": "slot_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "floor_number",
+          "type": "INT",
+          "idx": true
+        },
+        {
+          "name": "slot_number",
+          "type": "INT"
+        },
+        {
+          "name": "slot_type",
+          "type": "ENUM(S,M,L)"
+        },
+        {
+          "name": "status",
+          "type": "ENUM(FREE,OCC)",
+          "idx": true
+        }
       ]
     },
     {
       "table": "tickets",
       "columns": [
-        {"name": "ticket_id", "type": "UUID", "pk": true},
-        {"name": "slot_id", "type": "UUID", "fk": true},
-        {"name": "vehicle_type", "type": "ENUM"},
-        {"name": "license_plate", "type": "VARCHAR"},
-        {"name": "entry_time", "type": "TIMESTAMP"},
-        {"name": "exit_time", "type": "TIMESTAMP"},
-        {"name": "fee_charged", "type": "DECIMAL"}
+        {
+          "name": "ticket_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "slot_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "vehicle_type",
+          "type": "ENUM"
+        },
+        {
+          "name": "license_plate",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "entry_time",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "exit_time",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "fee_charged",
+          "type": "DECIMAL"
+        }
       ]
     }
   ],
   "schema_note": "**Index:** Composite `(floor_number, slot_type, status)` for O(1) nearest-slot query. `slot_id` index on tickets for fast exit lookup.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -241,7 +404,6 @@
       "code": "public class ParkingLot {\n    private static volatile ParkingLot instance;\n    private final List<Floor> floors;\n    private final ConcurrentHashMap<String, Ticket> activeTickets = new ConcurrentHashMap<>();\n    private final FeeStrategy feeStrategy;\n\n    // ── Double-checked locking Singleton ──\n    public static ParkingLot getInstance() {\n        if (instance == null) {\n            synchronized (ParkingLot.class) {\n                if (instance == null) instance = new ParkingLot();\n            }\n        }\n        return instance;\n    }\n\n    // ── park() ────────────────────────────\n    public Ticket park(VehicleType vType, String licensePlate) {\n        if (licensePlate == null || licensePlate.isBlank())\n            throw new IllegalArgumentException(\"License plate required\");\n\n        SlotType required = mapSlotType(vType);\n\n        for (Floor floor : floors) {          // prefer ground floor\n            Optional<ParkingSlot> slot = floor.findAndOccupy(required);\n            if (slot.isPresent()) {\n                Ticket ticket = new Ticket(slot.get(), vType, licensePlate);\n                activeTickets.put(ticket.getTicketId(), ticket);\n                return ticket;\n            }\n        }\n        throw new ParkingFullException(\"No slots available for \" + vType);\n    }\n\n    // ── exit() ────────────────────────────\n    public double exit(String ticketId) {\n        Ticket ticket = activeTickets.remove(ticketId);  // atomic\n        if (ticket == null)\n            throw new InvalidTicketException(\"Ticket not found: \" + ticketId);\n\n        double fee = feeStrategy.calculateFee(ticket.getDurationMinutes());\n        int floorIdx = ticket.getSlot().getFloorNumber();\n        floors.get(floorIdx).returnSlot(ticket.getSlot());\n        return fee;\n    }\n\n    private SlotType mapSlotType(VehicleType v) {\n        return switch (v) {\n            case MOTORCYCLE -> SlotType.SMALL;\n            case CAR        -> SlotType.MEDIUM;\n            case TRUCK      -> SlotType.LARGE;\n        };\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Strategy Pattern → FeeStrategy",
@@ -254,7 +416,6 @@
       "where": "`ParkingLot.getInstance()` with `volatile` instance field"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Double-booking a slot",
@@ -269,7 +430,6 @@
       "fix": "**Fix:** `ConcurrentHashMap` instead of HashMap. `remove()` is atomic — if two threads call `exit()` with the same ticketId, only one gets a non-null Ticket. The second gets null → `InvalidTicketException`."
     }
   ],
-
   "deep_dives": [
     {
       "question": "What if a motorcycle can park in a larger slot when small slots are full?",
@@ -291,5 +451,9 @@
       "question": "Explain SOLID principles in your design.",
       "answer": "**S** — ParkingSlot only manages slot state, FeeStrategy only calculates fees, Floor only manages slot pools. **O** — new FeeStrategy without modifying ParkingLot. **L** — all FeeStrategy implementations are substitutable. **I** — FeeStrategy is a tiny focused interface. **D** — ParkingLot depends on FeeStrategy interface, not HourlyFeeStrategy."
     }
+  ],
+  "companies": [
+    "Uber",
+    "Amazon"
   ]
 }

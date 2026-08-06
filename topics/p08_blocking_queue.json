@@ -2,14 +2,25 @@
   "title": "Thread-Safe Bounded Blocking Queue",
   "description": "Implement a bounded blocking queue from scratch using locks and condition variables. Producers block when full, consumers block when empty. The canonical concurrency primitive — if you can't implement this, you can't implement anything concurrent.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Monitor Pattern"},
-    {"type": "concept", "label": "Condition Variables"},
-    {"type": "concept", "label": "Producer-Consumer"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Monitor Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Condition Variables"
+    },
+    {
+      "type": "concept",
+      "label": "Producer-Consumer"
+    }
   ],
   "prompt": "Implement a thread-safe bounded blocking queue with `put()` and `take()` methods. Producers block when the queue is full; consumers block when it's empty.",
   "prompt_note": "This is a **from-scratch implementation** problem — `java.util.concurrent.ArrayBlockingQueue` already exists, but the interviewer wants to see you wire up the locks and conditions yourself. The design is small but every line matters. Getting the `await`/`signal` semantics right is the entire point.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Should this be a generic queue — `BoundedBlockingQueue<T>` — or fixed to a type?\"",
@@ -37,7 +48,6 @@
       "why": "Graceful shutdown is a common follow-up. Add a `closed` flag + wake all waiters."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "`put(item)` — add to the back of the queue. **Blocks** if full until space available.",
@@ -51,7 +61,6 @@
       "Priority ordering, persistence, distributed coordination, fair ordering between producers/consumers."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Strict FIFO** — items come out in insertion order.",
@@ -63,7 +72,6 @@
       "Fairness guarantees (e.g., longest-waiting producer first), lock-free implementations."
     ]
   },
-
   "primary_scope": [
     "`put(x)` → acquire lock → while full: await notFull → add → signal notEmpty → unlock",
     "`take()` → acquire lock → while empty: await notEmpty → remove → signal notFull → unlock",
@@ -77,7 +85,6 @@
     "`QueueClosedException` — `put` on a closed queue",
     "Timed variants: return `false` / `null` on timeout (not an exception)"
   ],
-
   "entity_intro": "This problem has exactly **one class**. Over-engineering with multiple entities is a red flag — the interviewer wants to see correct primitives, not architecture.",
   "entities": [
     {
@@ -93,37 +100,74 @@
       "verdict_label": "✗ Don't over-engineer — use ArrayDeque directly"
     }
   ],
-
   "relationships": [
-    {"entity": "BoundedBlockingQueue", "owns": "`ArrayDeque<T>` storage, `ReentrantLock`, two `Condition` vars, capacity, closed flag", "rel": "Standalone — no collaborators"}
+    {
+      "entity": "BoundedBlockingQueue",
+      "owns": "`ArrayDeque<T>` storage, `ReentrantLock`, two `Condition` vars, capacity, closed flag",
+      "rel": "Standalone — no collaborators"
+    }
   ],
-
   "mvc_note": "**MVC doesn't apply here** — this is a single-class concurrency primitive, not an application. The design principle is: **one lock + two conditions** — the Monitor Pattern from Hoare/Brinch-Hansen's 1970s papers. Don't invent extra layers.",
-
   "classes": [
     {
-      "name": "BoundedBlockingQueue<T>", "type": "class", "layer": "Model",
+      "name": "BoundedBlockingQueue<T>",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "queue", "type": "ArrayDeque<T>"},
-        {"name": "capacity", "type": "int"},
-        {"name": "lock", "type": "ReentrantLock"},
-        {"name": "notFull", "type": "Condition"},
-        {"name": "notEmpty", "type": "Condition"},
-        {"name": "closed", "type": "boolean"}
+        {
+          "name": "queue",
+          "type": "ArrayDeque<T>"
+        },
+        {
+          "name": "capacity",
+          "type": "int"
+        },
+        {
+          "name": "lock",
+          "type": "ReentrantLock"
+        },
+        {
+          "name": "notFull",
+          "type": "Condition"
+        },
+        {
+          "name": "notEmpty",
+          "type": "Condition"
+        },
+        {
+          "name": "closed",
+          "type": "boolean"
+        }
       ],
       "methods": [
-        {"name": "put(item)", "returns": "void (blocking)"},
-        {"name": "take()", "returns": "T (blocking)"},
-        {"name": "offer(item, timeout)", "returns": "boolean"},
-        {"name": "poll(timeout)", "returns": "T"},
-        {"name": "size()", "returns": "int"},
-        {"name": "close()", "returns": "void"}
+        {
+          "name": "put(item)",
+          "returns": "void (blocking)"
+        },
+        {
+          "name": "take()",
+          "returns": "T (blocking)"
+        },
+        {
+          "name": "offer(item, timeout)",
+          "returns": "boolean"
+        },
+        {
+          "name": "poll(timeout)",
+          "returns": "T"
+        },
+        {
+          "name": "size()",
+          "returns": "int"
+        },
+        {
+          "name": "close()",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [],
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -149,7 +193,6 @@
       "code": "// Demo: 2 producers, 3 consumers, capacity 5\nBoundedBlockingQueue<Integer> bq = new BoundedBlockingQueue<>(5);\n\n// Producers\nfor (int p = 0; p < 2; p++) {\n    int id = p;\n    new Thread(() -> {\n        try {\n            for (int i = 0; i < 100; i++) {\n                bq.put(id * 1000 + i);  // blocks if full\n                System.out.println(\"P\" + id + \" put \" + i);\n            }\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }).start();\n}\n\n// Consumers\nfor (int c = 0; c < 3; c++) {\n    int id = c;\n    new Thread(() -> {\n        try {\n            while (true) {\n                Integer item = bq.take();  // blocks if empty\n                System.out.println(\"C\" + id + \" took \" + item);\n                Thread.sleep(10);  // simulate work\n            }\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }).start();\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Monitor Pattern (one lock + conditions)",
@@ -162,7 +205,6 @@
       "where": "The queue itself — no code to point to, it's the architectural role"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Spurious wakeups — `await()` returns without being signaled",
@@ -181,7 +223,6 @@
       "fix": "`lockInterruptibly()` + `await()` both throw `InterruptedException`. The thread's interrupt flag is cleared when the exception is thrown. Propagate the exception (`throws InterruptedException`) so the caller can handle it. Don't swallow it — it's the **interruption contract** for blocking methods."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why one lock and two conditions instead of two locks?",
@@ -211,5 +252,9 @@
       "question": "How would you make it lock-free?",
       "answer": "Use `ConcurrentLinkedQueue` (already unbounded lock-free, Michael-Scott algorithm). For bounded+lock-free: the **Disruptor** pattern (LMAX) uses a ring buffer with memory barriers and sequence counters — no locks, but complex. For an interview, mention that lock-free is possible but justify why locks are fine: contention on a single lock at O(1) per op is fast; the JVM handles bias-locking and escalation. Don't go lock-free unless profiling demands it."
     }
+  ],
+  "companies": [
+    "Amazon",
+    "Uber"
   ]
 }

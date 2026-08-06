@@ -2,14 +2,25 @@
   "title": "Vending Machine",
   "description": "Design a vending machine that accepts coins, lets users select products, dispenses items, and returns change. The quintessential State Pattern problem — the machine's behavior changes entirely based on its current state.",
   "tags": [
-    {"type": "medium", "label": "Medium"},
-    {"type": "pattern", "label": "State Pattern"},
-    {"type": "pattern", "label": "Singleton"},
-    {"type": "concept", "label": "State Machine"}
+    {
+      "type": "medium",
+      "label": "Medium"
+    },
+    {
+      "type": "pattern",
+      "label": "State Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Singleton"
+    },
+    {
+      "type": "concept",
+      "label": "State Machine"
+    }
   ],
   "prompt": "Design a vending machine that dispenses products and handles coin-based payments.",
   "prompt_note": "This is the textbook State Pattern problem. The machine has distinct states (IDLE, COIN_INSERTED, PRODUCT_SELECTED, DISPENSING) and each state handles the same inputs (insertCoin, selectProduct, dispense, cancel) differently. If you see an object whose behavior varies by state and has clear state transitions — reach for the State Pattern.",
-
   "clarifying_questions": [
     {
       "question": "You: \"What payment methods? Just coins, or also bills/cards?\"",
@@ -37,7 +48,6 @@
       "why": "Adds a CoinBank entity that tracks available coins for change-making."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "Insert coins (1¢, 5¢, 10¢, 25¢) — accumulates a running balance.",
@@ -51,7 +61,6 @@
       "Bill/card payments, remote monitoring, multi-machine networking, product temperature control."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Thread-safe:** only one transaction at a time (physical machine constraint — one user at a time).",
@@ -62,7 +71,6 @@
       "Distributed deployment, persistence, real-time analytics."
     ]
   },
-
   "primary_scope": [
     "Insert coin → add to balance → transition to COIN_INSERTED state",
     "Select product → check balance ≥ price AND stock > 0 → transition to DISPENSING",
@@ -77,7 +85,6 @@
     "`CannotMakeChangeException` — coin bank can't produce exact change → cancel transaction, return all coins",
     "`InvalidStateException` — calling dispense without selecting product, or selecting without inserting coins"
   ],
-
   "entity_intro": "The machine has clearly distinct behavioral states — this is a textbook State Pattern. Each state handles inputs differently (insertCoin in IDLE starts a transaction, in DISPENSING it's invalid).",
   "entities": [
     {
@@ -111,127 +118,319 @@
       "verdict_label": "✗ Just an enum — Coin(value)"
     }
   ],
-
   "relationships": [
-    {"entity": "VendingMachine", "owns": "VendingState (current), `Map<slotCode, ProductSlot>`, CoinBank, currentBalance", "rel": "1→1 State, 1→N ProductSlots, 1→1 CoinBank"},
-    {"entity": "VendingState", "owns": "Reference back to VendingMachine (to trigger state transitions)", "rel": "N implementations → 1 Context"},
-    {"entity": "CoinBank", "owns": "`Map<Coin, Integer>` (denomination → count)", "rel": "Standalone service"}
+    {
+      "entity": "VendingMachine",
+      "owns": "VendingState (current), `Map<slotCode, ProductSlot>`, CoinBank, currentBalance",
+      "rel": "1→1 State, 1→N ProductSlots, 1→1 CoinBank"
+    },
+    {
+      "entity": "VendingState",
+      "owns": "Reference back to VendingMachine (to trigger state transitions)",
+      "rel": "N implementations → 1 Context"
+    },
+    {
+      "entity": "CoinBank",
+      "owns": "`Map<Coin, Integer>` (denomination → count)",
+      "rel": "Standalone service"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Coin enum, ProductSlot, CoinBank. **Service** = VendingState implementations (each state encapsulates behavior for that phase). **Controller** = VendingMachine (delegates to current state, manages transitions).",
-
   "classes": [
     {
-      "name": "VendingState", "type": "interface", "layer": "Service",
+      "name": "VendingState",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "insertCoin(coin)", "returns": "void"},
-        {"name": "selectProduct(slotCode)", "returns": "void"},
-        {"name": "dispense()", "returns": "void"},
-        {"name": "cancel()", "returns": "Map<Coin,Integer>"}
+        {
+          "name": "insertCoin(coin)",
+          "returns": "void"
+        },
+        {
+          "name": "selectProduct(slotCode)",
+          "returns": "void"
+        },
+        {
+          "name": "dispense()",
+          "returns": "void"
+        },
+        {
+          "name": "cancel()",
+          "returns": "Map<Coin,Integer>"
+        }
       ]
     },
     {
-      "name": "IdleState", "type": "class", "layer": "Service",
-      "fields": [{"name": "machine", "type": "VendingMachine"}],
-      "methods": [
-        {"name": "insertCoin(coin)", "returns": "void → transitions to COIN_INSERTED"},
-        {"name": "selectProduct()", "returns": "throws InvalidStateException"},
-        {"name": "dispense()", "returns": "throws InvalidStateException"},
-        {"name": "cancel()", "returns": "no-op (nothing to return)"}
-      ]
-    },
-    {
-      "name": "CoinInsertedState", "type": "class", "layer": "Service",
-      "fields": [{"name": "machine", "type": "VendingMachine"}],
-      "methods": [
-        {"name": "insertCoin(coin)", "returns": "void → adds to balance"},
-        {"name": "selectProduct(code)", "returns": "void → validates → DISPENSING"},
-        {"name": "dispense()", "returns": "throws InvalidStateException"},
-        {"name": "cancel()", "returns": "Map<Coin,Int> → refund → IDLE"}
-      ]
-    },
-    {
-      "name": "DispensingState", "type": "class", "layer": "Service",
-      "fields": [{"name": "machine", "type": "VendingMachine"}],
-      "methods": [
-        {"name": "insertCoin()", "returns": "throws InvalidStateException"},
-        {"name": "selectProduct()", "returns": "throws InvalidStateException"},
-        {"name": "dispense()", "returns": "void → dispense + change → IDLE"},
-        {"name": "cancel()", "returns": "throws InvalidStateException"}
-      ]
-    },
-    {
-      "name": "VendingMachine", "type": "class", "layer": "Controller",
+      "name": "IdleState",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "currentState", "type": "VendingState"},
-        {"name": "slots", "type": "Map<String, ProductSlot>"},
-        {"name": "coinBank", "type": "CoinBank"},
-        {"name": "currentBalance", "type": "int (cents)"},
-        {"name": "selectedSlot", "type": "ProductSlot"}
+        {
+          "name": "machine",
+          "type": "VendingMachine"
+        }
       ],
       "methods": [
-        {"name": "insertCoin(coin)", "returns": "void (delegates)"},
-        {"name": "selectProduct(code)", "returns": "void (delegates)"},
-        {"name": "dispense()", "returns": "void (delegates)"},
-        {"name": "cancel()", "returns": "Map<Coin,Int> (delegates)"},
-        {"name": "setState(state)", "returns": "void"},
-        {"name": "restock(code, qty)", "returns": "void (admin)"}
+        {
+          "name": "insertCoin(coin)",
+          "returns": "void → transitions to COIN_INSERTED"
+        },
+        {
+          "name": "selectProduct()",
+          "returns": "throws InvalidStateException"
+        },
+        {
+          "name": "dispense()",
+          "returns": "throws InvalidStateException"
+        },
+        {
+          "name": "cancel()",
+          "returns": "no-op (nothing to return)"
+        }
       ]
     },
     {
-      "name": "ProductSlot", "type": "class", "layer": "Model",
+      "name": "CoinInsertedState",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "slotCode", "type": "String"},
-        {"name": "productName", "type": "String"},
-        {"name": "price", "type": "int (cents)"},
-        {"name": "quantity", "type": "int"}
+        {
+          "name": "machine",
+          "type": "VendingMachine"
+        }
       ],
       "methods": [
-        {"name": "isAvailable()", "returns": "boolean"},
-        {"name": "dispense()", "returns": "void (qty--)"},
-        {"name": "restock(qty)", "returns": "void"}
+        {
+          "name": "insertCoin(coin)",
+          "returns": "void → adds to balance"
+        },
+        {
+          "name": "selectProduct(code)",
+          "returns": "void → validates → DISPENSING"
+        },
+        {
+          "name": "dispense()",
+          "returns": "throws InvalidStateException"
+        },
+        {
+          "name": "cancel()",
+          "returns": "Map<Coin,Int> → refund → IDLE"
+        }
       ]
     },
     {
-      "name": "CoinBank", "type": "class", "layer": "Model",
+      "name": "DispensingState",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "coins", "type": "Map<Coin, Integer>"}
+        {
+          "name": "machine",
+          "type": "VendingMachine"
+        }
       ],
       "methods": [
-        {"name": "addCoin(coin)", "returns": "void"},
-        {"name": "makeChange(amount)", "returns": "Map<Coin,Int>"},
-        {"name": "refill(coin, qty)", "returns": "void"}
+        {
+          "name": "insertCoin()",
+          "returns": "throws InvalidStateException"
+        },
+        {
+          "name": "selectProduct()",
+          "returns": "throws InvalidStateException"
+        },
+        {
+          "name": "dispense()",
+          "returns": "void → dispense + change → IDLE"
+        },
+        {
+          "name": "cancel()",
+          "returns": "throws InvalidStateException"
+        }
+      ]
+    },
+    {
+      "name": "VendingMachine",
+      "type": "class",
+      "layer": "Controller",
+      "fields": [
+        {
+          "name": "currentState",
+          "type": "VendingState"
+        },
+        {
+          "name": "slots",
+          "type": "Map<String, ProductSlot>"
+        },
+        {
+          "name": "coinBank",
+          "type": "CoinBank"
+        },
+        {
+          "name": "currentBalance",
+          "type": "int (cents)"
+        },
+        {
+          "name": "selectedSlot",
+          "type": "ProductSlot"
+        }
+      ],
+      "methods": [
+        {
+          "name": "insertCoin(coin)",
+          "returns": "void (delegates)"
+        },
+        {
+          "name": "selectProduct(code)",
+          "returns": "void (delegates)"
+        },
+        {
+          "name": "dispense()",
+          "returns": "void (delegates)"
+        },
+        {
+          "name": "cancel()",
+          "returns": "Map<Coin,Int> (delegates)"
+        },
+        {
+          "name": "setState(state)",
+          "returns": "void"
+        },
+        {
+          "name": "restock(code, qty)",
+          "returns": "void (admin)"
+        }
+      ]
+    },
+    {
+      "name": "ProductSlot",
+      "type": "class",
+      "layer": "Model",
+      "fields": [
+        {
+          "name": "slotCode",
+          "type": "String"
+        },
+        {
+          "name": "productName",
+          "type": "String"
+        },
+        {
+          "name": "price",
+          "type": "int (cents)"
+        },
+        {
+          "name": "quantity",
+          "type": "int"
+        }
+      ],
+      "methods": [
+        {
+          "name": "isAvailable()",
+          "returns": "boolean"
+        },
+        {
+          "name": "dispense()",
+          "returns": "void (qty--)"
+        },
+        {
+          "name": "restock(qty)",
+          "returns": "void"
+        }
+      ]
+    },
+    {
+      "name": "CoinBank",
+      "type": "class",
+      "layer": "Model",
+      "fields": [
+        {
+          "name": "coins",
+          "type": "Map<Coin, Integer>"
+        }
+      ],
+      "methods": [
+        {
+          "name": "addCoin(coin)",
+          "returns": "void"
+        },
+        {
+          "name": "makeChange(amount)",
+          "returns": "Map<Coin,Int>"
+        },
+        {
+          "name": "refill(coin, qty)",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "product_slots",
       "columns": [
-        {"name": "slot_code", "type": "VARCHAR(4)", "pk": true},
-        {"name": "machine_id", "type": "UUID", "fk": true},
-        {"name": "product_name", "type": "VARCHAR"},
-        {"name": "price_cents", "type": "INT"},
-        {"name": "quantity", "type": "INT"}
+        {
+          "name": "slot_code",
+          "type": "VARCHAR(4)",
+          "pk": true
+        },
+        {
+          "name": "machine_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "product_name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "price_cents",
+          "type": "INT"
+        },
+        {
+          "name": "quantity",
+          "type": "INT"
+        }
       ]
     },
     {
       "table": "transactions",
       "columns": [
-        {"name": "txn_id", "type": "UUID", "pk": true},
-        {"name": "machine_id", "type": "UUID", "fk": true},
-        {"name": "slot_code", "type": "VARCHAR(4)", "fk": true},
-        {"name": "amount_paid", "type": "INT"},
-        {"name": "change_given", "type": "INT"},
-        {"name": "status", "type": "ENUM(OK,CANCELLED,CHANGE_FAIL)"},
-        {"name": "created_at", "type": "TIMESTAMP", "idx": true}
+        {
+          "name": "txn_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "machine_id",
+          "type": "UUID",
+          "fk": true
+        },
+        {
+          "name": "slot_code",
+          "type": "VARCHAR(4)",
+          "fk": true
+        },
+        {
+          "name": "amount_paid",
+          "type": "INT"
+        },
+        {
+          "name": "change_given",
+          "type": "INT"
+        },
+        {
+          "name": "status",
+          "type": "ENUM(OK,CANCELLED,CHANGE_FAIL)"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "idx": true
+        }
       ]
     }
   ],
   "schema_note": "Runtime state is in-memory. DB is for **audit log** (transaction history for reconciliation). Index `machine_id + created_at` for daily sales reporting.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -250,7 +449,6 @@
       "code": "class VendingMachine {\n    private VendingState currentState;\n    private final Map<String, ProductSlot> slots;\n    private final CoinBank coinBank;\n    private int currentBalance = 0; // cents\n    private ProductSlot selectedSlot;\n\n    public VendingMachine(Map<String, ProductSlot> slots) {\n        this.slots = slots;\n        this.coinBank = new CoinBank();\n        this.currentState = new IdleState(this);\n    }\n\n    // ── Public API (delegates to state) ─────\n    public void insertCoin(Coin coin)          { currentState.insertCoin(coin); }\n    public void selectProduct(String slotCode) { currentState.selectProduct(slotCode); }\n    public void dispense()                     { currentState.dispense(); }\n    public Map<Coin, Integer> cancel()         { return currentState.cancel(); }\n\n    // ── State management ────────────────────\n    void setState(VendingState state)     { this.currentState = state; }\n    void addToBalance(int cents)          { this.currentBalance += cents; }\n    void resetBalance()                   { this.currentBalance = 0; }\n    int getCurrentBalance()               { return currentBalance; }\n    void setSelectedSlot(ProductSlot s)   { this.selectedSlot = s; }\n    ProductSlot getSelectedSlot()         { return selectedSlot; }\n    CoinBank getCoinBank()                { return coinBank; }\n\n    ProductSlot getSlot(String code) {\n        ProductSlot slot = slots.get(code);\n        if (slot == null)\n            throw new InvalidSlotException(\"Unknown slot: \" + code);\n        return slot;\n    }\n\n    // ── Admin ───────────────────────────────\n    public void restock(String slotCode, int qty) {\n        getSlot(slotCode).restock(qty);\n    }\n\n    public void refillCoins(Coin coin, int qty) {\n        coinBank.refill(coin, qty);\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "State Pattern → VendingState",
@@ -263,7 +461,6 @@
       "where": "Could wrap VendingMachine in a Singleton; or just pass it as a dependency."
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two users operating the machine simultaneously",
@@ -278,7 +475,6 @@
       "fix": "Restock modifies `ProductSlot.quantity` which isn't read until `selectProduct()`. If a restock happens between `selectProduct()` and `dispense()`, the slot already passed the availability check — we proceed. If the slot was restocked mid-cancel, no issue. For safety, `synchronized` on ProductSlot methods."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why State Pattern instead of a simple enum + switch?",
@@ -304,5 +500,9 @@
       "question": "How do you handle the case where coins inserted are lost due to a power failure?",
       "answer": "Real machines have a non-volatile coin counter (EEPROM). In our LLD, we'd persist transaction state: on every `insertCoin()`, write `{txnId, balance, timestamp}` to a journal. On boot, check for an in-progress transaction and either resume or refund. This is a **Write-Ahead Log** pattern — acknowledge to the interviewer but out of scope for 35 minutes."
     }
+  ],
+  "companies": [
+    "Amazon",
+    "Google"
   ]
 }

@@ -2,15 +2,29 @@
   "title": "Notification Service",
   "description": "Design a notification service that delivers messages via multiple channels (Email, SMS, Push). Supports user preferences, retry on failure, and rate limiting. Combines Strategy (per channel), Observer (for delivery callbacks), and Decorator (for cross-cutting concerns like rate limiting and templating).",
   "tags": [
-    {"type": "medium", "label": "Medium"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "pattern", "label": "Observer Pattern"},
-    {"type": "pattern", "label": "Decorator Pattern"},
-    {"type": "concept", "label": "Multi-Channel Delivery"}
+    {
+      "type": "medium",
+      "label": "Medium"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Observer Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Decorator Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Multi-Channel Delivery"
+    }
   ],
   "prompt": "Design a notification service that sends messages to users via multiple channels (email, SMS, push) with user preferences and retry on failure.",
   "prompt_note": "Notification systems sound trivial — 'just send the message.' The interesting design questions are: (1) **multi-channel** without coupling business logic to channel-specific code, (2) **user preferences** that respect quiet hours and channel opt-outs, (3) **delivery reliability** with retries, and (4) **observability** so you know what was sent and what failed. The patterns stack nicely: Strategy for channels, Decorator for cross-cutting concerns, Observer for delivery events.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Which channels do we support?\"",
@@ -48,7 +62,6 @@
       "why": "**Observer Pattern** — emit events for delivery state changes."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**Multi-channel delivery:** Email, SMS, Push. Each channel has its own implementation.",
@@ -63,7 +76,6 @@
       "Real provider integrations (Twilio, SendGrid, FCM), template management UI, A/B testing, internationalization, attachment support, scheduled (delayed) notifications."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Decoupled channels:** adding a 4th channel (e.g., WhatsApp) requires one new class, no changes to existing code.",
@@ -75,7 +87,6 @@
       "End-to-end encryption, GDPR compliance, multi-region delivery, real-time delivery tracking."
     ]
   },
-
   "primary_scope": [
     "`notify(notification)` → check user preferences → enqueue per applicable channel",
     "Worker pulls from channel queue → render template → rate-limit check → deliver via channel strategy",
@@ -90,7 +101,6 @@
     "Rate limit exceeded → defer (not throw)",
     "Final delivery failure → dead-letter queue + emit FAILURE event"
   ],
-
   "entity_intro": "The goal is to keep three orthogonal concerns separate: **what to send** (message + template), **how to send it** (channel), and **whether to send it now** (preferences, rate limit). Each concern is a layer that can be modified independently.",
   "entities": [
     {
@@ -136,141 +146,323 @@
       "verdict_label": "✓ Controller — Orchestrator"
     }
   ],
-
   "relationships": [
-    {"entity": "NotificationService", "owns": "channels map, userRepo, templateRepo, async queue, listeners list", "rel": "1 → N Channels, 1 → N Listeners"},
-    {"entity": "Notification", "owns": "id, userId, templateId, variables, urgent flag", "rel": "N → 1 User, N → 1 Template"},
-    {"entity": "User", "owns": "id, contact info, UserPreferences", "rel": "1 → 1 UserPreferences"},
-    {"entity": "ChannelDecorator", "owns": "wrapped NotificationChannel", "rel": "wraps 1 NotificationChannel (recursive)"}
+    {
+      "entity": "NotificationService",
+      "owns": "channels map, userRepo, templateRepo, async queue, listeners list",
+      "rel": "1 → N Channels, 1 → N Listeners"
+    },
+    {
+      "entity": "Notification",
+      "owns": "id, userId, templateId, variables, urgent flag",
+      "rel": "N → 1 User, N → 1 Template"
+    },
+    {
+      "entity": "User",
+      "owns": "id, contact info, UserPreferences",
+      "rel": "1 → 1 UserPreferences"
+    },
+    {
+      "entity": "ChannelDecorator",
+      "owns": "wrapped NotificationChannel",
+      "rel": "wraps 1 NotificationChannel (recursive)"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Notification, User, Template, DeliveryResult, ChannelType enum. **Service** = NotificationChannel implementations (per-channel logic), TemplateRenderer, RateLimiter, RetryPolicy. **Controller** = NotificationService (the public API). The interesting aspect is that **Service** here is layered: the channel strategy is at the bottom, decorators wrap it, and the controller orchestrates everything.",
-
   "classes": [
     {
-      "name": "NotificationChannel", "type": "interface", "layer": "Service",
+      "name": "NotificationChannel",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "send(user, message)", "returns": "DeliveryResult"},
-        {"name": "getChannelType()", "returns": "ChannelType"}
+        {
+          "name": "send(user, message)",
+          "returns": "DeliveryResult"
+        },
+        {
+          "name": "getChannelType()",
+          "returns": "ChannelType"
+        }
       ]
     },
     {
-      "name": "EmailChannel", "type": "class", "layer": "Service",
+      "name": "EmailChannel",
+      "type": "class",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "send(user, message)", "returns": "DeliveryResult (calls SMTP / SendGrid)"}
+        {
+          "name": "send(user, message)",
+          "returns": "DeliveryResult (calls SMTP / SendGrid)"
+        }
       ]
     },
     {
-      "name": "SmsChannel", "type": "class", "layer": "Service",
+      "name": "SmsChannel",
+      "type": "class",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "send(user, message)", "returns": "DeliveryResult (calls Twilio API)"}
+        {
+          "name": "send(user, message)",
+          "returns": "DeliveryResult (calls Twilio API)"
+        }
       ]
     },
     {
-      "name": "PushChannel", "type": "class", "layer": "Service",
+      "name": "PushChannel",
+      "type": "class",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "send(user, message)", "returns": "DeliveryResult (calls FCM / APNS)"}
+        {
+          "name": "send(user, message)",
+          "returns": "DeliveryResult (calls FCM / APNS)"
+        }
       ]
     },
     {
-      "name": "RateLimitDecorator", "type": "class", "layer": "Service",
+      "name": "RateLimitDecorator",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "wrapped", "type": "NotificationChannel"},
-        {"name": "rateLimiter", "type": "RateLimiter"}
+        {
+          "name": "wrapped",
+          "type": "NotificationChannel"
+        },
+        {
+          "name": "rateLimiter",
+          "type": "RateLimiter"
+        }
       ],
       "methods": [
-        {"name": "send(user, message)", "returns": "DeliveryResult (checks limit, then delegates)"}
+        {
+          "name": "send(user, message)",
+          "returns": "DeliveryResult (checks limit, then delegates)"
+        }
       ]
     },
     {
-      "name": "Notification", "type": "class", "layer": "Model",
+      "name": "Notification",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "notificationId", "type": "String"},
-        {"name": "userId", "type": "String"},
-        {"name": "templateId", "type": "String"},
-        {"name": "variables", "type": "Map<String, String>"},
-        {"name": "channels", "type": "Set<ChannelType>"},
-        {"name": "urgent", "type": "boolean"},
-        {"name": "createdAt", "type": "Instant"}
+        {
+          "name": "notificationId",
+          "type": "String"
+        },
+        {
+          "name": "userId",
+          "type": "String"
+        },
+        {
+          "name": "templateId",
+          "type": "String"
+        },
+        {
+          "name": "variables",
+          "type": "Map<String, String>"
+        },
+        {
+          "name": "channels",
+          "type": "Set<ChannelType>"
+        },
+        {
+          "name": "urgent",
+          "type": "boolean"
+        },
+        {
+          "name": "createdAt",
+          "type": "Instant"
+        }
       ],
       "methods": []
     },
     {
-      "name": "DeliveryEventListener", "type": "interface", "layer": "Service",
+      "name": "DeliveryEventListener",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "onDelivered(event)", "returns": "void"},
-        {"name": "onFailed(event)", "returns": "void"}
+        {
+          "name": "onDelivered(event)",
+          "returns": "void"
+        },
+        {
+          "name": "onFailed(event)",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "NotificationService", "type": "class", "layer": "Controller",
+      "name": "NotificationService",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "channels", "type": "Map<ChannelType, NotificationChannel>"},
-        {"name": "userRepo", "type": "UserRepository"},
-        {"name": "templateRepo", "type": "TemplateRepository"},
-        {"name": "queue", "type": "BlockingQueue<DeliveryTask>"},
-        {"name": "listeners", "type": "CopyOnWriteArrayList<DeliveryEventListener>"},
-        {"name": "workers", "type": "ExecutorService"},
-        {"name": "deadLetter", "type": "List<DeliveryTask>"}
+        {
+          "name": "channels",
+          "type": "Map<ChannelType, NotificationChannel>"
+        },
+        {
+          "name": "userRepo",
+          "type": "UserRepository"
+        },
+        {
+          "name": "templateRepo",
+          "type": "TemplateRepository"
+        },
+        {
+          "name": "queue",
+          "type": "BlockingQueue<DeliveryTask>"
+        },
+        {
+          "name": "listeners",
+          "type": "CopyOnWriteArrayList<DeliveryEventListener>"
+        },
+        {
+          "name": "workers",
+          "type": "ExecutorService"
+        },
+        {
+          "name": "deadLetter",
+          "type": "List<DeliveryTask>"
+        }
       ],
       "methods": [
-        {"name": "notify(notification)", "returns": "void (async)"},
-        {"name": "addListener(listener)", "returns": "void"}
+        {
+          "name": "notify(notification)",
+          "returns": "void (async)"
+        },
+        {
+          "name": "addListener(listener)",
+          "returns": "void"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "users",
       "columns": [
-        {"name": "user_id", "type": "UUID", "pk": true},
-        {"name": "name", "type": "VARCHAR"},
-        {"name": "email", "type": "VARCHAR"},
-        {"name": "phone", "type": "VARCHAR"},
-        {"name": "device_token", "type": "VARCHAR"}
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "device_token",
+          "type": "VARCHAR"
+        }
       ]
     },
     {
       "table": "user_preferences",
       "columns": [
-        {"name": "user_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "channel", "type": "ENUM(EMAIL,SMS,PUSH)", "pk": true},
-        {"name": "enabled", "type": "BOOLEAN"},
-        {"name": "quiet_hours_start", "type": "TIME"},
-        {"name": "quiet_hours_end", "type": "TIME"}
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "channel",
+          "type": "ENUM(EMAIL,SMS,PUSH)",
+          "pk": true
+        },
+        {
+          "name": "enabled",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "quiet_hours_start",
+          "type": "TIME"
+        },
+        {
+          "name": "quiet_hours_end",
+          "type": "TIME"
+        }
       ]
     },
     {
       "table": "templates",
       "columns": [
-        {"name": "template_id", "type": "VARCHAR", "pk": true},
-        {"name": "channel", "type": "ENUM(EMAIL,SMS,PUSH)", "pk": true},
-        {"name": "subject", "type": "TEXT"},
-        {"name": "body", "type": "TEXT"}
+        {
+          "name": "template_id",
+          "type": "VARCHAR",
+          "pk": true
+        },
+        {
+          "name": "channel",
+          "type": "ENUM(EMAIL,SMS,PUSH)",
+          "pk": true
+        },
+        {
+          "name": "subject",
+          "type": "TEXT"
+        },
+        {
+          "name": "body",
+          "type": "TEXT"
+        }
       ]
     },
     {
       "table": "notification_log",
       "columns": [
-        {"name": "notification_id", "type": "UUID", "pk": true},
-        {"name": "user_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "channel", "type": "ENUM"},
-        {"name": "template_id", "type": "VARCHAR", "fk": true},
-        {"name": "status", "type": "ENUM(QUEUED,DELIVERED,FAILED,DEAD_LETTERED)", "idx": true},
-        {"name": "attempt_count", "type": "INT"},
-        {"name": "last_error", "type": "TEXT"},
-        {"name": "delivered_at", "type": "TIMESTAMP"}
+        {
+          "name": "notification_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "channel",
+          "type": "ENUM"
+        },
+        {
+          "name": "template_id",
+          "type": "VARCHAR",
+          "fk": true
+        },
+        {
+          "name": "status",
+          "type": "ENUM(QUEUED,DELIVERED,FAILED,DEAD_LETTERED)",
+          "idx": true
+        },
+        {
+          "name": "attempt_count",
+          "type": "INT"
+        },
+        {
+          "name": "last_error",
+          "type": "TEXT"
+        },
+        {
+          "name": "delivered_at",
+          "type": "TIMESTAMP"
+        }
       ]
     }
   ],
   "schema_note": "**`notification_log` is the audit trail.** Every notification is recorded with status. Index `(user_id, status)` for 'show user their notification history' queries. Index `(status, created_at)` for monitoring (count of FAILED in last hour).",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -295,7 +487,6 @@
       "code": "import java.util.concurrent.*;\nimport java.util.concurrent.atomic.AtomicInteger;\n\nrecord DeliveryTask(\n    Notification notification,\n    ChannelType channel,\n    int attemptNumber,\n    long earliestRetryAt\n) {}\n\nrecord DeliveryEvent(String notificationId, String userId,\n                     ChannelType channel, DeliveryStatus status, String error) {}\n\ninterface DeliveryEventListener {\n    void onDelivered(DeliveryEvent event);\n    void onFailed(DeliveryEvent event);\n}\n\nclass NotificationService {\n    private static final int MAX_RETRIES = 3;\n\n    private final Map<ChannelType, NotificationChannel> channels;\n    private final UserRepository userRepo;\n    private final TemplateRepository templateRepo;\n    private final BlockingQueue<DeliveryTask> queue = new LinkedBlockingQueue<>();\n    private final CopyOnWriteArrayList<DeliveryEventListener> listeners = new CopyOnWriteArrayList<>();\n    private final List<DeliveryTask> deadLetter = Collections.synchronizedList(new ArrayList<>());\n    private final ExecutorService workers;\n    private volatile boolean running = true;\n\n    public NotificationService(Map<ChannelType, NotificationChannel> channels,\n                               UserRepository userRepo,\n                               TemplateRepository templateRepo,\n                               int workerCount) {\n        this.channels = channels;\n        this.userRepo = userRepo;\n        this.templateRepo = templateRepo;\n        this.workers = Executors.newFixedThreadPool(workerCount);\n        for (int i = 0; i < workerCount; i++) workers.submit(this::workerLoop);\n    }\n\n    // ── Public API ──────────────────────\n    public void notify(Notification notification) {\n        UserPreferences prefs = userRepo.getPreferences(notification.userId());\n\n        for (ChannelType ch : notification.channels()) {\n            // Respect user opt-out (urgent overrides this)\n            if (!notification.urgent() && !prefs.isChannelEnabled(ch))\n                continue;\n\n            // Respect quiet hours (urgent overrides)\n            if (!notification.urgent() && prefs.quietHours().isPresent()\n                    && prefs.quietHours().get().isInQuietHours(Instant.now()))\n                continue;\n\n            queue.offer(new DeliveryTask(notification, ch, 1, 0));\n        }\n    }\n\n    public void addListener(DeliveryEventListener listener) {\n        listeners.add(listener);\n    }\n\n    public void shutdown() {\n        running = false;\n        workers.shutdown();\n    }\n\n    // ── Worker loop ─────────────────────\n    private void workerLoop() {\n        while (running) {\n            try {\n                DeliveryTask task = queue.poll(1, TimeUnit.SECONDS);\n                if (task == null) continue;\n\n                // Honor backoff\n                long now = System.currentTimeMillis();\n                if (task.earliestRetryAt() > now) {\n                    Thread.sleep(task.earliestRetryAt() - now);\n                }\n\n                process(task);\n            } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n                break;\n            }\n        }\n    }\n\n    // ── Process a single delivery task ──\n    private void process(DeliveryTask task) {\n        Notification n = task.notification();\n        User user = userRepo.getUser(n.userId());\n        if (user == null) {\n            emitFailed(n, task.channel(), \"Unknown user\");\n            return;\n        }\n\n        Template template = templateRepo.get(n.templateId(), task.channel());\n        if (template == null) {\n            emitFailed(n, task.channel(), \"Unknown template\");\n            return;\n        }\n\n        String body = template.render(n.variables());\n        NotificationChannel channel = channels.get(task.channel());\n        if (channel == null) {\n            emitFailed(n, task.channel(), \"Unknown channel\");\n            return;\n        }\n\n        DeliveryResult result = channel.send(user, body, template.subject());\n\n        switch (result.status()) {\n            case SUCCESS -> emitDelivered(n, task.channel());\n            case FAILED_PERMANENT -> emitFailed(n, task.channel(), result.errorMessage());\n            case FAILED_RETRYABLE -> {\n                if (task.attemptNumber() >= MAX_RETRIES) {\n                    deadLetter.add(task);\n                    emitFailed(n, task.channel(),\n                        \"Max retries exceeded: \" + result.errorMessage());\n                } else {\n                    // Exponential backoff: 1s, 2s, 4s\n                    long backoffMs = 1000L * (1L << task.attemptNumber());\n                    queue.offer(new DeliveryTask(\n                        n, task.channel(), task.attemptNumber() + 1,\n                        System.currentTimeMillis() + backoffMs));\n                }\n            }\n        }\n    }\n\n    private void emitDelivered(Notification n, ChannelType channel) {\n        DeliveryEvent event = new DeliveryEvent(\n            n.notificationId(), n.userId(), channel,\n            DeliveryStatus.SUCCESS, null);\n        for (DeliveryEventListener l : listeners) {\n            try { l.onDelivered(event); } catch (Exception ignored) {}\n        }\n    }\n\n    private void emitFailed(Notification n, ChannelType channel, String error) {\n        DeliveryEvent event = new DeliveryEvent(\n            n.notificationId(), n.userId(), channel,\n            DeliveryStatus.FAILED_PERMANENT, error);\n        for (DeliveryEventListener l : listeners) {\n            try { l.onFailed(event); } catch (Exception ignored) {}\n        }\n    }\n}\n\ninterface UserRepository {\n    User getUser(String userId);\n    UserPreferences getPreferences(String userId);\n}\n\ninterface TemplateRepository {\n    Template get(String templateId, ChannelType channel);\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Strategy Pattern → NotificationChannel",
@@ -318,7 +509,6 @@
       "where": "`BlockingQueue<DeliveryTask>` + `workers` ExecutorService + `workerLoop()`"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Multiple workers processing the same notification simultaneously",
@@ -337,7 +527,6 @@
       "fix": "Workers check `running` flag in the loop. On `shutdown()`, current task completes (worker finishes the iteration), then exits. **For graceful drain:** call `workers.shutdown()` then `awaitTermination(30s)` — gives in-flight tasks time to finish. Tasks still in the queue at shutdown are lost — could be persisted to disk for recovery."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why Decorator instead of just adding rate limiting inside each channel?",
@@ -367,5 +556,9 @@
       "question": "How would you handle template versioning?",
       "answer": "**Add a version field to templateId.** `templateRepo.get('order-confirmed-v2', EMAIL)`. New campaigns reference new versions; old in-flight notifications continue using their version. Deletes/archives are soft (`active = false` flag). For A/B tests: the templateId is decided by the caller, not the service. The service is just a renderer. Template logic lives in a separate **TemplateService** — decoupled from delivery. Don't conflate them."
     }
+  ],
+  "companies": [
+    "Slack",
+    "WhatsApp"
   ]
 }

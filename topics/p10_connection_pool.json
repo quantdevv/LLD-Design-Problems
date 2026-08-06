@@ -2,15 +2,29 @@
   "title": "Database Connection Pool",
   "description": "Design a database connection pool that maintains a fixed set of reusable connections. Clients borrow connections, use them, and return them. Handles concurrent borrowing, timeouts, health checks, and graceful shutdown.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Object Pool"},
-    {"type": "pattern", "label": "Proxy Pattern"},
-    {"type": "concept", "label": "Resource Management"},
-    {"type": "concept", "label": "Concurrency"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Object Pool"
+    },
+    {
+      "type": "pattern",
+      "label": "Proxy Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Resource Management"
+    },
+    {
+      "type": "concept",
+      "label": "Concurrency"
+    }
   ],
   "prompt": "Design a thread-safe database connection pool that manages a fixed number of reusable connections, with borrow timeouts and health validation.",
   "prompt_note": "Connection pools are the canonical **Object Pool Pattern** — reuse expensive-to-create resources. Real production pools (HikariCP, Apache DBCP, c3p0) solve subtle problems: validation, leaks from forgotten returns, idle connection expiry, and startup vs steady-state sizing. Don't replicate all of that — focus on the borrowing semantics and one or two production concerns.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Fixed pool size, or elastic (min/max with growth)?\"",
@@ -43,7 +57,6 @@
       "why": "Standard lifecycle — `shutdown()` + `awaitTermination()`."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "`borrowConnection(timeout)` → returns a pooled connection within timeout or throws.",
@@ -57,7 +70,6 @@
       "Elastic sizing (min/max with dynamic growth), idle connection expiry, leak detection, statement caching, JDBC-specific features (transaction isolation, savepoints)."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Thread-safe borrow/return** — hundreds of concurrent borrows must serialize correctly.",
@@ -69,7 +81,6 @@
       "Distributed pooling across JVMs, read/write splitting, connection affinity."
     ]
   },
-
   "primary_scope": [
     "`borrowConnection(timeout)` → poll available queue with timeout → validate → wrap in proxy → return",
     "`proxy.close()` → return underlying connection to available queue → notify waiters",
@@ -82,7 +93,6 @@
     "`ConnectionValidationException` — all connections in pool are invalid and can't be replaced",
     "`SQLException` — wrapped underlying DB errors"
   ],
-
   "entity_intro": "The key insight: we need a **Proxy** so that calling `close()` doesn't actually close the connection — it returns it to the pool. This is the Object Pool Pattern with an auto-return twist via Proxy.",
   "entities": [
     {
@@ -110,56 +120,117 @@
       "verdict_label": "✗ Standard JDBC — not our entity"
     }
   ],
-
   "relationships": [
-    {"entity": "ConnectionPool", "owns": "`BlockingQueue<Connection>` available, `ConnectionFactory`, `Set<Connection>` allCreated, closed flag, pool size", "rel": "1→N Connections (all owned), 1→1 Factory"},
-    {"entity": "PooledConnection", "owns": "reference to real Connection + reference to pool (for return)", "rel": "Wraps 1 Connection + points back to 1 Pool"},
-    {"entity": "ConnectionFactory", "owns": "DB URL, credentials, config", "rel": "Standalone service"}
+    {
+      "entity": "ConnectionPool",
+      "owns": "`BlockingQueue<Connection>` available, `ConnectionFactory`, `Set<Connection>` allCreated, closed flag, pool size",
+      "rel": "1→N Connections (all owned), 1→1 Factory"
+    },
+    {
+      "entity": "PooledConnection",
+      "owns": "reference to real Connection + reference to pool (for return)",
+      "rel": "Wraps 1 Connection + points back to 1 Pool"
+    },
+    {
+      "entity": "ConnectionFactory",
+      "owns": "DB URL, credentials, config",
+      "rel": "Standalone service"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = PooledConnection (the proxy object clients hold). **Service** = ConnectionFactory (creation), ConnectionPool's borrow/return logic. **Controller** = ConnectionPool public API. The Proxy + Pool combination is the most important design decision here.",
-
   "classes": [
     {
-      "name": "ConnectionFactory", "type": "interface", "layer": "Service",
+      "name": "ConnectionFactory",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "createConnection()", "returns": "Connection"}
+        {
+          "name": "createConnection()",
+          "returns": "Connection"
+        }
       ]
     },
     {
-      "name": "ConnectionPool", "type": "class", "layer": "Controller",
+      "name": "ConnectionPool",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "factory", "type": "ConnectionFactory"},
-        {"name": "available", "type": "BlockingQueue<Connection>"},
-        {"name": "allConnections", "type": "Set<Connection>"},
-        {"name": "poolSize", "type": "int"},
-        {"name": "closed", "type": "volatile boolean"}
+        {
+          "name": "factory",
+          "type": "ConnectionFactory"
+        },
+        {
+          "name": "available",
+          "type": "BlockingQueue<Connection>"
+        },
+        {
+          "name": "allConnections",
+          "type": "Set<Connection>"
+        },
+        {
+          "name": "poolSize",
+          "type": "int"
+        },
+        {
+          "name": "closed",
+          "type": "volatile boolean"
+        }
       ],
       "methods": [
-        {"name": "borrowConnection(timeout)", "returns": "Connection (proxy)"},
-        {"name": "returnConnection(conn)", "returns": "void"},
-        {"name": "shutdown()", "returns": "void"},
-        {"name": "getIdleCount()", "returns": "int"},
-        {"name": "getActiveCount()", "returns": "int"}
+        {
+          "name": "borrowConnection(timeout)",
+          "returns": "Connection (proxy)"
+        },
+        {
+          "name": "returnConnection(conn)",
+          "returns": "void"
+        },
+        {
+          "name": "shutdown()",
+          "returns": "void"
+        },
+        {
+          "name": "getIdleCount()",
+          "returns": "int"
+        },
+        {
+          "name": "getActiveCount()",
+          "returns": "int"
+        }
       ]
     },
     {
-      "name": "PooledConnection", "type": "class", "layer": "Model",
+      "name": "PooledConnection",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "delegate", "type": "Connection"},
-        {"name": "pool", "type": "ConnectionPool"},
-        {"name": "closed", "type": "boolean"}
+        {
+          "name": "delegate",
+          "type": "Connection"
+        },
+        {
+          "name": "pool",
+          "type": "ConnectionPool"
+        },
+        {
+          "name": "closed",
+          "type": "boolean"
+        }
       ],
       "methods": [
-        {"name": "close()", "returns": "void → returns to pool"},
-        {"name": "all other Connection methods", "returns": "delegate to underlying"}
+        {
+          "name": "close()",
+          "returns": "void → returns to pool"
+        },
+        {
+          "name": "all other Connection methods",
+          "returns": "delegate to underlying"
+        }
       ]
     }
   ],
-
   "db_schema": [],
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -183,7 +254,6 @@
       "code": "ConnectionFactory factory = new JdbcConnectionFactory(\n    \"jdbc:postgresql://localhost/mydb\", \"user\", \"pass\");\nConnectionPool pool = new ConnectionPool(factory, 10);\n\n// Borrow with 5-second timeout\ntry (Connection conn = pool.borrowConnection(5000)) {\n    try (PreparedStatement ps = conn.prepareStatement(\n            \"SELECT * FROM users WHERE id = ?\")) {\n        ps.setInt(1, 42);\n        try (ResultSet rs = ps.executeQuery()) {\n            while (rs.next()) {\n                System.out.println(rs.getString(\"name\"));\n            }\n        }\n    }\n}  // conn.close() here → returns to pool, NOT closes underlying\n\n// Clean shutdown\npool.shutdown();"
     }
   ],
-
   "patterns": [
     {
       "name": "Object Pool Pattern → ConnectionPool",
@@ -201,7 +271,6 @@
       "where": "`ConnectionFactory` interface + `JdbcConnectionFactory` impl"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two threads borrow the last connection simultaneously",
@@ -224,7 +293,6 @@
       "fix": "The `allConnections` set tracks the total count. Replacement only happens when we remove a dead connection first — net pool size stays at `poolSize`. We never exceed it because the original connection is removed before the replacement is added."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why a Proxy instead of asking clients to explicitly call `pool.returnConnection(conn)`?",
@@ -254,5 +322,9 @@
       "question": "How would you test this without a real database?",
       "answer": "**Inject a mock `ConnectionFactory`** that returns `Mockito.mock(Connection.class)`. Configure the mock's `isValid()` to return true/false based on test scenario. Test cases: (1) borrow succeeds within timeout, (2) borrow times out when pool exhausted, (3) invalid connection is replaced, (4) return adds back to queue, (5) shutdown closes all. The Factory abstraction is precisely for testability — no real DB needed."
     }
+  ],
+  "companies": [
+    "Oracle",
+    "Netflix"
   ]
 }

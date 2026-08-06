@@ -2,15 +2,29 @@
   "title": "Collaborative Document Editor (Google Docs)",
   "description": "Design an in-process engine for a collaborative text editor: multiple users editing the same document simultaneously, seeing each other's changes in real time. The defining challenge is **semantic concurrency** — merging concurrent edits without losing data or creating garbled output. Introduces CRDTs and Operational Transformation.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "CRDT"},
-    {"type": "pattern", "label": "Operational Transformation"},
-    {"type": "pattern", "label": "Observer Pattern"},
-    {"type": "concept", "label": "Distributed Consistency"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "CRDT"
+    },
+    {
+      "type": "pattern",
+      "label": "Operational Transformation"
+    },
+    {
+      "type": "pattern",
+      "label": "Observer Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Distributed Consistency"
+    }
   ],
   "prompt": "Design an in-process engine for a collaborative text editor where multiple users can edit the same document simultaneously and see each other's changes in real time.",
   "prompt_note": "This problem is fundamentally different from every other LLD problem. **Concurrency here isn't about mutex — it's about merging.** Two users can both insert a character at position 5 simultaneously, and both inserts must be preserved and ordered consistently on every replica. The solutions are either **CRDTs** (conflict-free data structures that merge automatically) or **Operational Transformation** (transform operations against each other to preserve intent). Mention both; implement one.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Single document or multi-document system? Real-time sync or eventual consistency?\"",
@@ -48,7 +62,6 @@
       "why": "**Both work.** CRDTs are simpler to reason about (no central server needed). OT (Google Docs' approach) requires a central transformation server but produces cleaner document history. We'll implement **CRDT** because it's conceptually cleaner for LLD."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**Multiple users** edit a shared text document concurrently.",
@@ -62,7 +75,6 @@
       "Transport layer (WebSocket, HTTP long-polling), authentication, access control, persistence format, rich text formatting, collaborative cursors visualization, export to PDF/DOCX."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Convergence:** commutative, associative, idempotent merge — the three CRDT guarantees.",
@@ -74,7 +86,6 @@
       "Cross-datacenter replication, end-to-end encryption, exactly-once delivery, byzantine fault tolerance."
     ]
   },
-
   "primary_scope": [
     "User types → local replica generates an Operation with unique ID → applies locally → broadcasts",
     "Remote replica receives Operation → applies using CRDT merge rules → all replicas converge",
@@ -88,7 +99,6 @@
     "Malformed position ID → ignored (replica may be stale)",
     "Unknown replica ID → still processed (no validation of authorship)"
   ],
-
   "entity_intro": "The critical design decision: **what represents a character's position?** Simple integer indices break under concurrency (two users insert at index 5 — now what does index 5 mean?). CRDTs use **position identifiers that are totally ordered and dense** — between any two positions, you can always create a new one. Common approaches: fractional indices (doubles between 0 and 1), logoot-style paths, or Yjs's structured IDs.",
   "entities": [
     {
@@ -128,119 +138,284 @@
       "verdict_label": "✓ Entity — broadcast hub"
     }
   ],
-
   "relationships": [
-    {"entity": "Document", "owns": "`List<CharNode>` (sorted by PositionId), replicaId, lamportClock, seenOps Set", "rel": "1 → N CharNodes"},
-    {"entity": "CharNode", "owns": "value, PositionId, replicaId, deleted flag", "rel": "N → 1 Document"},
-    {"entity": "Operation", "owns": "type, positionId, value, originReplica, clock", "rel": "Broadcast to all replicas"},
-    {"entity": "ReplicaSession", "owns": "Document instance, reference to OperationRouter", "rel": "N → 1 OperationRouter"}
+    {
+      "entity": "Document",
+      "owns": "`List<CharNode>` (sorted by PositionId), replicaId, lamportClock, seenOps Set",
+      "rel": "1 → N CharNodes"
+    },
+    {
+      "entity": "CharNode",
+      "owns": "value, PositionId, replicaId, deleted flag",
+      "rel": "N → 1 Document"
+    },
+    {
+      "entity": "Operation",
+      "owns": "type, positionId, value, originReplica, clock",
+      "rel": "Broadcast to all replicas"
+    },
+    {
+      "entity": "ReplicaSession",
+      "owns": "Document instance, reference to OperationRouter",
+      "rel": "N → 1 OperationRouter"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = CharNode, Operation, PositionId (pure data). **Service** = Document (the CRDT implementation with merge logic), OperationRouter (fan-out). **Controller** = ReplicaSession (user-facing API). **This problem is more 'data-oriented' than 'service-oriented'** — the CRDT algorithm lives in Document.apply() and positionId generation.",
-
   "classes": [
     {
-      "name": "PositionId", "type": "class", "layer": "Model",
+      "name": "PositionId",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "path", "type": "List<Segment>"},
-        {"name": "replicaId", "type": "String (tiebreaker)"}
+        {
+          "name": "path",
+          "type": "List<Segment>"
+        },
+        {
+          "name": "replicaId",
+          "type": "String (tiebreaker)"
+        }
       ],
       "methods": [
-        {"name": "compareTo(other)", "returns": "int (total order)"},
-        {"name": "between(before, after, replicaId)", "returns": "PositionId (static factory)"}
+        {
+          "name": "compareTo(other)",
+          "returns": "int (total order)"
+        },
+        {
+          "name": "between(before, after, replicaId)",
+          "returns": "PositionId (static factory)"
+        }
       ]
     },
     {
-      "name": "CharNode", "type": "class", "layer": "Model",
+      "name": "CharNode",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "value", "type": "char"},
-        {"name": "positionId", "type": "PositionId"},
-        {"name": "originReplica", "type": "String"},
-        {"name": "deleted", "type": "boolean (tombstone)"}
+        {
+          "name": "value",
+          "type": "char"
+        },
+        {
+          "name": "positionId",
+          "type": "PositionId"
+        },
+        {
+          "name": "originReplica",
+          "type": "String"
+        },
+        {
+          "name": "deleted",
+          "type": "boolean (tombstone)"
+        }
       ],
       "methods": []
     },
     {
-      "name": "Operation", "type": "class", "layer": "Model",
+      "name": "Operation",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "opId", "type": "String (replicaId + counter)"},
-        {"name": "type", "type": "INSERT | DELETE"},
-        {"name": "positionId", "type": "PositionId"},
-        {"name": "value", "type": "char (for INSERT)"},
-        {"name": "originReplica", "type": "String"},
-        {"name": "lamportClock", "type": "long"}
+        {
+          "name": "opId",
+          "type": "String (replicaId + counter)"
+        },
+        {
+          "name": "type",
+          "type": "INSERT | DELETE"
+        },
+        {
+          "name": "positionId",
+          "type": "PositionId"
+        },
+        {
+          "name": "value",
+          "type": "char (for INSERT)"
+        },
+        {
+          "name": "originReplica",
+          "type": "String"
+        },
+        {
+          "name": "lamportClock",
+          "type": "long"
+        }
       ],
       "methods": []
     },
     {
-      "name": "Document", "type": "class", "layer": "Service",
+      "name": "Document",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "chars", "type": "TreeMap<PositionId, CharNode> (sorted)"},
-        {"name": "replicaId", "type": "String"},
-        {"name": "lamportClock", "type": "AtomicLong"},
-        {"name": "seenOps", "type": "Set<String> (idempotence)"}
+        {
+          "name": "chars",
+          "type": "TreeMap<PositionId, CharNode> (sorted)"
+        },
+        {
+          "name": "replicaId",
+          "type": "String"
+        },
+        {
+          "name": "lamportClock",
+          "type": "AtomicLong"
+        },
+        {
+          "name": "seenOps",
+          "type": "Set<String> (idempotence)"
+        }
       ],
       "methods": [
-        {"name": "insertLocal(index, char)", "returns": "Operation"},
-        {"name": "deleteLocal(index)", "returns": "Operation"},
-        {"name": "apply(operation)", "returns": "void"},
-        {"name": "getText()", "returns": "String (skips tombstones)"},
-        {"name": "getLength()", "returns": "int"}
+        {
+          "name": "insertLocal(index, char)",
+          "returns": "Operation"
+        },
+        {
+          "name": "deleteLocal(index)",
+          "returns": "Operation"
+        },
+        {
+          "name": "apply(operation)",
+          "returns": "void"
+        },
+        {
+          "name": "getText()",
+          "returns": "String (skips tombstones)"
+        },
+        {
+          "name": "getLength()",
+          "returns": "int"
+        }
       ]
     },
     {
-      "name": "OperationRouter", "type": "class", "layer": "Service",
+      "name": "OperationRouter",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "replicas", "type": "Map<String, ReplicaSession>"}
+        {
+          "name": "replicas",
+          "type": "Map<String, ReplicaSession>"
+        }
       ],
       "methods": [
-        {"name": "register(session)", "returns": "void"},
-        {"name": "broadcast(operation)", "returns": "void"},
-        {"name": "unregister(replicaId)", "returns": "void"}
+        {
+          "name": "register(session)",
+          "returns": "void"
+        },
+        {
+          "name": "broadcast(operation)",
+          "returns": "void"
+        },
+        {
+          "name": "unregister(replicaId)",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "ReplicaSession", "type": "class", "layer": "Controller",
+      "name": "ReplicaSession",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "document", "type": "Document"},
-        {"name": "router", "type": "OperationRouter"},
-        {"name": "replicaId", "type": "String"}
+        {
+          "name": "document",
+          "type": "Document"
+        },
+        {
+          "name": "router",
+          "type": "OperationRouter"
+        },
+        {
+          "name": "replicaId",
+          "type": "String"
+        }
       ],
       "methods": [
-        {"name": "type(index, char)", "returns": "void"},
-        {"name": "delete(index)", "returns": "void"},
-        {"name": "receiveRemote(operation)", "returns": "void"},
-        {"name": "getText()", "returns": "String"}
+        {
+          "name": "type(index, char)",
+          "returns": "void"
+        },
+        {
+          "name": "delete(index)",
+          "returns": "void"
+        },
+        {
+          "name": "receiveRemote(operation)",
+          "returns": "void"
+        },
+        {
+          "name": "getText()",
+          "returns": "String"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "document_operations (append-only log)",
       "columns": [
-        {"name": "op_id", "type": "VARCHAR", "pk": true},
-        {"name": "document_id", "type": "UUID", "idx": true},
-        {"name": "op_type", "type": "ENUM(INSERT,DELETE)"},
-        {"name": "position_id", "type": "TEXT (serialized)"},
-        {"name": "value", "type": "CHAR"},
-        {"name": "origin_replica", "type": "VARCHAR"},
-        {"name": "lamport_clock", "type": "BIGINT", "idx": true},
-        {"name": "created_at", "type": "TIMESTAMP"}
+        {
+          "name": "op_id",
+          "type": "VARCHAR",
+          "pk": true
+        },
+        {
+          "name": "document_id",
+          "type": "UUID",
+          "idx": true
+        },
+        {
+          "name": "op_type",
+          "type": "ENUM(INSERT,DELETE)"
+        },
+        {
+          "name": "position_id",
+          "type": "TEXT (serialized)"
+        },
+        {
+          "name": "value",
+          "type": "CHAR"
+        },
+        {
+          "name": "origin_replica",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "lamport_clock",
+          "type": "BIGINT",
+          "idx": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP"
+        }
       ]
     },
     {
       "table": "document_snapshots (periodic materialized state)",
       "columns": [
-        {"name": "document_id", "type": "UUID", "pk": true},
-        {"name": "snapshot_at_clock", "type": "BIGINT"},
-        {"name": "content", "type": "TEXT"},
-        {"name": "char_positions", "type": "JSONB"}
+        {
+          "name": "document_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "snapshot_at_clock",
+          "type": "BIGINT"
+        },
+        {
+          "name": "content",
+          "type": "TEXT"
+        },
+        {
+          "name": "char_positions",
+          "type": "JSONB"
+        }
       ]
     }
   ],
   "schema_note": "**Event sourcing is the natural fit.** The document is defined by its operation log. New replicas bootstrap by replaying operations from the last snapshot. Snapshots are periodic (every 1000 ops) to avoid full replay on every load.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -269,7 +444,6 @@
       "code": "OperationRouter router = new OperationRouter();\nReplicaSession alice = new ReplicaSession(\"alice\", router);\nReplicaSession bob   = new ReplicaSession(\"bob\", router);\n\n// Both start with empty doc\nalice.type(0, 'H');   // Alice: H\n// Broadcast happens — Bob now sees H\nbob.type(1, 'i');     // Bob: Hi (appended to Alice's H)\n// Now both replicas see \"Hi\"\n\nassert alice.getText().equals(\"Hi\");\nassert bob.getText().equals(\"Hi\");\n\n// Concurrent edit at same position — both preserved\nReplicaSession carol = new ReplicaSession(\"carol\", router);\n// All three have \"Hi\"\n\n// Alice types 'A' at position 1 (between H and i)\n// Bob types 'B' at position 1 (also between H and i) — concurrent!\nOperation aliceOp = alice.type(1, 'A');  // Alice's local: HAi\nOperation bobOp = bob.type(1, 'B');      // Bob's local: HBi\n\n// After both ops propagate, all three replicas converge to the same\n// text — either \"HABi\" or \"HBAi\" (decided by replicaId tiebreaker in\n// PositionId.between). The key is: ALL replicas see the same result.\n\n// CRDT guarantee: identical final state regardless of op delivery order"
     }
   ],
-
   "patterns": [
     {
       "name": "CRDT (Conflict-free Replicated Data Type)",
@@ -292,7 +466,6 @@
       "where": "`Operation` is the immutable event; the log is the source of truth"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Two replicas insert at the same visible index simultaneously",
@@ -315,7 +488,6 @@
       "fix": "Deleted characters stay as tombstones for all time (in the naive version) because we need them to preserve PositionId ordering. For long-lived documents, **tombstone garbage collection** requires coordination: a replica can only drop a tombstone when it knows every other replica has seen it. Implement with vector clocks + periodic prune. **Call this out as a production concern.**"
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why use PositionIds instead of integer indices?",
@@ -349,5 +521,9 @@
       "question": "What's the memory footprint per character?",
       "answer": "Each CharNode: `char` (2 bytes), `PositionId` reference (8) + path List (16 base + ~24 per segment) + boolean (1) + String replicaId reference (8). For a typical 50-char document with 10 deletions → ~60 CharNodes × ~100 bytes = **6KB for a 40-character visible document.** Tombstones are the memory villain. **After 1M edits**, even with a 10KB visible doc, you'd have 1M tombstones × 100 bytes = 100MB. **Garbage collection of tombstones is essential for production.**"
     }
+  ],
+  "companies": [
+    "Google Docs",
+    "Notion"
   ]
 }

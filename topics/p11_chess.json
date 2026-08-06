@@ -2,15 +2,29 @@
   "title": "Chess (Board Game Framework)",
   "description": "Design a chess game with full rule enforcement. Tests polymorphism (each piece type), game state management (turns, check, checkmate), and extensibility (could later support variants or other board games).",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "pattern", "label": "Template Method"},
-    {"type": "concept", "label": "Polymorphism"},
-    {"type": "concept", "label": "State Machine"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Template Method"
+    },
+    {
+      "type": "concept",
+      "label": "Polymorphism"
+    },
+    {
+      "type": "concept",
+      "label": "State Machine"
+    }
   ],
   "prompt": "Design a chess game that enforces all the rules: legal moves for each piece, check, checkmate, stalemate, and turn alternation.",
   "prompt_note": "Chess is the classical **polymorphism interview problem**. Six piece types, each with distinct movement rules. The instinct is to use inheritance (abstract Piece with subclasses). That's correct — but the *details* matter: how does Pawn know about en passant? How does King check for check? The board needs to know about pieces, and pieces need to know about the board. Keep the coupling clean.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Full chess rules — castling, en passant, promotion?\"",
@@ -38,7 +52,6 @@
       "why": "Move history is needed for en passant (check the last move was a 2-square pawn advance). Undo would be a nice extension via Memento Pattern — mention it."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**8x8 board** with standard starting position.",
@@ -53,7 +66,6 @@
       "AI opponent, network play, algebraic notation parsing, draw by repetition, clock/time controls, GUI."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Extensibility:** adding a new piece type (e.g., chess variants) should require one new class — no changes to Board or Game.",
@@ -63,7 +75,6 @@
       "Performance (we're not building a chess engine), concurrency (single-player local game)."
     ]
   },
-
   "primary_scope": [
     "`makeMove(from, to)` → validate → execute → check game state → return result",
     "Piece-specific `getValidMoves(board, position)` — polymorphism per piece type",
@@ -76,7 +87,6 @@
     "`KingInCheckException` — move would leave own king in check (illegal)",
     "Game end: `CHECKMATE`, `STALEMATE`, `DRAW`"
   ],
-
   "entity_intro": "This is a polymorphism problem. Six piece types → abstract `Piece` with six subclasses. Each overrides `getValidMoves(board, position)`. The Board holds a grid; the Game orchestrates turns.",
   "entities": [
     {
@@ -122,68 +132,147 @@
       "verdict_label": "✗ Just a Color enum"
     }
   ],
-
   "relationships": [
-    {"entity": "Game", "owns": "Board, currentTurn Color, `List<Move>` history, GameState", "rel": "1→1 Board, 1→N Moves"},
-    {"entity": "Board", "owns": "`Piece[8][8]` grid", "rel": "1→N Pieces (up to 32)"},
-    {"entity": "Piece (abstract)", "owns": "color, hasMoved flag", "rel": "Belongs to 1 Board, referenced by its Position"},
-    {"entity": "Move", "owns": "from, to, piece ref, capturedPiece, moveType", "rel": "Immutable record"}
+    {
+      "entity": "Game",
+      "owns": "Board, currentTurn Color, `List<Move>` history, GameState",
+      "rel": "1→1 Board, 1→N Moves"
+    },
+    {
+      "entity": "Board",
+      "owns": "`Piece[8][8]` grid",
+      "rel": "1→N Pieces (up to 32)"
+    },
+    {
+      "entity": "Piece (abstract)",
+      "owns": "color, hasMoved flag",
+      "rel": "Belongs to 1 Board, referenced by its Position"
+    },
+    {
+      "entity": "Move",
+      "owns": "from, to, piece ref, capturedPiece, moveType",
+      "rel": "Immutable record"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Board, Piece hierarchy, Move, Position. **Service** = Move validation logic (mostly inside Piece subclasses). **Controller** = Game (public API, turn management, game state detection). The Piece hierarchy is where **Strategy Pattern via inheritance** lives — each piece encapsulates its own movement strategy.",
-
   "classes": [
     {
-      "name": "Piece (abstract)", "type": "abstract", "layer": "Model",
+      "name": "Piece (abstract)",
+      "type": "abstract",
+      "layer": "Model",
       "fields": [
-        {"name": "color", "type": "Color"},
-        {"name": "hasMoved", "type": "boolean"}
+        {
+          "name": "color",
+          "type": "Color"
+        },
+        {
+          "name": "hasMoved",
+          "type": "boolean"
+        }
       ],
       "methods": [
-        {"name": "getValidMoves(board, from)", "returns": "List<Position> (abstract)"},
-        {"name": "getColor()", "returns": "Color"}
+        {
+          "name": "getValidMoves(board, from)",
+          "returns": "List<Position> (abstract)"
+        },
+        {
+          "name": "getColor()",
+          "returns": "Color"
+        }
       ]
     },
     {
-      "name": "King / Queen / Rook / Bishop / Knight / Pawn", "type": "class", "layer": "Model",
+      "name": "King / Queen / Rook / Bishop / Knight / Pawn",
+      "type": "class",
+      "layer": "Model",
       "fields": [],
       "methods": [
-        {"name": "getValidMoves(board, from)", "returns": "List<Position> (piece-specific rules)"}
+        {
+          "name": "getValidMoves(board, from)",
+          "returns": "List<Position> (piece-specific rules)"
+        }
       ]
     },
     {
-      "name": "Board", "type": "class", "layer": "Service",
+      "name": "Board",
+      "type": "class",
+      "layer": "Service",
       "fields": [
-        {"name": "grid", "type": "Piece[8][8]"}
+        {
+          "name": "grid",
+          "type": "Piece[8][8]"
+        }
       ],
       "methods": [
-        {"name": "getPiece(pos)", "returns": "Piece"},
-        {"name": "setPiece(pos, piece)", "returns": "void"},
-        {"name": "movePiece(from, to)", "returns": "Piece (captured)"},
-        {"name": "isUnderAttack(pos, byColor)", "returns": "boolean"},
-        {"name": "findKing(color)", "returns": "Position"}
+        {
+          "name": "getPiece(pos)",
+          "returns": "Piece"
+        },
+        {
+          "name": "setPiece(pos, piece)",
+          "returns": "void"
+        },
+        {
+          "name": "movePiece(from, to)",
+          "returns": "Piece (captured)"
+        },
+        {
+          "name": "isUnderAttack(pos, byColor)",
+          "returns": "boolean"
+        },
+        {
+          "name": "findKing(color)",
+          "returns": "Position"
+        }
       ]
     },
     {
-      "name": "Game", "type": "class", "layer": "Controller",
+      "name": "Game",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "board", "type": "Board"},
-        {"name": "currentTurn", "type": "Color"},
-        {"name": "history", "type": "List<Move>"},
-        {"name": "state", "type": "GameState"}
+        {
+          "name": "board",
+          "type": "Board"
+        },
+        {
+          "name": "currentTurn",
+          "type": "Color"
+        },
+        {
+          "name": "history",
+          "type": "List<Move>"
+        },
+        {
+          "name": "state",
+          "type": "GameState"
+        }
       ],
       "methods": [
-        {"name": "makeMove(from, to)", "returns": "MoveResult"},
-        {"name": "isInCheck(color)", "returns": "boolean"},
-        {"name": "isCheckmate(color)", "returns": "boolean"},
-        {"name": "isStalemate(color)", "returns": "boolean"},
-        {"name": "getState()", "returns": "GameState"}
+        {
+          "name": "makeMove(from, to)",
+          "returns": "MoveResult"
+        },
+        {
+          "name": "isInCheck(color)",
+          "returns": "boolean"
+        },
+        {
+          "name": "isCheckmate(color)",
+          "returns": "boolean"
+        },
+        {
+          "name": "isStalemate(color)",
+          "returns": "boolean"
+        },
+        {
+          "name": "getState()",
+          "returns": "GameState"
+        }
       ]
     }
   ],
-
   "db_schema": [],
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -208,7 +297,6 @@
       "code": "class Game {\n    private final Board board = new Board();\n    private Color currentTurn = Color.WHITE;\n    private final List<Move> history = new ArrayList<>();\n    private GameState state = GameState.IN_PROGRESS;\n\n    public Game() {\n        board.setupStartingPosition();\n    }\n\n    // ── makeMove ─────────────────────────\n    public MoveResult makeMove(Position from, Position to) {\n        if (state != GameState.IN_PROGRESS && state != GameState.CHECK)\n            throw new IllegalStateException(\"Game is over\");\n\n        Piece piece = board.getPiece(from);\n        if (piece == null)\n            throw new InvalidMoveException(\"No piece at \" + from);\n        if (piece.getColor() != currentTurn)\n            throw new WrongTurnException(\"It's \" + currentTurn + \"'s turn\");\n\n        // Validate: is `to` in the piece's legal moves?\n        List<Position> valid = piece.getValidMoves(board, from);\n        if (!valid.contains(to))\n            throw new InvalidMoveException(piece + \" cannot move from \" + from + \" to \" + to);\n\n        // Simulate move: would it leave own king in check?\n        Piece captured = board.getPiece(to);\n        board.movePiece(from, to);\n\n        if (isInCheck(currentTurn)) {\n            // Rollback — illegal move\n            board.setPiece(from, piece);\n            board.setPiece(to, captured);\n            piece.hasMoved = false;  // reset (simplification)\n            throw new KingInCheckException(\"Move would leave own king in check\");\n        }\n\n        // Commit — record history, switch turns, check game state\n        history.add(new Move(from, to, piece, captured, MoveType.NORMAL));\n        currentTurn = currentTurn.opposite();\n\n        // Detect opponent's game state after this move\n        if (isCheckmate(currentTurn)) {\n            state = GameState.CHECKMATE;\n        } else if (isStalemate(currentTurn)) {\n            state = GameState.STALEMATE;\n        } else if (isInCheck(currentTurn)) {\n            state = GameState.CHECK;\n        } else {\n            state = GameState.IN_PROGRESS;\n        }\n\n        return new MoveResult(state, captured);\n    }\n\n    // ── Check detection ─────────────────\n    public boolean isInCheck(Color color) {\n        Position kingPos = board.findKing(color);\n        return board.isUnderAttack(kingPos, color.opposite());\n    }\n\n    // ── Checkmate = in check + no legal move saves the king ──\n    public boolean isCheckmate(Color color) {\n        if (!isInCheck(color)) return false;\n        return !hasAnyLegalMove(color);\n    }\n\n    // ── Stalemate = not in check + no legal moves ──\n    public boolean isStalemate(Color color) {\n        if (isInCheck(color)) return false;\n        return !hasAnyLegalMove(color);\n    }\n\n    // Iterate all pieces, try all their moves, simulate — any that escape check?\n    private boolean hasAnyLegalMove(Color color) {\n        for (int r = 0; r < 8; r++) {\n            for (int c = 0; c < 8; c++) {\n                Piece p = board.getPiece(new Position(r, c));\n                if (p == null || p.getColor() != color) continue;\n                Position from = new Position(r, c);\n                for (Position to : p.getValidMoves(board, from)) {\n                    // Simulate\n                    Piece captured = board.getPiece(to);\n                    board.movePiece(from, to);\n                    boolean stillInCheck = isInCheck(color);\n                    // Rollback\n                    board.setPiece(from, p);\n                    board.setPiece(to, captured);\n                    if (!stillInCheck) return true;\n                }\n            }\n        }\n        return false;\n    }\n\n    public GameState getState() { return state; }\n    public Color getCurrentTurn() { return currentTurn; }\n    public List<Move> getHistory() { return Collections.unmodifiableList(history); }\n}\n\nrecord MoveResult(GameState state, Piece captured) {}"
     }
   ],
-
   "patterns": [
     {
       "name": "Strategy Pattern (via Inheritance) → Piece.getValidMoves()",
@@ -226,14 +314,12 @@
       "where": "Would extend `Game.history` to store rollback info or full board states"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Not applicable — single-player local game",
       "fix": "Chess is turn-based, single-threaded by nature. No concurrency concerns in the basic design. If you added network play, you'd synchronize `makeMove()` on the Game instance."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why is check detection computationally expensive, and how do you handle it?",
@@ -263,5 +349,9 @@
       "question": "Why not make Position mutable and reuse it to save allocations?",
       "answer": "Premature optimization. Position is a value object — immutability makes equals/hashCode trivial, it's safe to use as map keys, and thread-safe by default. Allocation of a small record is ~5ns — negligible compared to the logic. **Correctness first, performance when measured.** Record types in modern Java (14+) make this essentially free syntactically."
     }
+  ],
+  "companies": [
+    "Google",
+    "Microsoft"
   ]
 }

@@ -2,16 +2,33 @@
   "title": "LeetCode / Online Judge Platform",
   "description": "Design an online judge that accepts code submissions, runs them against test cases in a sandboxed environment, and returns verdicts (Accepted, Wrong Answer, TLE, MLE, Runtime Error). The core is an **async pipeline**: submit → queue → sandbox execute → judge → verdict. Tests pipeline design, isolation, and timeout handling.",
   "tags": [
-    {"type": "hard", "label": "Hard"},
-    {"type": "pattern", "label": "Command Pattern"},
-    {"type": "pattern", "label": "Producer-Consumer"},
-    {"type": "pattern", "label": "Strategy Pattern"},
-    {"type": "concept", "label": "Sandboxing"},
-    {"type": "concept", "label": "Async Pipeline"}
+    {
+      "type": "hard",
+      "label": "Hard"
+    },
+    {
+      "type": "pattern",
+      "label": "Command Pattern"
+    },
+    {
+      "type": "pattern",
+      "label": "Producer-Consumer"
+    },
+    {
+      "type": "pattern",
+      "label": "Strategy Pattern"
+    },
+    {
+      "type": "concept",
+      "label": "Sandboxing"
+    },
+    {
+      "type": "concept",
+      "label": "Async Pipeline"
+    }
   ],
   "prompt": "Design a LeetCode-style online judge that accepts code submissions, evaluates them against test cases, and returns pass/fail verdicts with execution metrics.",
   "prompt_note": "The interesting LLD challenge here isn't the web frontend — it's the **execution pipeline**. How do you safely run untrusted user code? How do you enforce time and memory limits? How do you parallelize thousands of concurrent submissions? This is a producer-consumer pipeline with strict isolation between stages.",
-
   "clarifying_questions": [
     {
       "question": "You: \"Which languages should we support — and how do we compile/run them?\"",
@@ -44,7 +61,6 @@
       "why": "Classic bounded producer-consumer. Worker count = available sandbox slots."
     }
   ],
-
   "functional_requirements": {
     "core": [
       "**Submit code:** user submits (problemId, language, code) → gets submissionId.",
@@ -59,7 +75,6 @@
       "Problem CRUD, user auth, leaderboards/ranking, contest timers, code plagiarism detection, interactive problems (stdin/stdout), special judges (custom comparison logic)."
     ]
   },
-
   "non_functional_requirements": {
     "core": [
       "**Isolation:** one user's submission must not affect another's (process-level isolation per execution).",
@@ -71,7 +86,6 @@
       "Distributed worker fleet, auto-scaling, multi-datacenter, anti-cheat."
     ]
   },
-
   "primary_scope": [
     "`submit(problemId, language, code)` → create Submission → enqueue → return submissionId",
     "Worker loop: dequeue → compile (if needed) → run against each test case → collect verdicts",
@@ -88,7 +102,6 @@
     "QUEUE_FULL — too many pending submissions → reject",
     "INTERNAL_ERROR — sandbox crashed → mark submission as ERROR, alert ops"
   ],
-
   "entity_intro": "The pipeline has clear stages: **Submit → Queue → Compile → Execute per test case → Judge → Store result.** Each stage is an entity or service. The Submission object flows through stages, accumulating state (compiled binary, per-test verdicts, final result).",
   "entities": [
     {
@@ -134,117 +147,295 @@
       "verdict_label": "✓ Entity — Orchestrator"
     }
   ],
-
   "relationships": [
-    {"entity": "SubmissionService", "owns": "`BlockingQueue<Submission>`, `ExecutorService workerPool`, `Map<String, Submission>`, `Map<String, LanguageExecutor>`, JudgeService", "rel": "1→1 queue, 1→N workers, 1→N submissions"},
-    {"entity": "Submission", "owns": "userId, problemId, language, code, status, `List<TestCaseResult>`, overallVerdict", "rel": "N→1 Problem, N→1 User"},
-    {"entity": "Problem", "owns": "title, `List<TestCase>`, timeLimitMs, memLimitKb", "rel": "1→N TestCases"},
-    {"entity": "LanguageExecutor", "owns": "compile command template, run command template, file extensions", "rel": "Standalone Strategy per language"}
+    {
+      "entity": "SubmissionService",
+      "owns": "`BlockingQueue<Submission>`, `ExecutorService workerPool`, `Map<String, Submission>`, `Map<String, LanguageExecutor>`, JudgeService",
+      "rel": "1→1 queue, 1→N workers, 1→N submissions"
+    },
+    {
+      "entity": "Submission",
+      "owns": "userId, problemId, language, code, status, `List<TestCaseResult>`, overallVerdict",
+      "rel": "N→1 Problem, N→1 User"
+    },
+    {
+      "entity": "Problem",
+      "owns": "title, `List<TestCase>`, timeLimitMs, memLimitKb",
+      "rel": "1→N TestCases"
+    },
+    {
+      "entity": "LanguageExecutor",
+      "owns": "compile command template, run command template, file extensions",
+      "rel": "Standalone Strategy per language"
+    }
   ],
-
   "mvc_note": "**MVC Mapping:** **Model** = Submission, Problem, TestCase, TestCaseResult, Verdict enum. **Service** = LanguageExecutor strategies, JudgeService (comparison), pipeline evaluation logic. **Controller** = SubmissionService (public API, queue, worker dispatch). The pipeline structure is **Producer-Consumer** with the queue as the buffer between submit (producer) and evaluate (consumer).",
-
   "classes": [
     {
-      "name": "LanguageExecutor", "type": "interface", "layer": "Service",
+      "name": "LanguageExecutor",
+      "type": "interface",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "compile(code, workDir)", "returns": "CompileResult"},
-        {"name": "execute(workDir, input, timeLimitMs, memLimitKb)", "returns": "ExecutionResult"},
-        {"name": "getLanguage()", "returns": "Language enum"}
+        {
+          "name": "compile(code, workDir)",
+          "returns": "CompileResult"
+        },
+        {
+          "name": "execute(workDir, input, timeLimitMs, memLimitKb)",
+          "returns": "ExecutionResult"
+        },
+        {
+          "name": "getLanguage()",
+          "returns": "Language enum"
+        }
       ]
     },
     {
-      "name": "JudgeService", "type": "class", "layer": "Service",
+      "name": "JudgeService",
+      "type": "class",
+      "layer": "Service",
       "fields": [],
       "methods": [
-        {"name": "judge(actual, expected)", "returns": "Verdict"},
-        {"name": "normalizeOutput(output)", "returns": "String (trim, trailing newline)"}
+        {
+          "name": "judge(actual, expected)",
+          "returns": "Verdict"
+        },
+        {
+          "name": "normalizeOutput(output)",
+          "returns": "String (trim, trailing newline)"
+        }
       ]
     },
     {
-      "name": "Submission", "type": "class", "layer": "Model",
+      "name": "Submission",
+      "type": "class",
+      "layer": "Model",
       "fields": [
-        {"name": "submissionId", "type": "String"},
-        {"name": "userId", "type": "String"},
-        {"name": "problemId", "type": "String"},
-        {"name": "language", "type": "Language"},
-        {"name": "sourceCode", "type": "String"},
-        {"name": "status", "type": "volatile SubmissionStatus"},
-        {"name": "testCaseResults", "type": "List<TestCaseResult>"},
-        {"name": "overallVerdict", "type": "Verdict"},
-        {"name": "submittedAt", "type": "Instant"}
+        {
+          "name": "submissionId",
+          "type": "String"
+        },
+        {
+          "name": "userId",
+          "type": "String"
+        },
+        {
+          "name": "problemId",
+          "type": "String"
+        },
+        {
+          "name": "language",
+          "type": "Language"
+        },
+        {
+          "name": "sourceCode",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "volatile SubmissionStatus"
+        },
+        {
+          "name": "testCaseResults",
+          "type": "List<TestCaseResult>"
+        },
+        {
+          "name": "overallVerdict",
+          "type": "Verdict"
+        },
+        {
+          "name": "submittedAt",
+          "type": "Instant"
+        }
       ],
       "methods": [
-        {"name": "addTestResult(result)", "returns": "void"},
-        {"name": "setOverallVerdict(verdict)", "returns": "void"}
+        {
+          "name": "addTestResult(result)",
+          "returns": "void"
+        },
+        {
+          "name": "setOverallVerdict(verdict)",
+          "returns": "void"
+        }
       ]
     },
     {
-      "name": "SubmissionService", "type": "class", "layer": "Controller",
+      "name": "SubmissionService",
+      "type": "class",
+      "layer": "Controller",
       "fields": [
-        {"name": "queue", "type": "BlockingQueue<Submission>"},
-        {"name": "workerPool", "type": "ExecutorService"},
-        {"name": "submissions", "type": "ConcurrentHashMap<String, Submission>"},
-        {"name": "problems", "type": "Map<String, Problem>"},
-        {"name": "executors", "type": "Map<Language, LanguageExecutor>"},
-        {"name": "judgeService", "type": "JudgeService"}
+        {
+          "name": "queue",
+          "type": "BlockingQueue<Submission>"
+        },
+        {
+          "name": "workerPool",
+          "type": "ExecutorService"
+        },
+        {
+          "name": "submissions",
+          "type": "ConcurrentHashMap<String, Submission>"
+        },
+        {
+          "name": "problems",
+          "type": "Map<String, Problem>"
+        },
+        {
+          "name": "executors",
+          "type": "Map<Language, LanguageExecutor>"
+        },
+        {
+          "name": "judgeService",
+          "type": "JudgeService"
+        }
       ],
       "methods": [
-        {"name": "submit(userId, problemId, language, code)", "returns": "String (submissionId)"},
-        {"name": "getResult(submissionId)", "returns": "Submission (snapshot)"}
+        {
+          "name": "submit(userId, problemId, language, code)",
+          "returns": "String (submissionId)"
+        },
+        {
+          "name": "getResult(submissionId)",
+          "returns": "Submission (snapshot)"
+        }
       ]
     }
   ],
-
   "db_schema": [
     {
       "table": "problems",
       "columns": [
-        {"name": "problem_id", "type": "UUID", "pk": true},
-        {"name": "title", "type": "VARCHAR"},
-        {"name": "time_limit_ms", "type": "INT"},
-        {"name": "memory_limit_kb", "type": "INT"}
+        {
+          "name": "problem_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "time_limit_ms",
+          "type": "INT"
+        },
+        {
+          "name": "memory_limit_kb",
+          "type": "INT"
+        }
       ]
     },
     {
       "table": "test_cases",
       "columns": [
-        {"name": "test_case_id", "type": "UUID", "pk": true},
-        {"name": "problem_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "input", "type": "TEXT"},
-        {"name": "expected_output", "type": "TEXT"},
-        {"name": "is_sample", "type": "BOOLEAN"},
-        {"name": "order_index", "type": "INT"}
+        {
+          "name": "test_case_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "problem_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "input",
+          "type": "TEXT"
+        },
+        {
+          "name": "expected_output",
+          "type": "TEXT"
+        },
+        {
+          "name": "is_sample",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "order_index",
+          "type": "INT"
+        }
       ]
     },
     {
       "table": "submissions",
       "columns": [
-        {"name": "submission_id", "type": "UUID", "pk": true},
-        {"name": "user_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "problem_id", "type": "UUID", "fk": true, "idx": true},
-        {"name": "language", "type": "ENUM(JAVA,PYTHON,CPP)"},
-        {"name": "source_code", "type": "TEXT"},
-        {"name": "status", "type": "ENUM(QUEUED,COMPILING,RUNNING,COMPLETED)", "idx": true},
-        {"name": "overall_verdict", "type": "ENUM(AC,WA,TLE,MLE,RE,CE,PENDING)"},
-        {"name": "submitted_at", "type": "TIMESTAMP", "idx": true}
+        {
+          "name": "submission_id",
+          "type": "UUID",
+          "pk": true
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "problem_id",
+          "type": "UUID",
+          "fk": true,
+          "idx": true
+        },
+        {
+          "name": "language",
+          "type": "ENUM(JAVA,PYTHON,CPP)"
+        },
+        {
+          "name": "source_code",
+          "type": "TEXT"
+        },
+        {
+          "name": "status",
+          "type": "ENUM(QUEUED,COMPILING,RUNNING,COMPLETED)",
+          "idx": true
+        },
+        {
+          "name": "overall_verdict",
+          "type": "ENUM(AC,WA,TLE,MLE,RE,CE,PENDING)"
+        },
+        {
+          "name": "submitted_at",
+          "type": "TIMESTAMP",
+          "idx": true
+        }
       ]
     },
     {
       "table": "test_case_results",
       "columns": [
-        {"name": "submission_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "test_case_id", "type": "UUID", "pk": true, "fk": true},
-        {"name": "verdict", "type": "ENUM(AC,WA,TLE,MLE,RE)"},
-        {"name": "runtime_ms", "type": "INT"},
-        {"name": "memory_kb", "type": "INT"},
-        {"name": "actual_output", "type": "TEXT"}
+        {
+          "name": "submission_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "test_case_id",
+          "type": "UUID",
+          "pk": true,
+          "fk": true
+        },
+        {
+          "name": "verdict",
+          "type": "ENUM(AC,WA,TLE,MLE,RE)"
+        },
+        {
+          "name": "runtime_ms",
+          "type": "INT"
+        },
+        {
+          "name": "memory_kb",
+          "type": "INT"
+        },
+        {
+          "name": "actual_output",
+          "type": "TEXT"
+        }
       ]
     }
   ],
   "schema_note": "Index `(user_id, problem_id, submitted_at)` for 'show my submissions for this problem' queries. Index `(problem_id, overall_verdict)` for acceptance rate statistics. Source code is stored as TEXT — for large-scale systems, store in object storage (S3) and keep a reference.",
-
   "code_lang": "Java",
   "code_sections": [
     {
@@ -270,7 +461,6 @@
       "code": "class SubmissionService {\n    private final BlockingQueue<Submission> queue;\n    private final ExecutorService workerPool;\n    private final ConcurrentHashMap<String, Submission> submissions = new ConcurrentHashMap<>();\n    private final Map<String, Problem> problems;\n    private final Map<Language, LanguageExecutor> executors;\n    private final JudgeService judgeService = new JudgeService();\n    private volatile boolean running = true;\n\n    public SubmissionService(int queueSize, int numWorkers,\n                              Map<String, Problem> problems,\n                              Map<Language, LanguageExecutor> executors) {\n        this.queue = new ArrayBlockingQueue<>(queueSize);\n        this.problems = problems;\n        this.executors = executors;\n        this.workerPool = Executors.newFixedThreadPool(numWorkers);\n        for (int i = 0; i < numWorkers; i++) {\n            workerPool.submit(this::workerLoop);\n        }\n    }\n\n    // ── Submit ────────────────────────────\n    public String submit(String userId, String problemId,\n                          Language language, String code) {\n        if (!problems.containsKey(problemId))\n            throw new ProblemNotFoundException(problemId);\n        if (!executors.containsKey(language))\n            throw new UnsupportedLanguageException(language.name());\n\n        Submission sub = new Submission(userId, problemId, language, code);\n        submissions.put(sub.getSubmissionId(), sub);\n\n        if (!queue.offer(sub)) {\n            sub.setStatus(SubmissionStatus.COMPLETED);\n            sub.setOverallVerdict(Verdict.INTERNAL_ERROR);\n            throw new QueueFullException(\"Judge queue is full, try again later\");\n        }\n        return sub.getSubmissionId();\n    }\n\n    // ── Poll result ──────────────────────\n    public Submission getResult(String submissionId) {\n        Submission sub = submissions.get(submissionId);\n        if (sub == null)\n            throw new SubmissionNotFoundException(submissionId);\n        return sub;\n    }\n\n    // ── Worker loop ──────────────────────\n    private void workerLoop() {\n        while (running) {\n            try {\n                Submission sub = queue.poll(1, TimeUnit.SECONDS);\n                if (sub == null) continue;\n                evaluate(sub);\n            } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n                break;\n            }\n        }\n    }\n\n    // ── Evaluation pipeline ──────────────\n    private void evaluate(Submission sub) {\n        try {\n            Problem problem = problems.get(sub.getProblemId());\n            LanguageExecutor executor = executors.get(sub.getLanguage());\n\n            // Create isolated work directory\n            String workDir = createTempDir(sub.getSubmissionId());\n\n            // Phase 1: Compile\n            sub.setStatus(SubmissionStatus.COMPILING);\n            CompileResult compileResult = executor.compile(sub.getSourceCode(), workDir);\n\n            if (!compileResult.success()) {\n                sub.setOverallVerdict(Verdict.COMPILE_ERROR);\n                sub.setStatus(SubmissionStatus.COMPLETED);\n                return;\n            }\n\n            // Phase 2: Run against each test case\n            sub.setStatus(SubmissionStatus.RUNNING);\n            Verdict overallVerdict = Verdict.ACCEPTED;\n\n            for (TestCase tc : problem.testCases()) {\n                ExecutionResult execResult = executor.execute(\n                    workDir, tc.input(),\n                    problem.timeLimitMs(), problem.memoryLimitKb());\n\n                Verdict testVerdict;\n                if (execResult.timedOut()) {\n                    testVerdict = Verdict.TIME_LIMIT_EXCEEDED;\n                } else if (execResult.memExceeded()) {\n                    testVerdict = Verdict.MEMORY_LIMIT_EXCEEDED;\n                } else if (execResult.exitCode() != 0) {\n                    testVerdict = Verdict.RUNTIME_ERROR;\n                } else {\n                    testVerdict = judgeService.judge(\n                        execResult.stdout(), tc.expectedOutput());\n                }\n\n                sub.addTestResult(new TestCaseResult(\n                    tc.testCaseId(), testVerdict,\n                    execResult.runtimeMs(), execResult.memoryKb(),\n                    testVerdict == Verdict.WRONG_ANSWER ? execResult.stdout() : null));\n\n                // Short-circuit on first failure (optimization)\n                if (testVerdict != Verdict.ACCEPTED && overallVerdict == Verdict.ACCEPTED) {\n                    overallVerdict = testVerdict;\n                    // Continue running remaining tests for full feedback\n                    // (or break here for competitive judge — configurable)\n                }\n            }\n\n            sub.setOverallVerdict(overallVerdict);\n            sub.setStatus(SubmissionStatus.COMPLETED);\n\n            // Cleanup temp directory\n            cleanupTempDir(workDir);\n\n        } catch (Exception e) {\n            sub.setOverallVerdict(Verdict.INTERNAL_ERROR);\n            sub.setStatus(SubmissionStatus.COMPLETED);\n        }\n    }\n\n    private String createTempDir(String subId) {\n        try {\n            return Files.createTempDirectory(\"judge-\" + subId).toString();\n        } catch (IOException e) {\n            throw new RuntimeException(\"Failed to create temp dir\", e);\n        }\n    }\n\n    private void cleanupTempDir(String workDir) {\n        try {\n            // rm -rf workDir\n            Path path = Path.of(workDir);\n            Files.walk(path).sorted(Comparator.reverseOrder())\n                .map(Path::toFile).forEach(File::delete);\n        } catch (IOException ignored) {}\n    }\n\n    public void shutdown() {\n        running = false;\n        workerPool.shutdown();\n    }\n}"
     }
   ],
-
   "patterns": [
     {
       "name": "Strategy Pattern → LanguageExecutor",
@@ -293,7 +483,6 @@
       "where": "`evaluate()` method — sequential stages with early termination"
     }
   ],
-
   "concurrency": [
     {
       "issue": "Multiple workers modifying the same Submission's test results",
@@ -312,7 +501,6 @@
       "fix": "The entire `evaluate()` call is wrapped in try-catch. Exceptions mark the submission as `INTERNAL_ERROR`, don't crash the worker. The worker loop continues processing the next submission. For extra safety: use `Executors.newFixedThreadPool` with an uncaught exception handler that logs and restarts."
     }
   ],
-
   "deep_dives": [
     {
       "question": "Why run test cases sequentially within a submission instead of in parallel?",
@@ -342,5 +530,9 @@
       "question": "How do you ensure deterministic timing for competitive programming?",
       "answer": "**Dedicated hardware per judge.** In production: dedicated physical machines with fixed CPU frequency (no turbo boost), no other processes competing for resources. Run each test case on an isolated core with `taskset` (CPU pinning). Compare against a **reference solution** (solution runs on the same machine, same conditions). If reference takes 500ms, time limit = 3× reference = 1500ms. **This is why competitive programming sites often have different time limits per language** (Python gets 3×)."
     }
+  ],
+  "companies": [
+    "LeetCode",
+    "HackerRank"
   ]
 }
