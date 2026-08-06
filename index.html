@@ -16,7 +16,7 @@
   <a class="brand" href="#" onclick="App.goHome();return false;">
     <span class="brand-mark">L</span>
     <span>LLD Mastery</span>
-    <span class="brand-sub">26-problem interview reference</span>
+    <span class="brand-sub" id="brandSub">26-problem interview reference</span>
   </a>
   <div class="tb-spacer"></div>
   <div class="tb-controls">
@@ -278,6 +278,8 @@ async function renderCurrent() {
   main.innerHTML = `<div class="loading"><div class="spinner"></div><div>Loading…</div></div>`;
   const p = await fetchProblem(State.current);
   main.innerHTML = `<div id="sec-top"></div>` + LLDRender.renderProblem(p, State.current);
+  const brandSub = document.getElementById('brandSub');
+  if (brandSub) brandSub.textContent = p.title;
   renderTOC(p);
   renderMeta();
   renderRail();
