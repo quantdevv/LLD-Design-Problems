@@ -3,426 +3,100 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>LLD Interview Mastery — 26 Problems (Interview Format)</title>
+<title>LLD Mastery — 26 Problems</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
-<style>
-:root{
-  --bg:#08090e;--s1:#0d0f18;--s2:#12151f;--s3:#181c28;
-  --border:#1f2535;--borderl:#28314a;
-  --text:#dde4f0;--muted:#7a869e;--dim:#424d63;
-  --acc:#4f8ef7;--accl:#7aabff;--accg:rgba(79,142,247,0.12);
-  --green:#2dd4a0;--greeng:rgba(45,212,160,0.1);
-  --red:#f7614f;--redg:rgba(247,97,79,0.1);
-  --amber:#f5b942;--amberg:rgba(245,185,66,0.1);
-  --purple:#b478f5;--purpleg:rgba(180,120,245,0.1);
-  --cyan:#38c9e8;--cyang:rgba(56,201,232,0.1);
-  --r:10px;--rs:6px;
-}
-body.light-theme{
-  --bg:#ffffff;--s1:#f8f9fc;--s2:#f1f3f8;--s3:#e9edf5;
-  --border:#e2e6ef;--borderl:#cfd6e6;
-  --text:#0f172a;--muted:#475569;--dim:#94a3b8;
-  --acc:#2563eb;--accl:#1d4ed8;--accg:rgba(37,99,235,0.08);
-}
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:'Sora',sans-serif;font-size:14px;line-height:1.7;min-height:100vh}
-
-/* ── NAV ── */
-.topbar{background:var(--s1);border-bottom:1px solid var(--border);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
-.logo{font-size:18px;font-weight:800;letter-spacing:-0.04em;color:var(--text)}.logo em{color:var(--acc);font-style:normal}
-.nav-pills{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.nav-pill{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;text-decoration:none;color:var(--muted);border:1px solid var(--border);transition:all .15s;cursor:pointer;background:none}
-.nav-pill:hover{color:var(--text);border-color:var(--borderl)}
-.theme-btn{margin-left:8px;padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--s2);color:var(--text);cursor:pointer;font-family:'Sora',sans-serif;font-size:12px;font-weight:600}
-
-/* ── LAYOUT ── */
-.layout{display:flex;max-width:1440px;margin:0 auto;padding:0 24px;gap:36px}
-.layout.sidebar-collapsed{gap:0}
-.sidebar{width:270px;flex-shrink:0;padding-top:32px;position:sticky;top:68px;align-self:flex-start;max-height:calc(100vh - 68px);overflow-y:auto;transition:width .3s ease}
-.sidebar.collapsed{width:0;padding:0;overflow:hidden}
-.sb-title{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
-.sb-title:hover{color:var(--text)}
-.sb-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--rs);text-decoration:none;color:var(--muted);font-size:12.5px;transition:all .15s;cursor:pointer}
-.sb-item:hover{background:var(--s2);color:var(--text)}
-.sb-item.active{background:var(--accg);color:var(--accl)}
-.sb-num{width:20px;height:20px;border-radius:4px;background:var(--s3);border:1px solid var(--border);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--dim);flex-shrink:0}
-.sb-item.active .sb-num{background:var(--accg);border-color:rgba(79,142,247,.4);color:var(--acc)}
-.sb-section{margin-bottom:20px}
-.sb-items{display:none}
-.sb-section.expanded .sb-items{display:block}
-.sb-toggle{font-size:8px;transition:transform .2s;display:inline-block;transform:rotate(0deg)}
-.sb-section.expanded .sb-toggle{transform:rotate(180deg)}
-.main{flex:1;min-width:0;padding:32px 0 120px}
-
-/* ── HERO ── */
-.hero{margin-bottom:48px;padding:40px;background:linear-gradient(135deg,rgba(79,142,247,.08),rgba(180,120,245,.06));border:1px solid rgba(79,142,247,.2);border-radius:16px;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(79,142,247,.15),transparent 70%);border-radius:50%}
-.hero-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:var(--accg);border:1px solid rgba(79,142,247,.3);border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accl);margin-bottom:16px}
-.hero-title{font-size:36px;font-weight:800;letter-spacing:-.04em;color:var(--text);line-height:1.15;margin-bottom:12px}
-.hero-title span{background:linear-gradient(135deg,var(--acc),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-sub{font-size:14.5px;color:var(--muted);max-width:640px;line-height:1.7;margin-bottom:24px}
-.hero-pills{display:flex;gap:8px;flex-wrap:wrap}
-.hp{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid var(--border);color:var(--muted)}
-.hp.g{background:var(--greeng);border-color:rgba(45,212,160,.25);color:var(--green)}
-.hp.p{background:var(--purpleg);border-color:rgba(180,120,245,.25);color:var(--purple)}
-.hp.a{background:var(--amberg);border-color:rgba(245,185,66,.25);color:var(--amber)}
-
-/* ── PROBLEM CARD ── */
-.problem{margin-bottom:72px;scroll-margin-top:80px}
-.problem-header{display:flex;align-items:flex-start;gap:16px;margin-bottom:24px;padding:24px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r)}
-.problem-num{font-size:32px;font-weight:800;letter-spacing:-.04em;color:var(--acc);opacity:.4;min-width:52px;font-family:'JetBrains Mono',monospace}
-.problem-meta{flex:1}
-.problem-title{font-size:24px;font-weight:700;letter-spacing:-.03em;color:var(--text);margin-bottom:6px}
-.problem-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.ptag{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:20px}
-.ptag-hard{background:var(--redg);color:var(--red);border:1px solid rgba(247,97,79,.25)}
-.ptag-med{background:var(--amberg);color:var(--amber);border:1px solid rgba(245,185,66,.25)}
-.ptag-easy{background:var(--greeng);color:var(--green);border:1px solid rgba(45,212,160,.25)}
-.ptag-pat{background:var(--purpleg);color:var(--purple);border:1px solid rgba(180,120,245,.25)}
-.ptag-cyan{background:var(--cyang);color:var(--cyan);border:1px solid rgba(56,201,232,.25)}
-.problem-desc{font-size:13.5px;color:var(--muted);line-height:1.7}
-
-/* ── SECTION HEADINGS ── */
-.sh{font-size:19px;font-weight:700;letter-spacing:-.025em;color:var(--text);margin:36px 0 12px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
-.sh:first-child{border-top:none;margin-top:0}
-h3{font-size:15px;font-weight:600;color:var(--text);margin:22px 0 8px}
-h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:16px 0 6px}
-p,.desc-text{margin-bottom:12px;color:var(--muted);line-height:1.75;font-size:13.5px}
-p strong,.desc-text strong{color:var(--text);font-weight:600}
-
-/* ── PROMPT BOX ── */
-.prompt-box{background:var(--s1);border:1px solid var(--borderl);border-left:3px solid var(--acc);border-radius:var(--r);padding:16px 20px;margin:14px 0;font-size:14px;color:var(--text);font-style:italic;line-height:1.7}
-
-/* ── CLARIFY Q&A ── */
-.clarify{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin:14px 0;overflow:hidden}
-.clarify-item{padding:12px 16px;border-bottom:1px solid var(--border)}
-.clarify-item:last-child{border-bottom:none}
-.clarify-q{font-size:13px;font-weight:600;color:var(--accl);margin-bottom:4px}
-.clarify-a{font-size:13px;color:var(--muted);font-style:italic}
-.clarify-why{font-size:12px;color:var(--dim);margin-top:4px;padding-left:12px;border-left:2px solid var(--border)}
-
-/* ── REQ BOX ── */
-.req-wrap{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin:14px 0;overflow:hidden}
-.req-head{padding:10px 16px;background:var(--s2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:flex;align-items:center;gap:7px}
-.req-body{padding:14px 16px}
-.req-group{margin-bottom:14px}.req-group:last-child{margin-bottom:0}
-.req-glabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);margin-bottom:7px}
-.req-list{list-style:none}
-.req-item{display:flex;align-items:flex-start;gap:9px;padding:6px 0;font-size:13px;color:var(--muted);border-bottom:1px solid var(--border)}
-.req-item:last-child{border-bottom:none}
-.rn{width:20px;height:20px;border-radius:50%;background:var(--accg);border:1px solid rgba(79,142,247,.4);color:var(--acc);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-.rn-x{background:var(--s2);border-color:var(--border);color:var(--dim)}
-
-/* ── SCOPE BOX ── */
-.scope-wrap{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
-.scope-col{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px}
-.scope-col-t{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
-.scope-col.primary .scope-col-t{color:var(--green)}
-.scope-col.termination .scope-col-t{color:var(--red)}
-.scope-item{font-size:12.5px;color:var(--muted);margin-bottom:5px;display:flex;gap:6px;line-height:1.5}
-
-/* ── ENTITY RATIONALE ── */
-.entity-rationale{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin:14px 0;overflow:hidden}
-.er-item{padding:12px 16px;border-bottom:1px solid var(--border)}
-.er-item:last-child{border-bottom:none}
-.er-name{font-size:13px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;margin-bottom:3px}
-.er-role{font-size:12.5px;color:var(--muted);line-height:1.6}
-.er-verdict{font-size:11px;font-weight:600;margin-top:4px;padding:2px 8px;border-radius:12px;display:inline-block}
-.er-verdict.yes{background:var(--greeng);color:var(--green);border:1px solid rgba(45,212,160,.25)}
-.er-verdict.no{background:var(--redg);color:var(--red);border:1px solid rgba(247,97,79,.25)}
-.er-verdict.maybe{background:var(--amberg);color:var(--amber);border:1px solid rgba(245,185,66,.25)}
-
-/* ── RELATIONSHIP TABLE ── */
-.tw{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin:14px 0}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:9px 13px;background:var(--s2);color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;border-bottom:1px solid var(--border)}
-td{padding:9px 13px;border-bottom:1px solid var(--border);color:var(--muted);vertical-align:top}
-tr:last-child td{border-bottom:none}
-td strong{color:var(--text);font-weight:500}
-
-/* ── CLASS DIAGRAM ── */
-.class-diagram{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:22px;margin:14px 0;font-family:'JetBrains Mono',monospace;font-size:12px;overflow-x:auto}
-.cd-class{display:inline-block;background:var(--s2);border:1.5px solid var(--borderl);border-radius:6px;margin:6px;vertical-align:top;min-width:180px}
-.cd-class.interface{border-color:var(--purple);border-style:dashed}
-.cd-class.abstract{border-color:var(--amber)}
-.cd-head{padding:8px 12px;background:var(--s3);border-bottom:1px solid var(--border);font-weight:700;color:var(--text);font-size:12px}
-.cd-head .ilabel{font-size:9px;color:var(--purple);display:block;font-weight:400}
-.cd-head .alabel{font-size:9px;color:var(--amber);display:block;font-weight:400}
-.cd-head .layer{font-size:9px;font-weight:400;margin-left:4px}
-.layer-m{color:var(--purple)}.layer-s{color:var(--amber)}.layer-c{color:var(--green)}
-.cd-body{padding:10px 12px}
-.cd-field{color:var(--muted);font-size:11.5px;line-height:1.8}
-.cd-field .vis{color:var(--green)}.cd-field .fn{color:var(--accl)}.cd-field .ft{color:var(--dim)}
-.cd-divider{border-top:1px solid var(--border);margin:6px 0}
-.cd-method{color:var(--muted);font-size:11.5px;line-height:1.8}
-.cd-method .vis{color:var(--amber)}.cd-method .mn{color:var(--green)}.cd-method .rt{color:var(--purple)}
-.cd-grid{display:flex;flex-wrap:wrap;gap:4px}
-.cd-arrow{color:var(--dim);padding:8px;font-size:13px;align-self:center}
-
-/* ════════════════════════════════════════
-   IDE-STYLE JAVA CODE BLOCKS
-   ════════════════════════════════════════ */
-
-/* Outer wrapper — gives the card shadow + rounded corners */
-.code-wrapper {
-  position: relative;
-  margin: 16px 0;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 8px 40px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.3);
-}
-body.light-theme .code-wrapper {
-  box-shadow: 0 4px 24px rgba(0,0,0,.12), 0 1px 4px rgba(0,0,0,.08);
-}
-
-/* Fake title bar — macOS window chrome */
-.code-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: #181926;
-  border-bottom: 1px solid #24253a;
-  user-select: none;
-}
-body.light-theme .code-header {
-  background: #dfe1ec;
-  border-bottom: 1px solid #c8cad9;
-}
-
-.code-dots { display: flex; gap: 7px; align-items: center; }
-.code-dot {
-  width: 13px; height: 13px; border-radius: 50%;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,.2);
-}
-.code-dot-r { background: #ff5f57; }
-.code-dot-y { background: #febc2e; }
-.code-dot-g { background: #28c840; }
-
-.code-lang-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  color: #585b70;
-}
-body.light-theme .code-lang-badge { color: #6272a4; }
-
-.copy-btn {
-  font-family: 'Sora', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  color: #585b70;
-  background: transparent;
-  border: 1px solid #313244;
-  border-radius: 5px;
-  padding: 3px 10px;
-  cursor: pointer;
-  transition: color .15s, border-color .15s, background .15s;
-}
-.copy-btn:hover { color: #cdd6f4; border-color: #7f849c; background: rgba(205,214,244,.07); }
-body.light-theme .copy-btn { color: #6272a4; border-color: #b0b2c3; }
-body.light-theme .copy-btn:hover { color: #282a36; border-color: #6272a4; background: rgba(98,114,164,.08); }
-
-/* The <pre> block itself */
-.java-code {
-  display: block;
-  margin: 0;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: #1e1e2e;   /* Catppuccin Mocha base */
-  overflow-x: auto;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12.5px;
-  line-height: 1.72;
-}
-body.light-theme .java-code {
-  background: #f8f8f2;   /* Dracula light / GitHub Light */
-}
-
-/* Inner <code> — reset browser defaults */
-.java-code code {
-  display: block;
-  background: none;
-  padding: 0;
-  margin: 0;
-  font-size: inherit;
-  line-height: inherit;
-  white-space: pre;
-}
-
-/* Each line row */
-.code-line {
-  display: flex;
-  min-height: 1.72em;
-}
-.code-line:hover { background: rgba(205,214,244,.04); }
-body.light-theme .code-line:hover { background: rgba(40,42,54,.04); }
-
-/* Gutter / line numbers */
-.line-num {
-  min-width: 52px;
-  padding: 0 14px 0 18px;
-  text-align: right;
-  color: #45475a;
-  border-right: 1px solid #313244;
-  margin-right: 18px;
-  flex-shrink: 0;
-  font-size: 11px;
-  line-height: 1.72;
-  user-select: none;
-}
-body.light-theme .line-num {
-  color: #b0b2c3;
-  border-right-color: #dce0f0;
-}
-
-/* Line text */
-.line-content {
-  flex: 1;
-  white-space: pre;
-  padding-right: 24px;
-  color: #cdd6f4;          /* default text */
-}
-body.light-theme .line-content { color: #282a36; }
-
-/* ── TOKEN COLORS — DARK (Catppuccin Mocha) ── */
-.jk  { color: #cba6f7; }                        /* keyword    — mauve/purple  */
-.jt  { color: #89dceb; }                        /* type/class — sky           */
-.js  { color: #a6e3a1; }                        /* string     — green         */
-.jc  { color: #6c7086; font-style: italic; }    /* comment    — overlay       */
-.jn  { color: #fab387; }                        /* number     — peach         */
-.ja  { color: #f38ba8; }                        /* annotation — red           */
-.jm  { color: #89b4fa; }                        /* method     — blue          */
-.jo  { color: #94e2d5; }                        /* operator   — teal          */
-.jb  { color: #f9e2af; }                        /* built-in   — yellow        */
-
-/* ── TOKEN COLORS — LIGHT (GitHub Light inspired) ── */
-body.light-theme .jk  { color: #cf222e; }       /* keyword    — red           */
-body.light-theme .jt  { color: #0550ae; }       /* type/class — blue          */
-body.light-theme .js  { color: #0a3069; }       /* string     — dark blue     */
-body.light-theme .jc  { color: #6e7781; font-style: italic; } /* comment   */
-body.light-theme .jn  { color: #0550ae; }       /* number     — blue          */
-body.light-theme .ja  { color: #953800; }       /* annotation — orange        */
-body.light-theme .jm  { color: #6639ba; }       /* method     — purple        */
-body.light-theme .jo  { color: #0550ae; }       /* operator                   */
-body.light-theme .jb  { color: #116329; }       /* built-in   — green         */
-
-/* ── DB SCHEMA ── */
-.schema-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:14px 0}
-.schema-table{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-.schema-thead{padding:8px 12px;background:var(--s3);border-bottom:1px solid var(--border)}
-.schema-tname{font-size:12.5px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace}
-.schema-tbody{padding:6px 0}
-.schema-col{display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:11.5px;font-family:'JetBrains Mono',monospace}
-.schema-col-name{color:var(--accl);flex:1}
-.schema-col-type{color:var(--dim)}
-.schema-col-pk{font-size:9px;background:var(--amberg);color:var(--amber);border:1px solid rgba(245,185,66,.25);padding:1px 5px;border-radius:3px}
-.schema-col-fk{font-size:9px;background:var(--purpleg);color:var(--purple);border:1px solid rgba(180,120,245,.25);padding:1px 5px;border-radius:3px}
-.schema-col-idx{font-size:9px;background:var(--cyang);color:var(--cyan);border:1px solid rgba(56,201,232,.25);padding:1px 5px;border-radius:3px}
-
-/* ── BOXES ── */
-.box{border-radius:var(--r);padding:14px 16px;margin:14px 0;font-size:13.5px;color:var(--muted)}
-.box strong{font-weight:600}
-.box-acc{background:var(--accg);border:1px solid rgba(79,142,247,.25);border-left:3px solid var(--acc)}.box-acc strong{color:var(--accl)}
-.box-green{background:var(--greeng);border:1px solid rgba(45,212,160,.2);border-left:3px solid var(--green)}.box-green strong{color:var(--green)}
-.box-amber{background:var(--amberg);border:1px solid rgba(245,185,66,.2);border-left:3px solid var(--amber)}.box-amber strong{color:var(--amber)}
-.box-red{background:var(--redg);border:1px solid rgba(247,97,79,.2);border-left:3px solid var(--red)}.box-red strong{color:var(--red)}
-.box-purple{background:var(--purpleg);border:1px solid rgba(180,120,245,.2);border-left:3px solid var(--purple)}.box-purple strong{color:var(--purple)}
-
-/* ── PILL ── */
-.pill{display:inline-flex;align-items:center;background:var(--s2);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:11.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;vertical-align:middle}
-
-/* ── CONCURRENCY BOX ── */
-.conc-box{background:linear-gradient(135deg,rgba(247,97,79,.06),rgba(245,185,66,.04));border:1px solid rgba(247,97,79,.2);border-radius:var(--r);padding:16px;margin:14px 0}
-.conc-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.conc-items{display:grid;gap:8px}
-.conc-item{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);padding:10px 13px}
-.conc-item-t{font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:3px}
-.conc-item-d{font-size:12.5px;color:var(--muted);line-height:1.55}
-
-/* ── DEEP DIVE HEADER ── */
-.dd-head{display:flex;align-items:center;gap:12px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin:22px 0 12px}
-.dd-n{width:30px;height:30px;background:linear-gradient(135deg,var(--acc),var(--purple));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0}
-.dd-t{font-size:15px;font-weight:600;color:var(--text)}
-
-/* ── STEP LIST (Q&A) ── */
-.steps{list-style:none;margin:12px 0}
-.step{display:flex;gap:13px;padding:11px 0;border-bottom:1px solid var(--border);align-items:flex-start}
-.step:last-child{border-bottom:none}
-.step-a{width:26px;height:26px;flex-shrink:0;background:var(--s3);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--dim);margin-top:1px}
-.step-b{flex:1}
-.step-t{font-size:13.5px;font-weight:600;color:var(--text);margin-bottom:3px}
-.step-d{font-size:13px;color:var(--muted);line-height:1.6}
-
-/* ── PATTERN BOX ── */
-.pattern-box{background:var(--s1);border:1px solid var(--borderl);border-radius:var(--r);padding:14px 16px;margin:10px 0}
-.pattern-name{font-size:13px;font-weight:700;color:var(--purple);margin-bottom:4px}
-.pattern-why{font-size:12.5px;color:var(--muted);line-height:1.6}
-.pattern-where{font-size:12px;color:var(--dim);margin-top:4px}
-
-/* ── DIVIDER ── */
-.prob-divider{border:none;border-top:2px dashed var(--border);margin:60px 0}
-
-/* ── MVC LABEL ── */
-.mvc-box{background:var(--purpleg);border:1px solid rgba(180,120,245,.2);border-left:3px solid var(--purple);border-radius:var(--r);padding:14px 16px;margin:14px 0;font-size:13px;color:var(--muted)}
-.mvc-box strong{color:var(--purple)}
-
-/* ── LOADING ── */
-.loading{text-align:center;padding:60px;color:var(--dim)}
-.loading-spin{display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:spin .6s linear infinite;margin-bottom:12px}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-@media(max-width:900px){.sidebar{display:none}.hero-title{font-size:26px}.scope-wrap{grid-template-columns:1fr}}
-</style>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/app.css"/>
 </head>
 <body>
 
+<!-- Top bar -->
 <nav class="topbar">
-  <div class="logo"><em>LLD</em> <span style="color:var(--dim);font-size:12px;font-weight:400;margin-left:8px">/ Interview Mastery — 26 Problems</span></div>
-  <div class="nav-pills">
-    <button class="nav-pill" onclick="scrollToGroup(1)">P1–5</button>
-    <button class="nav-pill" onclick="scrollToGroup(6)">P6–10</button>
-    <button class="nav-pill" onclick="scrollToGroup(11)">P11–15</button>
-    <button class="nav-pill" onclick="scrollToGroup(16)">P16–20</button>
-    <button class="nav-pill" onclick="scrollToGroup(21)">P21–25</button>
-    <button class="nav-pill" onclick="scrollToGroup(26)">P26</button>
-    <button class="theme-btn" id="themeToggle">☀️ Light</button>
+  <a class="brand" href="#" onclick="App.goHome();return false;">
+    <span class="brand-mark">L</span>
+    <span>LLD Mastery</span>
+    <span class="brand-sub">26-problem interview reference</span>
+  </a>
+  <div class="tb-spacer"></div>
+  <div class="tb-controls">
+    <div class="search" onclick="App.openCmdK()">
+      <span class="search-icon">⌕</span>
+      <input id="topSearch" placeholder="Search problems…" readonly/>
+      <span class="search-kbd">⌘K</span>
+    </div>
+    <button class="tb-btn" id="themeToggle" title="Toggle theme">
+      <span id="themeIcon">◐</span>
+      <span class="kbd">T</span>
+    </button>
+    <button class="tb-btn" onclick="window.print()" title="Print / save PDF">
+      Print
+    </button>
   </div>
 </nav>
+<div class="progress-bar" id="progressBar"></div>
 
+<!-- Layout -->
 <div class="layout">
-<aside class="sidebar" id="sidebar"></aside>
-<main class="main" id="main">
+  <!-- Left rail: problem index -->
+  <aside class="rail-left" id="railLeft">
+    <div class="rail-title">All Problems</div>
+    <div id="railContent">
+      <div class="loading"><div class="spinner"></div><div>Loading…</div></div>
+    </div>
+  </aside>
 
-<!-- HERO -->
-<div class="hero">
-  <div class="hero-badge">📚 LLD Interview Mastery — 2026 Edition</div>
-  <div class="hero-title">Ace <span>26 LLD Problems</span><br/>HelloInterview Format</div>
-  <div class="hero-sub">Every problem: Understanding → Clarifying Qs → Requirements (FR/NFR + scope) → Termination Points → Entity Rationale → Class Design (MVC) → DB Schema → Full Java Code (flow + edge cases) → Concurrency → Patterns → Interviewer Deep Dives.</div>
-  <div class="hero-pills">
-    <span class="hp g">✓ SOLID</span><span class="hp p">✓ Patterns</span><span class="hp a">✓ Concurrency</span>
-    <span class="hp g">✓ Full Java</span><span class="hp p">✓ DB Schema</span><span class="hp a">✓ Deep Dives</span>
-    <span class="hp g">✓ MVC</span><span class="hp p">✓ Error Handling</span>
+  <!-- Main content -->
+  <main class="main" id="main">
+    <div class="loading"><div class="spinner"></div><div>Loading problem…</div></div>
+  </main>
+
+  <!-- Right rail: in-page TOC + studied + nav -->
+  <aside class="rail-right" id="railRight">
+    <div class="toc-title">On this page</div>
+    <ul class="toc-list" id="tocList"></ul>
+    <div class="toc-meta">
+      <div class="toc-meta-tag">Status</div>
+      <button class="studied-toggle" id="studiedBtn">
+        <span class="check"></span>
+        <span id="studiedLabel">Mark as studied</span>
+      </button>
+      <div class="nav-strip">
+        <button class="nav-arrow" id="prevBtn" onclick="App.prev()">
+          <span class="nav-arrow-tag">← Prev</span>
+          <span class="nav-arrow-text" id="prevText">—</span>
+        </button>
+        <button class="nav-arrow" id="nextBtn" onclick="App.next()">
+          <span class="nav-arrow-tag">Next →</span>
+          <span class="nav-arrow-text" id="nextText">—</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Command palette overlay -->
+<div class="cmdk-overlay" id="cmdkOverlay" onclick="if(event.target===this) App.closeCmdK()">
+  <div class="cmdk-panel">
+    <div class="cmdk-input-wrap">
+      <span class="search-icon" style="position:relative;left:0;top:0;transform:none;font-size:18px;color:var(--muted)">⌕</span>
+      <input id="cmdkInput" placeholder="Jump to a problem… (try 'cache' or 'parking')"/>
+      <kbd style="font-family:var(--font-mono);font-size:10px;background:var(--s3);border:1px solid var(--border);padding:2px 6px;border-radius:3px;color:var(--muted)">esc</kbd>
+    </div>
+    <div class="cmdk-results" id="cmdkResults"></div>
+    <div class="cmdk-foot">
+      <span><kbd>↑↓</kbd> navigate</span>
+      <span><kbd>↵</kbd> open</span>
+      <span><kbd>esc</kbd> close</span>
+    </div>
   </div>
 </div>
 
-
-<div id="problems-container">
-  <div class="loading"><div class="loading-spin"></div><br/>Loading problems…</div>
-</div>
-
-</main>
-</div>
-
+<script src="js/highlight.js"></script>
+<script src="js/render.js"></script>
 <script>
 // ═══════════════════════════════════════════════════
-// PROBLEM MANIFEST
+// LLD Mastery — App shell
 // ═══════════════════════════════════════════════════
 const MANIFEST = [
   {file:"topics/p01_parking_lot.json",       group:"State Machine / Creational"},
@@ -440,11 +114,11 @@ const MANIFEST = [
   {file:"topics/p13_movie_ticket.json",      group:"Game / Logic"},
   {file:"topics/p14_library.json",           group:"Game / Logic"},
   {file:"topics/p15_food_delivery.json",     group:"Game / Logic"},
-  {file:"topics/p16_file_system.json",       group:"New — Mixed Archetypes"},
-  {file:"topics/p17_notification.json",      group:"New — Mixed Archetypes"},
-  {file:"topics/p18_lru_cache.json",         group:"New — Mixed Archetypes"},
-  {file:"topics/p19_hotel_booking.json",     group:"New — Mixed Archetypes"},
-  {file:"topics/p20_tictactoe.json",         group:"New — Mixed Archetypes"},
+  {file:"topics/p16_file_system.json",       group:"Mixed Archetypes"},
+  {file:"topics/p17_notification.json",      group:"Mixed Archetypes"},
+  {file:"topics/p18_lru_cache.json",         group:"Mixed Archetypes"},
+  {file:"topics/p19_hotel_booking.json",     group:"Mixed Archetypes"},
+  {file:"topics/p20_tictactoe.json",         group:"Mixed Archetypes"},
   {file:"topics/p21_collab_doc.json",        group:"System-Style LLD"},
   {file:"topics/p22_leetcode.json",          group:"System-Style LLD"},
   {file:"topics/p23_url_shortener.json",     group:"System-Style LLD"},
@@ -453,543 +127,380 @@ const MANIFEST = [
   {file:"topics/p26_collab_editor_session.json", group:"System-Style LLD"}
 ];
 
-// ═══════════════════════════════════════════════════
-// THEME
-// ═══════════════════════════════════════════════════
-const tb = document.getElementById('themeToggle');
-tb.addEventListener('click', () => {
-  document.body.classList.toggle('light-theme');
-  tb.textContent = document.body.classList.contains('light-theme') ? '🌙 Dark' : '☀️ Light';
-});
-if(window.matchMedia('(prefers-color-scheme:light)').matches) {
-  document.body.classList.add('light-theme'); tb.textContent='🌙 Dark';
+const STORAGE_KEY = 'lld-mastery-v2';
+const State = {
+  problems: [],         // loaded JSONs (one per manifest entry)
+  current: 0,           // current problem index
+  studied: new Set(),   // ids of studied problems
+  loaded: new Set(),    // indices loaded
+  cmdkActive: 0,        // active result idx
+  cmdkResults: [],      // current result list
+};
+
+function loadStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    if (obj.studied) State.studied = new Set(obj.studied);
+    if (obj.theme === 'light') document.body.classList.add('light-theme');
+    if (typeof obj.current === 'number') State.current = obj.current;
+  } catch (e) {}
+}
+function saveStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      studied: [...State.studied],
+      theme: document.body.classList.contains('light-theme') ? 'light' : 'dark',
+      current: State.current,
+    }));
+  } catch (e) {}
 }
 
-// ═══════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════
-function esc(s){ return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function md(s){
-  return String(s||'')
-    .replace(/`([^`]+)`/g,'<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g,'<em>$1</em>');
+// ── Loading ───────────────────────────────────────────
+async function fetchProblem(idx) {
+  if (State.problems[idx]) return State.problems[idx];
+  const m = MANIFEST[idx];
+  try {
+    const r = await fetch(m.file);
+    if (!r.ok) throw new Error('http ' + r.status);
+    const data = await r.json();
+    State.problems[idx] = data;
+    State.loaded.add(idx);
+    return data;
+  } catch (e) {
+    const fallback = {
+      _missing: true,
+      title: m.file.replace(/.*\//,'').replace(/\.json$/,'').replace(/^p\d+_/,'').replace(/_/g,' '),
+      description: `This problem is not yet available. Add **${m.file}** to load its content.`,
+      tags: [],
+    };
+    State.problems[idx] = fallback;
+    return fallback;
+  }
 }
 
-// ═══════════════════════════════════════════════════
-// PROPER TOKEN-BASED JAVA HIGHLIGHTER
-// ═══════════════════════════════════════════════════
-function highlightJava(rawCode) {
-  if (!rawCode) return '';
-
-  const KEYWORDS = new Set([
-    'abstract','assert','boolean','break','byte','case','catch','char','class',
-    'const','continue','default','do','double','else','enum','extends','final',
-    'finally','float','for','goto','if','implements','import','instanceof','int',
-    'interface','long','native','new','package','private','protected','public',
-    'return','short','static','strictfp','super','switch','synchronized','this',
-    'throw','throws','transient','try','void','volatile','while',
-    'null','true','false','var','record','sealed','permits','yield'
-  ]);
-
-  const TYPES = new Set([
-    'String','Integer','Boolean','Long','Double','Float','Character','Byte','Short',
-    'Object','Number','Math','System','Thread','Runnable','Callable','Iterable',
-    'Comparable','AutoCloseable','Exception','RuntimeException','Error','Throwable',
-    'List','Set','Map','Queue','Deque','Collection','Optional','Stream','Iterator',
-    'ArrayList','LinkedList','HashSet','TreeSet','LinkedHashSet',
-    'HashMap','TreeMap','LinkedHashMap','ConcurrentHashMap','CopyOnWriteArrayList',
-    'AtomicInteger','AtomicLong','AtomicBoolean','AtomicReference',
-    'ReentrantLock','ReadWriteLock','ReentrantReadWriteLock','Semaphore',
-    'CountDownLatch','CyclicBarrier','BlockingQueue','ArrayBlockingQueue',
-    'LinkedBlockingQueue','PriorityQueue','PriorityBlockingQueue',
-    'ExecutorService','Executor','ThreadPoolExecutor','ScheduledExecutorService',
-    'Executors','Future','CompletableFuture',
-    'UUID','LocalDate','LocalTime','LocalDateTime','ZonedDateTime','Instant',
-    'Duration','ChronoUnit','DateTimeFormatter',
-    'StringBuilder','StringBuffer','Scanner','Random',
-    'Collections','Arrays','Objects','Comparator',
-    'Supplier','Consumer','Function','Predicate','BiFunction','BiConsumer',
-    'UnaryOperator','BinaryOperator','Enum','Override','SuppressWarnings',
-    'FunctionalInterface','Deprecated','SafeVarargs'
-  ]);
-
-  function e(s) {
-    return String(s)
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;');
+async function fetchAllForIndex() {
+  // Fetch only titles for index — use existing fetch (light), all are tiny
+  // We just fetch all so search works. Sequential is fine for ~26 files locally.
+  for (let i = 0; i < MANIFEST.length; i++) {
+    if (!State.problems[i]) await fetchProblem(i);
   }
-  function span(cls, text) {
-    return `<span class="${cls}">${e(text)}</span>`;
-  }
-
-  function tokenize(code) {
-    let out = '';
-    let i = 0;
-    const len = code.length;
-
-    while (i < len) {
-      // ── Single-line comment
-      if (code[i]==='/' && code[i+1]==='/') {
-        let j = i+2;
-        while (j < len && code[j] !== '\n') j++;
-        out += span('jc', code.slice(i, j));
-        i = j;
-        continue;
-      }
-      // ── Block comment
-      if (code[i]==='/' && code[i+1]==='*') {
-        let j = i+2;
-        while (j < len-1 && !(code[j]==='*' && code[j+1]==='/')) j++;
-        j += 2;
-        out += span('jc', code.slice(i, j));
-        i = j;
-        continue;
-      }
-      // ── String literal (including text blocks """)
-      if (code[i]==='"') {
-        // Text block?
-        if (code[i+1]==='"' && code[i+2]==='"') {
-          let j = i+3;
-          while (j < len-2 && !(code[j]==='"' && code[j+1]==='"' && code[j+2]==='"')) j++;
-          j += 3;
-          out += span('js', code.slice(i, j));
-          i = j;
-          continue;
-        }
-        let j = i+1;
-        while (j < len && code[j] !== '"' && code[j] !== '\n') {
-          if (code[j]==='\\') j++;
-          j++;
-        }
-        j++;
-        out += span('js', code.slice(i, j));
-        i = j;
-        continue;
-      }
-      // ── Char literal
-      if (code[i]==="'") {
-        let j = i+1;
-        while (j < len && code[j] !== "'" && code[j] !== '\n') {
-          if (code[j]==='\\') j++;
-          j++;
-        }
-        j++;
-        out += span('js', code.slice(i, j));
-        i = j;
-        continue;
-      }
-      // ── Annotation
-      if (code[i]==='@') {
-        let j = i+1;
-        while (j < len && /\w/.test(code[j])) j++;
-        out += span('ja', code.slice(i, j));
-        i = j;
-        continue;
-      }
-      // ── Number literal
-      if (/[0-9]/.test(code[i]) || (code[i]==='.' && /[0-9]/.test(code[i+1]||''))) {
-        let j = i;
-        // Hex
-        if (code[i]==='0' && (code[i+1]==='x'||code[i+1]==='X')) {
-          j += 2;
-          while (j < len && /[0-9a-fA-F_]/.test(code[j])) j++;
-        } else {
-          while (j < len && /[0-9_\.]/.test(code[j])) j++;
-          if (j < len && (code[j]==='e'||code[j]==='E')) {
-            j++;
-            if (code[j]==='+'||code[j]==='-') j++;
-            while (j < len && /[0-9]/.test(code[j])) j++;
-          }
-          if (j < len && /[lLfFdD]/.test(code[j])) j++;
-        }
-        out += span('jn', code.slice(i, j));
-        i = j;
-        continue;
-      }
-      // ── Identifier / keyword / type
-      if (/[a-zA-Z_$]/.test(code[i])) {
-        let j = i;
-        while (j < len && /[\w$]/.test(code[j])) j++;
-        const word = code.slice(i, j);
-        // Look ahead past whitespace for '('
-        let k = j;
-        while (k < len && (code[k]===' '||code[k]==='\t')) k++;
-        const nextIsCall = code[k]==='(';
-
-        if (KEYWORDS.has(word)) {
-          out += span('jk', word);
-        } else if (nextIsCall && !KEYWORDS.has(word)) {
-          // Constructor or method call
-          if (/^[A-Z]/.test(word)) {
-            out += span('jt', word); // new ClassName(
-          } else {
-            out += span('jm', word);
-          }
-        } else if (TYPES.has(word)) {
-          out += span('jt', word);
-        } else if (/^[A-Z][A-Z0-9_]*$/.test(word)) {
-          // ALL_CAPS constant
-          out += span('jb', word);
-        } else if (/^[A-Z]/.test(word)) {
-          // PascalCase → likely a type/class reference
-          out += span('jt', word);
-        } else {
-          out += e(word);
-        }
-        i = j;
-        continue;
-      }
-      // ── Operators and punctuation — pass through (escaped)
-      out += e(code[i]);
-      i++;
-    }
-    return out;
-  }
-
-  // Split into lines and wrap with gutter
-  const tokenized = tokenize(rawCode);
-  const lines = tokenized.split('\n');
-  // Remove trailing empty line if present
-  if (lines[lines.length-1].trim() === '') lines.pop();
-
-  let result = '<code>';
-  lines.forEach((line, idx) => {
-    result += `<span class="code-line">` +
-      `<span class="line-num">${idx+1}</span>` +
-      `<span class="line-content">${line}</span>` +
-      `</span>`;
-  });
-  result += '</code>';
-  return result;
 }
 
-const DIFF_MAP = {hard:'ptag-hard',medium:'ptag-med',easy:'ptag-easy',pattern:'ptag-pat',concept:'ptag-cyan'};
-
-// ═══════════════════════════════════════════════════
-// RENDER PROBLEM
-// ═══════════════════════════════════════════════════
-function renderProblem(p, idx) {
-  const num = String(idx+1).padStart(2,'0');
-  let h = '';
-
-  h += `<div class="problem" id="p${idx+1}">`;
-  h += `<div class="problem-header"><div class="problem-num">${num}</div><div class="problem-meta">`;
-  h += `<div class="problem-title">${esc(p.title)}</div><div class="problem-tags">`;
-  (p.tags||[]).forEach(t => {
-    const cls = DIFF_MAP[t.type]||'ptag-pat';
-    h += `<span class="ptag ${cls}">${esc(t.label)}</span>`;
-  });
-  h += `</div><div class="problem-desc">${md(p.description)}</div></div></div>`;
-
-  if(p.prompt){
-    h += `<div class="sh">🎯 Understanding the Problem</div>`;
-    h += `<div class="prompt-box">"${esc(p.prompt)}"</div>`;
-    if(p.prompt_note) h += `<p class="desc-text">${md(p.prompt_note)}</p>`;
-  }
-
-  if(p.clarifying_questions?.length){
-    h += `<h3>Clarifying Questions</h3><div class="clarify">`;
-    p.clarifying_questions.forEach(q => {
-      h += `<div class="clarify-item"><div class="clarify-q">${md(q.question)}</div>`;
-      h += `<div class="clarify-a">${md(q.answer)}</div>`;
-      if(q.why) h += `<div class="clarify-why">${md(q.why)}</div>`;
-      h += `</div>`;
-    });
-    h += `</div>`;
-  }
-
-  if(p.functional_requirements){
-    h += `<div class="sh">📋 Requirements</div>`;
-    h += renderReqBox('📋 Functional Requirements', p.functional_requirements);
-  }
-  if(p.non_functional_requirements){
-    h += renderReqBox('⚙️ Non-Functional Requirements', p.non_functional_requirements);
-  }
-
-  if(p.primary_scope || p.termination_points){
-    h += `<div class="sh">🔬 Primary Scope & Termination Points</div>`;
-    h += `<div class="scope-wrap">`;
-    if(p.primary_scope){
-      h += `<div class="scope-col primary"><div class="scope-col-t">✅ Primary Scope</div>`;
-      p.primary_scope.forEach(s => h += `<div class="scope-item">• ${md(s)}</div>`);
-      h += `</div>`;
-    }
-    if(p.termination_points){
-      h += `<div class="scope-col termination"><div class="scope-col-t">🛑 Termination / Error Points</div>`;
-      p.termination_points.forEach(s => h += `<div class="scope-item">• ${md(s)}</div>`);
-      h += `</div>`;
-    }
-    h += `</div>`;
-  }
-
-  if(p.entities?.length){
-    h += `<div class="sh">🧩 Entities & Relationships</div>`;
-    if(p.entity_intro) h += `<p class="desc-text">${md(p.entity_intro)}</p>`;
-    h += `<div class="entity-rationale">`;
-    p.entities.forEach(e => {
-      h += `<div class="er-item"><div class="er-name">${esc(e.name)}</div>`;
-      h += `<div class="er-role">${md(e.role)}</div>`;
-      const vc = e.verdict==='yes'?'yes':e.verdict==='no'?'no':'maybe';
-      h += `<span class="er-verdict ${vc}">${esc(e.verdict_label)}</span></div>`;
-    });
-    h += `</div>`;
-  }
-
-  if(p.relationships?.length){
-    h += `<div class="tw"><table><tr><th>Entity</th><th>Owns</th><th>Relationship</th></tr>`;
-    p.relationships.forEach(r => {
-      h += `<tr><td><strong>${esc(r.entity)}</strong></td><td>${md(r.owns)}</td><td>${md(r.rel)}</td></tr>`;
-    });
-    h += `</table></div>`;
-  }
-
-  if(p.classes?.length){
-    h += `<div class="sh">🏗️ Class Design</div>`;
-    if(p.mvc_note) h += `<div class="mvc-box">${md(p.mvc_note)}</div>`;
-    h += `<div class="class-diagram"><div class="cd-grid">`;
-    p.classes.forEach(c => {
-      const cls = c.type==='interface'?'interface':c.type==='abstract'?'abstract':'';
-      const layerCls = c.layer==='Model'?'layer-m':c.layer==='Service'?'layer-s':c.layer==='Controller'?'layer-c':'';
-      h += `<div class="cd-class ${cls}"><div class="cd-head">`;
-      if(c.type==='interface') h += `<span class="ilabel">&lt;&lt;interface&gt;&gt;</span>`;
-      if(c.type==='abstract') h += `<span class="alabel">&lt;&lt;abstract&gt;&gt;</span>`;
-      h += `${esc(c.name)}`;
-      if(c.layer) h += ` <span class="layer ${layerCls}">[${c.layer}]</span>`;
-      h += `</div><div class="cd-body">`;
-      (c.fields||[]).forEach(f => {
-        h += `<div class="cd-field"><span class="vis">-</span> <span class="fn">${esc(f.name)}</span>: <span class="ft">${esc(f.type)}</span></div>`;
-      });
-      if(c.fields?.length && c.methods?.length) h += `<div class="cd-divider"></div>`;
-      (c.methods||[]).forEach(m => {
-        h += `<div class="cd-method"><span class="vis">+</span> <span class="mn">${esc(m.name)}</span>: <span class="rt">${esc(m.returns)}</span></div>`;
-      });
-      h += `</div></div>`;
-    });
-    h += `</div></div>`;
-  }
-
-  if(p.db_schema?.length){
-    h += `<div class="sh">🗄️ Database Schema</div>`;
-    h += `<div class="schema-grid">`;
-    p.db_schema.forEach(t => {
-      h += `<div class="schema-table"><div class="schema-thead"><div class="schema-tname">${esc(t.table)}</div></div><div class="schema-tbody">`;
-      t.columns.forEach(c => {
-        h += `<div class="schema-col"><span class="schema-col-name">${esc(c.name)}</span><span class="schema-col-type">${esc(c.type)}</span>`;
-        if(c.pk) h += `<span class="schema-col-pk">PK</span>`;
-        if(c.fk) h += `<span class="schema-col-fk">FK</span>`;
-        if(c.idx) h += `<span class="schema-col-idx">IDX</span>`;
-        h += `</div>`;
-      });
-      h += `</div></div>`;
-    });
-    h += `</div>`;
-    if(p.schema_note) h += `<div class="box box-acc">${md(p.schema_note)}</div>`;
-  }
-
-  if(p.code_sections?.length){
-    h += `<div class="sh">💻 Code Implementation</div>`;
-    if(p.code_lang) h += `<span class="lang-tag">${esc(p.code_lang)}</span>`;
-    p.code_sections.forEach(cs => {
-      if(cs.label) h += `<h4>${esc(cs.label)}</h4>`;
-      if(cs.flow) h += `<div class="box box-green"><strong>Flow:</strong> ${md(cs.flow)}</div>`;
-      if(cs.edge_cases) h += `<div class="box box-red"><strong>Edge Cases:</strong> ${md(cs.edge_cases)}</div>`;
-
-      if(p.code_lang === 'Java') {
-        // IDE-style code block with macOS chrome + line numbers
-        h += `<div class="code-wrapper">`;
-        h += `<div class="code-header">`;
-        h += `<div class="code-dots">`;
-        h += `<span class="code-dot code-dot-r"></span>`;
-        h += `<span class="code-dot code-dot-y"></span>`;
-        h += `<span class="code-dot code-dot-g"></span>`;
-        h += `</div>`;
-        h += `<span class="code-lang-badge">Java</span>`;
-        h += `<button class="copy-btn" onclick="copyCode(this)">Copy</button>`;
-        h += `</div>`;
-        h += `<pre class="java-code">${highlightJava(cs.code)}</pre>`;
-        h += `</div>`;
-      } else {
-        h += `<pre><code>${esc(cs.code)}</code></pre>`;
-      }
-    });
-  }
-
-  if(p.patterns?.length){
-    h += `<div class="sh">🧬 Design Patterns Used</div>`;
-    p.patterns.forEach(pt => {
-      h += `<div class="pattern-box"><div class="pattern-name">${esc(pt.name)}</div>`;
-      h += `<div class="pattern-why">${md(pt.why)}</div>`;
-      if(pt.where) h += `<div class="pattern-where"><strong>Where:</strong> ${md(pt.where)}</div>`;
-      h += `</div>`;
-    });
-  }
-
-  if(p.concurrency?.length){
-    h += `<div class="dd-head"><div class="dd-n">⚡</div><div class="dd-t">Concurrency Deep Dive</div></div>`;
-    h += `<div class="conc-box"><div class="conc-title">⚠️ Race Conditions & Fixes</div><div class="conc-items">`;
-    p.concurrency.forEach(c => {
-      h += `<div class="conc-item"><div class="conc-item-t">${esc(c.issue)}</div><div class="conc-item-d">${md(c.fix)}</div></div>`;
-    });
-    h += `</div></div>`;
-  }
-
-  if(p.deep_dives?.length){
-    h += `<div class="dd-head"><div class="dd-n">🔍</div><div class="dd-t">Deep Dive — Interviewer Follow-ups</div></div>`;
-    h += `<div class="steps">`;
-    p.deep_dives.forEach(d => {
-      h += `<li class="step"><div class="step-a">Q</div><div class="step-b"><div class="step-t">${md(d.question)}</div><div class="step-d">${md(d.answer)}</div></div></li>`;
-    });
-    h += `</div>`;
-  }
-
-  h += `</div>`;
-  return h;
-}
-
-function renderReqBox(title, data){
-  let h = `<div class="req-wrap"><div class="req-head">${title}</div><div class="req-body">`;
-  if(data.core?.length){
-    h += `<div class="req-group"><div class="req-glabel">✅ Core</div><ul class="req-list">`;
-    data.core.forEach((r,i) => h += `<li class="req-item"><span class="rn">${i+1}</span>${md(r)}</li>`);
-    h += `</ul></div>`;
-  }
-  if(data.out_of_scope?.length){
-    h += `<div class="req-group"><div class="req-glabel">🚫 Out of Scope</div><ul class="req-list">`;
-    data.out_of_scope.forEach(r => h += `<li class="req-item"><span class="rn rn-x">—</span>${md(r)}</li>`);
-    h += `</ul></div>`;
-  }
-  h += `</div></div>`;
-  return h;
-}
-
-// ═══════════════════════════════════════════════════
-// SIDEBAR
-// ═══════════════════════════════════════════════════
-function renderSidebar(problems){
-  const sb = document.getElementById('sidebar');
-  let h = '';
-  let currentGroup = '';
-  let firstGroup = true;
-  problems.forEach((p,i) => {
-    const grp = MANIFEST[i]?.group || '';
-    if(grp !== currentGroup){
-      if(currentGroup) h += `</div></div>`;
-      currentGroup = grp;
-      const expanded = firstGroup ? ' expanded' : '';
-      firstGroup = false;
-      h += `<div class="sb-section${expanded}"><div class="sb-title" onclick="toggleSection(this)">${esc(grp)} <span class="sb-toggle">▼</span></div><div class="sb-items">`;
-    }
-    const num = String(i+1).padStart(2,'0');
-    h += `<a href="#p${i+1}" class="sb-item"><span class="sb-num">${num}</span>${esc(p.title||'Loading…')}</a>`;
-  });
-  if(currentGroup) h += `</div></div>`;
-  sb.innerHTML = h;
-}
-
-// ═══════════════════════════════════════════════════
-// SIDEBAR SECTION TOGGLE
-// ═══════════════════════════════════════════════════
-function toggleSection(titleEl) {
-  const section = titleEl.parentElement;
-  section.classList.toggle('expanded');
-}
-
-// ═══════════════════════════════════════════════════
-// COPY BUTTON
-// ═══════════════════════════════════════════════════
-function copyCode(btn) {
-  const pre = btn.closest('.code-wrapper').querySelector('pre');
-  if (!pre) return;
-  // Extract plain text from line-content spans
-  const spans = pre.querySelectorAll('.line-content');
-  const text = Array.from(spans).map(s => s.innerText).join('\n');
-  navigator.clipboard.writeText(text).then(() => {
-    const orig = btn.textContent;
-    btn.textContent = '✓ Copied!';
-    btn.style.color = '#a6e3a1';
-    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1800);
-  }).catch(() => {
-    // Fallback for browsers without clipboard API
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    btn.textContent = '✓ Copied!';
-    setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
-  });
-}
-
-// ═══════════════════════════════════════════════════
-// LOADER
-// ═══════════════════════════════════════════════════
-async function loadAll() {
-  const container = document.getElementById('problems-container');
-  const results = [];
-
-  for(let i=0; i<MANIFEST.length; i++){
-    try {
-      const resp = await fetch(MANIFEST[i].file);
-      if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      results.push(await resp.json());
-    } catch(e) {
-      results.push({
-        title: MANIFEST[i].file.replace(/\.json$/,'').replace(/^p\d+_/,'').replace(/_/g,' '),
-        description: `⚠️ Problem file not yet created (${MANIFEST[i].file}). Continue the conversation to generate it.`,
-        tags:[],
-        _missing:true
-      });
-    }
-  }
-
-  renderSidebar(results);
-
+// ── Rail (left index) ─────────────────────────────────
+function renderRail() {
+  const el = document.getElementById('railContent');
   let html = '';
-  results.forEach((p,i) => {
-    if(i > 0) html += `<hr class="prob-divider"/>`;
-    if(p._missing){
-      html += `<div class="problem" id="p${i+1}"><div class="problem-header"><div class="problem-num">${String(i+1).padStart(2,'0')}</div><div class="problem-meta"><div class="problem-title">${esc(p.title)}</div><div class="problem-desc">${md(p.description)}</div></div></div></div>`;
-    } else {
-      html += renderProblem(p, i);
+  let currentGroup = '';
+  MANIFEST.forEach((m, i) => {
+    if (m.group !== currentGroup) {
+      if (currentGroup) html += '</div></div>';
+      currentGroup = m.group;
+      html += `<div class="rail-group">`;
+      html += `<div class="rail-group-head" onclick="App.toggleGroup(this)">${LLDRender.esc(m.group)}<span class="chev">▾</span></div>`;
+      html += `<div class="rail-items">`;
     }
+    const p = State.problems[i];
+    const num = String(i+1).padStart(2,'0');
+    const title = p?.title || m.file.replace(/.*\//,'').replace(/\.json$/,'').replace(/^p\d+_/,'').replace(/_/g,' ');
+    const studied = State.studied.has(i) ? 'studied' : '';
+    const active = State.current === i ? 'active' : '';
+    html += `<div class="rail-item ${active} ${studied}" onclick="App.go(${i})">`;
+    html += `<span class="rail-num"><span>${num}</span></span>`;
+    html += `<span class="rail-text">${LLDRender.esc(title)}</span>`;
+    html += `</div>`;
   });
-  container.innerHTML = html;
-
-  // Sidebar active on scroll
-  const probs = document.querySelectorAll('.problem');
-  const sbItems = document.querySelectorAll('.sb-item');
-  const obs = new IntersectionObserver(entries => {
-    const visible = entries.filter(entry => entry.isIntersecting);
-    if (!visible.length) return;
-    const best = visible.reduce((max, entry) => entry.intersectionRatio > max.intersectionRatio ? entry : max, visible[0]);
-    sbItems.forEach(i => i.classList.remove('active'));
-
-    const id = best.target.id;
-    const a = document.querySelector(`.sb-item[href="#${id}"]`);
-    if (!a) return;
-
-    a.classList.add('active');
-
-    const allSections = document.querySelectorAll('.sb-section');
-    const activeSection = a.closest('.sb-section');
-    allSections.forEach(section => {
-      if (section === activeSection) {
-        section.classList.add('expanded');
-      } else {
-        section.classList.remove('expanded');
-      }
-    });
-  }, {rootMargin:'-20% 0px -70% 0px'});
-  probs.forEach(p => obs.observe(p));
+  if (currentGroup) html += '</div></div>';
+  el.innerHTML = html;
 }
 
-function scrollToGroup(n){ document.getElementById('p'+n)?.scrollIntoView({behavior:'smooth'}); }
+function toggleGroup(headEl) {
+  headEl.parentElement.classList.toggle('collapsed');
+}
 
-loadAll();
+// ── Right rail TOC ────────────────────────────────────
+function renderTOC(p) {
+  const list = document.getElementById('tocList');
+  if (!p || p._missing) { list.innerHTML = ''; return; }
+  const sections = LLDRender.getSections(p);
+  list.innerHTML = sections.map(s => `
+    <li class="toc-item" data-toc="${s.id}">
+      <a href="#${s.id}" onclick="App.scrollToSection('${s.id}');return false;">
+        ${s.n ? `<span class="toc-num">${s.n}</span>` : '<span class="toc-num"></span>'}
+        <span>${LLDRender.esc(s.label)}</span>
+      </a>
+    </li>
+  `).join('');
+}
+
+// ── Studied + Nav ─────────────────────────────────────
+function renderMeta() {
+  const btn = document.getElementById('studiedBtn');
+  const label = document.getElementById('studiedLabel');
+  const isStudied = State.studied.has(State.current);
+  btn.classList.toggle('on', isStudied);
+  btn.querySelector('.check').textContent = isStudied ? '✓' : '';
+  label.textContent = isStudied ? 'Studied' : 'Mark as studied';
+
+  const prevText = document.getElementById('prevText');
+  const nextText = document.getElementById('nextText');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+
+  if (State.current > 0) {
+    const p = State.problems[State.current - 1];
+    prevText.textContent = p?.title || '—';
+    prevBtn.disabled = false;
+  } else {
+    prevText.textContent = '—';
+    prevBtn.disabled = true;
+  }
+  if (State.current < MANIFEST.length - 1) {
+    const p = State.problems[State.current + 1];
+    nextText.textContent = p?.title || '—';
+    nextBtn.disabled = false;
+  } else {
+    nextText.textContent = '—';
+    nextBtn.disabled = true;
+  }
+}
+
+// ── Render current problem ────────────────────────────
+async function renderCurrent() {
+  const main = document.getElementById('main');
+  main.innerHTML = `<div class="loading"><div class="spinner"></div><div>Loading…</div></div>`;
+  const p = await fetchProblem(State.current);
+  main.innerHTML = `<div id="sec-top"></div>` + LLDRender.renderProblem(p, State.current);
+  renderTOC(p);
+  renderMeta();
+  renderRail();
+  attachCodeButtons();
+  setupTOCObserver();
+  // Scroll to top of content
+  window.scrollTo({top: 0, behavior: 'instant'});
+  saveStorage();
+  // Update URL hash
+  history.replaceState(null, '', `#p${State.current + 1}`);
+  document.title = `${String(State.current+1).padStart(2,'0')} · ${p.title} — LLD Mastery`;
+}
+
+// ── Code copy/wrap buttons ────────────────────────────
+function attachCodeButtons() {
+  document.querySelectorAll('.code-wrapper').forEach(wrapper => {
+    wrapper.querySelectorAll('.code-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.dataset.act;
+        if (act === 'wrap') {
+          wrapper.classList.toggle('wrap');
+          btn.textContent = wrapper.classList.contains('wrap') ? '⇄ Unwrap' : '⇄ Wrap';
+        } else if (act === 'copy') {
+          const lines = [...wrapper.querySelectorAll('.line-content')].map(s => s.innerText).join('\n');
+          (navigator.clipboard ? navigator.clipboard.writeText(lines) : Promise.reject())
+            .catch(() => {
+              const ta = document.createElement('textarea');
+              ta.value = lines;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+            }).finally(() => {
+              btn.classList.add('copied');
+              const orig = btn.textContent;
+              btn.textContent = '✓ Copied';
+              setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.textContent = orig;
+              }, 1600);
+            });
+        }
+      });
+    });
+  });
+}
+
+// ── TOC active-section observer ───────────────────────
+let _tocObs = null;
+function setupTOCObserver() {
+  if (_tocObs) _tocObs.disconnect();
+  const sections = document.querySelectorAll('.sec');
+  if (!sections.length) return;
+  _tocObs = new IntersectionObserver(entries => {
+    const visible = entries.filter(e => e.isIntersecting);
+    if (!visible.length) return;
+    const best = visible.reduce((m, e) => e.intersectionRatio > m.intersectionRatio ? e : m, visible[0]);
+    document.querySelectorAll('.toc-item').forEach(t => t.classList.remove('active'));
+    const id = best.target.id;
+    const tocEl = document.querySelector(`.toc-item[data-toc="${id}"]`);
+    if (tocEl) tocEl.classList.add('active');
+  }, { rootMargin: '-15% 0px -65% 0px' });
+  sections.forEach(s => _tocObs.observe(s));
+}
+
+// ── Top reading-progress bar ──────────────────────────
+function setupProgress() {
+  const bar = document.getElementById('progressBar');
+  window.addEventListener('scroll', () => {
+    const h = document.documentElement;
+    const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+    bar.style.width = Math.min(100, Math.max(0, pct)) + '%';
+  }, { passive: true });
+}
+
+// ── Command palette ───────────────────────────────────
+function openCmdK() {
+  document.getElementById('cmdkOverlay').classList.add('open');
+  const input = document.getElementById('cmdkInput');
+  input.value = '';
+  setTimeout(() => input.focus(), 30);
+  cmdKSearch('');
+}
+function closeCmdK() {
+  document.getElementById('cmdkOverlay').classList.remove('open');
+}
+function cmdKSearch(q) {
+  q = (q || '').toLowerCase().trim();
+  const results = [];
+  MANIFEST.forEach((m, i) => {
+    const p = State.problems[i];
+    const title = p?.title || m.file.replace(/.*\//,'').replace(/\.json$/,'').replace(/^p\d+_/,'').replace(/_/g,' ');
+    const desc = p?.description || '';
+    const hay = (title + ' ' + desc + ' ' + m.group).toLowerCase();
+    if (!q || hay.includes(q)) {
+      results.push({ idx: i, title, group: m.group });
+    }
+  });
+  State.cmdkResults = results;
+  State.cmdkActive = 0;
+  renderCmdKResults();
+}
+function renderCmdKResults() {
+  const el = document.getElementById('cmdkResults');
+  if (!State.cmdkResults.length) {
+    el.innerHTML = `<div class="cmdk-empty">No matches.</div>`;
+    return;
+  }
+  el.innerHTML = State.cmdkResults.map((r, i) => {
+    const num = String(r.idx + 1).padStart(2,'0');
+    const studied = State.studied.has(r.idx);
+    return `<div class="cmdk-result ${i === State.cmdkActive ? 'active' : ''}"
+                 data-idx="${r.idx}" data-listidx="${i}"
+                 onclick="App.cmdKPick(${r.idx})">
+      <span class="cmdk-result-num">${num}</span>
+      <span class="cmdk-result-title">${LLDRender.esc(r.title)}${studied ? ' <span style=\"color:var(--green);font-size:11px\">✓</span>' : ''}</span>
+      <span class="cmdk-result-group">${LLDRender.esc(r.group)}</span>
+    </div>`;
+  }).join('');
+}
+function cmdKMove(dir) {
+  const n = State.cmdkResults.length;
+  if (!n) return;
+  State.cmdkActive = (State.cmdkActive + dir + n) % n;
+  renderCmdKResults();
+  const active = document.querySelector('.cmdk-result.active');
+  if (active) active.scrollIntoView({block: 'nearest'});
+}
+function cmdKPick(idx) {
+  closeCmdK();
+  go(idx);
+}
+
+// ── Navigation ────────────────────────────────────────
+function go(i) {
+  if (i < 0 || i >= MANIFEST.length) return;
+  State.current = i;
+  renderCurrent();
+}
+function next() { go(State.current + 1); }
+function prev() { go(State.current - 1); }
+function goHome() { go(0); }
+function scrollToSection(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+function toggleStudied() {
+  if (State.studied.has(State.current)) State.studied.delete(State.current);
+  else State.studied.add(State.current);
+  renderMeta();
+  renderRail();
+  saveStorage();
+}
+
+// ── Theme ─────────────────────────────────────────────
+function toggleTheme() {
+  document.body.classList.toggle('light-theme');
+  document.getElementById('themeIcon').textContent =
+    document.body.classList.contains('light-theme') ? '◑' : '◐';
+  saveStorage();
+}
+
+// ── Keyboard ──────────────────────────────────────────
+function setupKeys() {
+  document.addEventListener('keydown', e => {
+    const cmdkOpen = document.getElementById('cmdkOverlay').classList.contains('open');
+    const inField = ['INPUT','TEXTAREA'].includes(document.activeElement?.tagName);
+    if (cmdkOpen) {
+      if (e.key === 'Escape') { e.preventDefault(); closeCmdK(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); cmdKMove(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); cmdKMove(-1); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        const r = State.cmdkResults[State.cmdkActive];
+        if (r) cmdKPick(r.idx);
+      }
+      return;
+    }
+    if (inField) return;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault(); openCmdK();
+    } else if (e.key === '/') {
+      e.preventDefault(); openCmdK();
+    } else if (e.key === 'ArrowLeft' && (e.metaKey || e.altKey)) {
+      e.preventDefault(); prev();
+    } else if (e.key === 'ArrowRight' && (e.metaKey || e.altKey)) {
+      e.preventDefault(); next();
+    } else if (e.key === 't' || e.key === 'T') {
+      toggleTheme();
+    } else if (e.key === 's' || e.key === 'S') {
+      toggleStudied();
+    }
+  });
+  document.getElementById('cmdkInput').addEventListener('input', e => cmdKSearch(e.target.value));
+  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+  document.getElementById('studiedBtn').addEventListener('click', toggleStudied);
+}
+
+// ── Boot ──────────────────────────────────────────────
+async function boot() {
+  loadStorage();
+  // pull initial problem from URL hash if present
+  const m = location.hash.match(/^#p(\d+)/);
+  if (m) {
+    const n = parseInt(m[1], 10) - 1;
+    if (n >= 0 && n < MANIFEST.length) State.current = n;
+  }
+  document.getElementById('themeIcon').textContent =
+    document.body.classList.contains('light-theme') ? '◑' : '◐';
+  renderRail();   // skeleton with file names
+  setupKeys();
+  setupProgress();
+  // Render current
+  await renderCurrent();
+  // Background-load all problems for search/index titles
+  fetchAllForIndex().then(() => {
+    renderRail();
+    renderMeta();
+  });
+}
+
+window.App = {
+  go, next, prev, goHome,
+  toggleGroup, scrollToSection,
+  openCmdK, closeCmdK, cmdKPick,
+  toggleStudied, toggleTheme,
+};
+
+boot();
 </script>
 </body>
 </html>
